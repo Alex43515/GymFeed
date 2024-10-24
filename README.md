@@ -1,4 +1,7 @@
 # GymFeed
-Fitness and health app
 
-proradices kad tad mamu ti jebem
+A new Flutter project.
+
+## Getting Started
+
+FlutterFlow projects are built to run on the Flutter _stable_ release.
