@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>756667012146-76009993i5cfmo3vojieliglht1ptki1.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.756667012146-76009993i5cfmo3vojieliglht1ptki1</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>756667012146-23v2msb81vm3n015e37frhjek0gmolir.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyDmQedSDIMgAZx8HpRkdqfpwJaEAra_gZg</string>
+	<key>GCM_SENDER_ID</key>
+	<string>756667012146</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.flutterflow.gymfeedofficial</string>
+	<key>PROJECT_ID</key>
+	<string>gym-feed-official-27tdk3</string>
+	<key>STORAGE_BUCKET</key>
+	<string>gym-feed-official-27tdk3.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:756667012146:ios:977ba0df002e3e577ad82b</string>
+	<key>DATABASE_URL</key>
+	<string>https://gym-feed-official-27tdk3-default-rtdb.europe-west1.firebasedatabase.app</string>
+</dict>
+</plist>

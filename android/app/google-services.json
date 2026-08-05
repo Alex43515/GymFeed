@@ -1,0 +1,159 @@
+{
+  "project_info": {
+    "project_number": "756667012146",
+    "firebase_url": "https://gym-feed-official-27tdk3-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "gym-feed-official-27tdk3",
+    "storage_bucket": "gym-feed-official-27tdk3.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:756667012146:android:e9b2620c8b9f5ffc7ad82b",
+        "android_client_info": {
+          "package_name": "com.flutterflow.gymfeedofficial"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "756667012146-23v2msb81vm3n015e37frhjek0gmolir.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.flutterflow.gymfeedofficial",
+            "certificate_hash": "9d44f4337b5f1da75c43a7ed6dc0a99a0dba3e7a"
+          }
+        },
+        {
+          "client_id": "756667012146-pte7a9qm6v25pgel580sstaprv2th05f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.flutterflow.gymfeedofficial",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "756667012146-gjabp67h8ij6huq7okk85bvmgm8a929l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFVbYzmanmQl3UtfU1AZy8SUym-JQkhe8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "756667012146-gjabp67h8ij6huq7okk85bvmgm8a929l.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "756667012146-0d85qo237mo66qfjins7ai1nv8hoh7rh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.gymfeed.app"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:756667012146:android:107279bd14acb3a87ad82b",
+        "android_client_info": {
+          "package_name": "com.gymfeed.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "756667012146-aiu7gs6ahb4sgs6f7qf5985au2dqe5ir.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gymfeed.app",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "756667012146-e1p8ngno7la7r2hdf8su2m4883bi6dvb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gymfeed.app",
+            "certificate_hash": "9d44f4337b5f1da75c43a7ed6dc0a99a0dba3e7a"
+          }
+        },
+        {
+          "client_id": "756667012146-gjabp67h8ij6huq7okk85bvmgm8a929l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFVbYzmanmQl3UtfU1AZy8SUym-JQkhe8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "756667012146-gjabp67h8ij6huq7okk85bvmgm8a929l.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "756667012146-0d85qo237mo66qfjins7ai1nv8hoh7rh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.gymfeed.app"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:756667012146:android:874e4701fb5d97d57ad82b",
+        "android_client_info": {
+          "package_name": "com.imagesharing.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "756667012146-ah8225u06c18k97t3blrkkt96fs5ojdd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.imagesharing.app",
+            "certificate_hash": "9d44f4337b5f1da75c43a7ed6dc0a99a0dba3e7a"
+          }
+        },
+        {
+          "client_id": "756667012146-gjabp67h8ij6huq7okk85bvmgm8a929l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFVbYzmanmQl3UtfU1AZy8SUym-JQkhe8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "756667012146-gjabp67h8ij6huq7okk85bvmgm8a929l.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "756667012146-0d85qo237mo66qfjins7ai1nv8hoh7rh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.gymfeed.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
