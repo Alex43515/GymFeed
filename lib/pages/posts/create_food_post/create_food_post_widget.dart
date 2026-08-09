@@ -1,16 +1,15 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/supabase/repositories/post_repository.dart';
 import '/backend/firebase_storage/storage.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
-import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_video_player.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/form_field_controller.dart';
 import '/flutter_flow/upload_data.dart';
+import '/custom_code/widgets/create_ui.dart';
 import '/custom_code/actions/index.dart' as actions;
-import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -134,9 +133,7 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                               padding: EdgeInsetsDirectional.fromSTEB(
                                   20.0, 0.0, 0.0, 0.0),
                               child: Text(
-                                FFLocalizations.of(context).getText(
-                                  'mhw3xekx' /* Food Post */,
-                                ),
+                                'Create food post',
                                 textAlign: TextAlign.center,
                                 style: FlutterFlowTheme.of(context)
                                     .bodyMedium
@@ -191,14 +188,10 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                               30.0, 0.0, 30.0, 0.0),
                           tabs: [
                             Tab(
-                              text: FFLocalizations.of(context).getText(
-                                '6qjiw2kb' /* Meal Insights */,
-                              ),
+                              text: 'Meal insights',
                             ),
                             Tab(
-                              text: FFLocalizations.of(context).getText(
-                                'lzjb5w1c' /* Upload Photo/Video */,
-                              ),
+                              text: 'Photo / video',
                             ),
                           ],
                           controller: _model.tabBarController,
@@ -261,85 +254,12 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                     _model.postTitleFocusNode,
                                                 autofocus: false,
                                                 obscureText: false,
-                                                decoration: InputDecoration(
-                                                  labelStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        letterSpacing: 0.0,
-                                                      ),
-                                                  alignLabelWithHint: false,
+                                                decoration: createInputDecoration(
+                                                  context,
                                                   hintText: FFLocalizations.of(
                                                           context)
                                                       .getText(
                                                     '5b6n7a0k' /* Delicious Meal Post... */,
-                                                  ),
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent1,
-                                                        fontSize: 12.0,
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
                                                   ),
                                                 ),
                                                 style:
@@ -403,78 +323,12 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                     _model.recipeFocusNode,
                                                 autofocus: false,
                                                 obscureText: false,
-                                                decoration: InputDecoration(
-                                                  alignLabelWithHint: false,
+                                                decoration: createInputDecoration(
+                                                  context,
                                                   hintText: FFLocalizations.of(
                                                           context)
                                                       .getText(
                                                     'i78j1jk0' /* Craft Your Culinary Story... */,
-                                                  ),
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent1,
-                                                        fontSize: 12.0,
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
                                                   ),
                                                 ),
                                                 style:
@@ -546,78 +400,12 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                     _model.cookingTimeFocusNode,
                                                 autofocus: false,
                                                 obscureText: false,
-                                                decoration: InputDecoration(
-                                                  alignLabelWithHint: false,
+                                                decoration: createInputDecoration(
+                                                  context,
                                                   hintText: FFLocalizations.of(
                                                           context)
                                                       .getText(
                                                     'j3cicxpd' /* From Kitchen to Table in No Ti... */,
-                                                  ),
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent1,
-                                                        fontSize: 12.0,
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
                                                   ),
                                                 ),
                                                 style:
@@ -683,79 +471,11 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                   _model.nutritionFocusNode,
                                               autofocus: false,
                                               obscureText: false,
-                                              decoration: InputDecoration(
-                                                labelStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          fontFamily: 'Poppins',
-                                                          letterSpacing: 0.0,
-                                                        ),
-                                                alignLabelWithHint: false,
-                                                hintText:
-                                                    FFLocalizations.of(context)
+                                              decoration: createInputDecoration(
+                                                context,
+                                                hintText: FFLocalizations.of(context)
                                                         .getText(
                                                   'w2wgrc7c' /* Fuel Your Wellness Journey.. */,
-                                                ),
-                                                hintStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .labelMedium
-                                                        .override(
-                                                          fontFamily: 'Poppins',
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .accent1,
-                                                          fontSize: 12.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.normal,
-                                                        ),
-                                                enabledBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .accent1,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
-                                                ),
-                                                focusedBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .accent1,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
-                                                ),
-                                                errorBorder: OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
-                                                ),
-                                                focusedErrorBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
                                                 ),
                                               ),
                                               style:
@@ -814,69 +534,32 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        FlutterFlowDropDown<String>(
-                                          controller: _model
-                                                  .mealTypeValueController ??=
-                                              FormFieldController<String>(null),
-                                          options: [
-                                            FFLocalizations.of(context).getText(
-                                              'hvcht5vi' /* Breakfast */,
-                                            ),
-                                            FFLocalizations.of(context).getText(
-                                              't02k3u5g' /* Lunch */,
-                                            ),
-                                            FFLocalizations.of(context).getText(
-                                              '2g6bus3n' /* Dinner */,
-                                            ),
-                                            FFLocalizations.of(context).getText(
-                                              'e5tv8esi' /* Snack */,
-                                            ),
-                                            FFLocalizations.of(context).getText(
-                                              'mmi65ouj' /* Desert */,
-                                            )
-                                          ],
-                                          onChanged: (val) => safeSetState(
-                                              () => _model.mealTypeValue = val),
-                                          width:
-                                              MediaQuery.sizeOf(context).width *
-                                                  0.96,
-                                          height: 55.0,
-                                          textStyle: FlutterFlowTheme.of(
-                                                  context)
-                                              .bodyMedium
-                                              .override(
-                                                fontFamily: 'Poppins',
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .accent1,
-                                                fontSize: 12.0,
-                                                letterSpacing: 0.0,
-                                                fontWeight: FontWeight.normal,
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              createSectionLabel(context, 'Meal type'),
+                                              Wrap(
+                                                spacing: 8.0,
+                                                runSpacing: 8.0,
+                                                children: const [
+                                                'Breakfast',
+                                                'Lunch',
+                                                'Dinner',
+                                                'Snack',
+                                                'Desert',
+                                                ]
+                                                    .map((c) => createChip(
+                                                          context,
+                                                          label: c,
+                                                          selected: _model.mealTypeValue == c,
+                                                          onTap: () => safeSetState(() => _model.mealTypeValue = c),
+                                                        ))
+                                                    .toList(),
                                               ),
-                                          hintText: FFLocalizations.of(context)
-                                              .getText(
-                                            'jon0qs9k' /* Please select... */,
+                                            ],
                                           ),
-                                          icon: Icon(
-                                            Icons.keyboard_arrow_down_rounded,
-                                            color: FlutterFlowTheme.of(context)
-                                                .accent1,
-                                            size: 24.0,
-                                          ),
-                                          fillColor: Color(0xFF0A0A0A),
-                                          elevation: 2.0,
-                                          borderColor:
-                                              FlutterFlowTheme.of(context)
-                                                  .accent1,
-                                          borderWidth: 1.0,
-                                          borderRadius: 10.0,
-                                          margin:
-                                              EdgeInsetsDirectional.fromSTEB(
-                                                  16.0, 4.0, 16.0, 4.0),
-                                          hidesUnderline: true,
-                                          isOverButton: true,
-                                          isSearchable: false,
-                                          isMultiSelect: false,
                                         ),
                                       ],
                                     ),
@@ -927,79 +610,11 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                   _model.caloriesFocusNode,
                                               autofocus: false,
                                               obscureText: false,
-                                              decoration: InputDecoration(
-                                                labelStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          fontFamily: 'Poppins',
-                                                          letterSpacing: 0.0,
-                                                        ),
-                                                alignLabelWithHint: false,
-                                                hintText:
-                                                    FFLocalizations.of(context)
+                                              decoration: createInputDecoration(
+                                                context,
+                                                hintText: FFLocalizations.of(context)
                                                         .getText(
                                                   '652h4dg7' /* Calories */,
-                                                ),
-                                                hintStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .labelMedium
-                                                        .override(
-                                                          fontFamily: 'Poppins',
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .accent1,
-                                                          fontSize: 12.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.normal,
-                                                        ),
-                                                enabledBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .accent1,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
-                                                ),
-                                                focusedBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .accent1,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
-                                                ),
-                                                errorBorder: OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
-                                                ),
-                                                focusedErrorBorder:
-                                                    OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .error,
-                                                    width: 1.0,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10.0),
                                                 ),
                                               ),
                                               style:
@@ -1075,85 +690,12 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                     _model.proteinFocusNode,
                                                 autofocus: false,
                                                 obscureText: false,
-                                                decoration: InputDecoration(
-                                                  labelStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        letterSpacing: 0.0,
-                                                      ),
-                                                  alignLabelWithHint: false,
+                                                decoration: createInputDecoration(
+                                                  context,
                                                   hintText: FFLocalizations.of(
                                                           context)
                                                       .getText(
                                                     'tcfh57cy' /* Protein */,
-                                                  ),
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent1,
-                                                        fontSize: 12.0,
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
                                                   ),
                                                 ),
                                                 style:
@@ -1226,85 +768,12 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                     _model.carbsFocusNode,
                                                 autofocus: false,
                                                 obscureText: false,
-                                                decoration: InputDecoration(
-                                                  labelStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        letterSpacing: 0.0,
-                                                      ),
-                                                  alignLabelWithHint: false,
+                                                decoration: createInputDecoration(
+                                                  context,
                                                   hintText: FFLocalizations.of(
                                                           context)
                                                       .getText(
                                                     'zubavkmg' /* Protein */,
-                                                  ),
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent1,
-                                                        fontSize: 12.0,
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
                                                   ),
                                                 ),
                                                 style:
@@ -1376,85 +845,12 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                 focusNode: _model.fatsFocusNode,
                                                 autofocus: false,
                                                 obscureText: false,
-                                                decoration: InputDecoration(
-                                                  labelStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        letterSpacing: 0.0,
-                                                      ),
-                                                  alignLabelWithHint: false,
+                                                decoration: createInputDecoration(
+                                                  context,
                                                   hintText: FFLocalizations.of(
                                                           context)
                                                       .getText(
                                                     'qc76m39r' /* Protein */,
-                                                  ),
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent1,
-                                                        fontSize: 12.0,
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 1.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10.0),
                                                   ),
                                                 ),
                                                 style:
@@ -2549,153 +1945,61 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                             '') ||
                                                     (_model.uploadedFileUrl2 !=
                                                             '')) {
-                                                  var postsRecordReference =
-                                                      PostsRecord.collection
-                                                          .doc();
-                                                  await postsRecordReference
-                                                      .set({
-                                                    ...createPostsRecordData(
-                                                      postPhoto: _model.uploadedFileUrl2 !=
-                                                                  ''
-                                                          ? 'https://gymfeed.b-cdn.net/${functions.extractPathFromUrl(_model.uploadedFileUrl2)}'
-                                                          : '',
-                                                      postUser:
-                                                          currentUserReference,
-                                                      timePosted:
-                                                          getCurrentTimestamp,
-                                                      numComments: 0,
-                                                      postCaption: _model
-                                                          .postTitleTextController
-                                                          .text,
-                                                      allowComments:
-                                                          !_model.switchValue2!,
-                                                      allowLikes:
-                                                          !_model.switchValue1!,
-                                                      location:
-                                                          FFAppState().location,
-                                                      callToActionEnabled:
-                                                          FFAppState()
-                                                              .calltoactionenabled,
-                                                      callToActionText:
-                                                          FFAppState()
-                                                              .calltoactiontext,
-                                                      callToActionLink:
-                                                          FFAppState()
-                                                              .calltoactionurl,
-                                                      labels: FFAppState()
-                                                          .imageLabels,
-                                                      deleted: false,
-                                                      postVideo: _model.uploadedFileUrl1 !=
-                                                                  ''
-                                                          ? 'https://gymfeed.b-cdn.net/${functions.extractPathFromUrl(_model.uploadedFileUrl1)}'
-                                                          : '',
-                                                      foodPost: true,
-                                                      nutritionFacts: _model
-                                                          .nutritionTextController
-                                                          .text,
-                                                      postDescriptionFood: _model
-                                                          .recipeTextController
-                                                          .text,
-                                                      cookingTime: _model
-                                                          .cookingTimeTextController
-                                                          .text,
-                                                      mealType:
-                                                          _model.mealTypeValue,
-                                                      calories: int.tryParse(_model
-                                                          .caloriesTextController
-                                                          .text),
-                                                      protein: int.tryParse(_model
-                                                          .proteinTextController
-                                                          .text),
-                                                      carbs: _model
-                                                          .carbsTextController
-                                                          .text,
-                                                      fats: _model
-                                                          .fatsTextController
-                                                          .text,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'likes': FFAppState()
-                                                            .emptyList,
-                                                        'tagged_users':
-                                                            FFAppState()
-                                                                .taggedUsers,
-                                                      },
-                                                    ),
-                                                  });
-                                                  _model.post = PostsRecord
-                                                      .getDocumentFromData({
-                                                    ...createPostsRecordData(
-                                                      postPhoto: _model.uploadedFileUrl2 !=
-                                                                  ''
-                                                          ? 'https://gymfeed.b-cdn.net/${functions.extractPathFromUrl(_model.uploadedFileUrl2)}'
-                                                          : '',
-                                                      postUser:
-                                                          currentUserReference,
-                                                      timePosted:
-                                                          getCurrentTimestamp,
-                                                      numComments: 0,
-                                                      postCaption: _model
-                                                          .postTitleTextController
-                                                          .text,
-                                                      allowComments:
-                                                          !_model.switchValue2!,
-                                                      allowLikes:
-                                                          !_model.switchValue1!,
-                                                      location:
-                                                          FFAppState().location,
-                                                      callToActionEnabled:
-                                                          FFAppState()
-                                                              .calltoactionenabled,
-                                                      callToActionText:
-                                                          FFAppState()
-                                                              .calltoactiontext,
-                                                      callToActionLink:
-                                                          FFAppState()
-                                                              .calltoactionurl,
-                                                      labels: FFAppState()
-                                                          .imageLabels,
-                                                      deleted: false,
-                                                      postVideo: _model.uploadedFileUrl1 !=
-                                                                  ''
-                                                          ? 'https://gymfeed.b-cdn.net/${functions.extractPathFromUrl(_model.uploadedFileUrl1)}'
-                                                          : '',
-                                                      foodPost: true,
-                                                      nutritionFacts: _model
-                                                          .nutritionTextController
-                                                          .text,
-                                                      postDescriptionFood: _model
-                                                          .recipeTextController
-                                                          .text,
-                                                      cookingTime: _model
-                                                          .cookingTimeTextController
-                                                          .text,
-                                                      mealType:
-                                                          _model.mealTypeValue,
-                                                      calories: int.tryParse(_model
-                                                          .caloriesTextController
-                                                          .text),
-                                                      protein: int.tryParse(_model
-                                                          .proteinTextController
-                                                          .text),
-                                                      carbs: _model
-                                                          .carbsTextController
-                                                          .text,
-                                                      fats: _model
-                                                          .fatsTextController
-                                                          .text,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'likes': FFAppState()
-                                                            .emptyList,
-                                                        'tagged_users':
-                                                            FFAppState()
-                                                                .taggedUsers,
-                                                      },
-                                                    ),
-                                                  }, postsRecordReference);
+                                                  // Create the food post in
+                                                  // Supabase.
+                                                  await PostRepository()
+                                                      .createPost(
+                                                    caption: _model
+                                                        .postTitleTextController
+                                                        .text,
+                                                    photoUrl:
+                                                        _model.uploadedFileUrl2,
+                                                    videoUrl:
+                                                        _model.uploadedFileUrl1,
+                                                    foodPost: true,
+                                                    allowComments:
+                                                        !_model.switchValue2!,
+                                                    allowLikes:
+                                                        !_model.switchValue1!,
+                                                    location:
+                                                        FFAppState().location,
+                                                    callToActionEnabled:
+                                                        FFAppState()
+                                                            .calltoactionenabled,
+                                                    callToActionText:
+                                                        FFAppState()
+                                                            .calltoactiontext,
+                                                    callToActionLink:
+                                                        FFAppState()
+                                                            .calltoactionurl,
+                                                    labels:
+                                                        FFAppState().imageLabels,
+                                                    foodTitle: _model
+                                                        .postTitleTextController
+                                                        .text,
+                                                    foodDescription: _model
+                                                        .recipeTextController
+                                                        .text,
+                                                    nutritionFacts: _model
+                                                        .nutritionTextController
+                                                        .text,
+                                                    cookingTime: _model
+                                                        .cookingTimeTextController
+                                                        .text,
+                                                    mealType:
+                                                        _model.mealTypeValue,
+                                                    calories: int.tryParse(_model
+                                                        .caloriesTextController
+                                                        .text),
+                                                    protein: int.tryParse(_model
+                                                        .proteinTextController
+                                                        .text),
+                                                    carbs: _model
+                                                        .carbsTextController
+                                                        .text,
+                                                    fats: _model
+                                                        .fatsTextController.text,
+                                                  );
                                                   if (FFAppState()
                                                           .taggedUsers
                                                           .length >
@@ -2753,11 +2057,8 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                 '9ajp4qh4' /* Post */,
                                               ),
                                               options: FFButtonOptions(
-                                                width:
-                                                    MediaQuery.sizeOf(context)
-                                                            .width *
-                                                        0.9,
-                                                height: 55.0,
+                                                width: double.infinity,
+                                                height: 54.0,
                                                 padding: EdgeInsetsDirectional
                                                     .fromSTEB(
                                                         24.0, 0.0, 24.0, 0.0),
@@ -2775,17 +2076,17 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                           fontFamily: 'Poppins',
                                                           color:
                                                               Color(0xFF0A0A0A),
-                                                          fontSize: 20.0,
-                                                          letterSpacing: 0.0,
+                                                          fontSize: 16.0,
+                                                          letterSpacing: 0.2,
                                                           fontWeight:
-                                                              FontWeight.w500,
+                                                              FontWeight.w600,
                                                         ),
                                                 elevation: 3.0,
                                                 borderSide: BorderSide(
                                                   color: Colors.transparent,
                                                 ),
                                                 borderRadius:
-                                                    BorderRadius.circular(40.0),
+                                                    BorderRadius.circular(28.0),
                                               ),
                                             ),
                                           ],
