@@ -1,5 +1,3 @@
-import '/ai_workout/aiworkout/aiworkout_widget.dart';
-import '/ai_workout/aiworkout_pro/aiworkout_pro_widget.dart';
 import '/ai_workout/payment/payment_widget.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
@@ -74,6 +72,130 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+
+  // ── AI feature chooser (design gf-03) ──────────────────────────────────────
+  // The lightning button opens a sheet to choose between the AI coach and the
+  // machine scanner. Each option keeps the freemium gate: a shared free-usage
+  // counter (gptButton) up to 5 uses, then the paywall unless the user is
+  // entitled (in which case they get the Pro screen).
+  Future<void> _showAiChooser() async {
+    final theme = FlutterFlowTheme.of(context);
+    Widget optionRow(String label, VoidCallback onTap) => InkWell(
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          onTap: onTap,
+          child: Padding(
+            padding:
+                const EdgeInsetsDirectional.fromSTEB(24.0, 20.0, 20.0, 20.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 18.0,
+                  height: 18.0,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border:
+                        Border.all(color: const Color(0xFF0A0A0A), width: 2.0),
+                  ),
+                ),
+                const SizedBox(width: 14.0),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.headlineMedium.override(
+                      fontFamily: 'Poppins',
+                      color: const Color(0xFF0A0A0A),
+                      fontSize: 18.0,
+                      letterSpacing: 0.0,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Color(0xFF0A0A0A), size: 24.0),
+              ],
+            ),
+          ),
+        );
+    await showModalBottomSheet(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      context: context,
+      builder: (sheetContext) => Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: theme.primary,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24.0)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10.0),
+              optionRow('Personal AI fitness expert', () {
+                Navigator.pop(sheetContext);
+                _openAiFeature(isScanner: false);
+              }),
+              Padding(
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(24.0, 0.0, 24.0, 0.0),
+                child: Container(height: 1.0, color: const Color(0x1A0A0A0A)),
+              ),
+              optionRow('Machine scanner', () {
+                Navigator.pop(sheetContext);
+                _openAiFeature(isScanner: true);
+              }),
+              const SizedBox(height: 10.0),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) safeSetState(() {});
+  }
+
+  Future<void> _openAiFeature({required bool isScanner}) async {
+    final isEntitled =
+        await revenue_cat.isEntitled('premium_features') ?? false;
+    if (!isEntitled) {
+      await revenue_cat.loadOfferings();
+    }
+    if (!mounted) return;
+    if (isEntitled) {
+      context.pushNamed(isScanner
+          ? GptVisionProWidget.routeName
+          : AssistantGPTProWidget.routeName);
+      return;
+    }
+    // Free tier: shared AI-usage counter up to 5 uses, then paywall.
+    final used = valueOrDefault(currentUserDocument?.gptButton, 0);
+    if (used <= 5) {
+      await currentUserReference!.update({
+        ...mapToFirestore({'gptButton': FieldValue.increment(1)}),
+      });
+      if (!mounted) return;
+      context.pushNamed(
+          isScanner ? GptVisionWidget.routeName : AssistantGPTWidget.routeName);
+    } else {
+      _showPaywall();
+    }
+  }
+
+  void _showPaywall() {
+    showModalBottomSheet(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      enableDrag: false,
+      context: context,
+      builder: (context) => Padding(
+        padding: MediaQuery.viewInsetsOf(context),
+        child: PaymentWidget(),
+      ),
+    ).then((value) => safeSetState(() {}));
   }
 
   @override
@@ -218,48 +340,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                                   size: 15.0,
                                                 ),
                                                 onPressed: () async {
-                                                  await currentUserReference!
-                                                      .update({
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'gptButton': FieldValue
-                                                            .increment(1),
-                                                      },
-                                                    ),
-                                                  });
-                                                  await showModalBottomSheet(
-                                                    isScrollControlled: true,
-                                                    backgroundColor:
-                                                        Colors.transparent,
-                                                    enableDrag: false,
-                                                    context: context,
-                                                    builder: (context) {
-                                                      return GestureDetector(
-                                                        onTap: () {
-                                                          FocusScope.of(context)
-                                                              .unfocus();
-                                                          FocusManager.instance
-                                                              .primaryFocus
-                                                              ?.unfocus();
-                                                        },
-                                                        child: Padding(
-                                                          padding: MediaQuery
-                                                              .viewInsetsOf(
-                                                                  context),
-                                                          child: Container(
-                                                            height: MediaQuery
-                                                                        .sizeOf(
-                                                                            context)
-                                                                    .height *
-                                                                0.5,
-                                                            child:
-                                                                AiworkoutWidget(),
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
-                                                  ).then((value) =>
-                                                      safeSetState(() {}));
+                                                  await _showAiChooser();
                                                 },
                                               ),
                                             ),
@@ -284,74 +365,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                                   size: 15.0,
                                                 ),
                                                 onPressed: () async {
-                                                  final isEntitled =
-                                                      await revenue_cat.isEntitled(
-                                                              'premium_features') ??
-                                                          false;
-                                                  if (!isEntitled) {
-                                                    await revenue_cat
-                                                        .loadOfferings();
-                                                  }
-
-                                                  if (isEntitled) {
-                                                    await showModalBottomSheet(
-                                                      isScrollControlled: true,
-                                                      backgroundColor:
-                                                          Colors.transparent,
-                                                      enableDrag: false,
-                                                      context: context,
-                                                      builder: (context) {
-                                                        return GestureDetector(
-                                                          onTap: () {
-                                                            FocusScope.of(
-                                                                    context)
-                                                                .unfocus();
-                                                            FocusManager
-                                                                .instance
-                                                                .primaryFocus
-                                                                ?.unfocus();
-                                                          },
-                                                          child: Padding(
-                                                            padding: MediaQuery
-                                                                .viewInsetsOf(
-                                                                    context),
-                                                            child:
-                                                                AiworkoutProWidget(),
-                                                          ),
-                                                        );
-                                                      },
-                                                    ).then((value) =>
-                                                        safeSetState(() {}));
-                                                  } else {
-                                                    await showModalBottomSheet(
-                                                      isScrollControlled: true,
-                                                      backgroundColor:
-                                                          Colors.transparent,
-                                                      enableDrag: false,
-                                                      context: context,
-                                                      builder: (context) {
-                                                        return GestureDetector(
-                                                          onTap: () {
-                                                            FocusScope.of(
-                                                                    context)
-                                                                .unfocus();
-                                                            FocusManager
-                                                                .instance
-                                                                .primaryFocus
-                                                                ?.unfocus();
-                                                          },
-                                                          child: Padding(
-                                                            padding: MediaQuery
-                                                                .viewInsetsOf(
-                                                                    context),
-                                                            child:
-                                                                PaymentWidget(),
-                                                          ),
-                                                        );
-                                                      },
-                                                    ).then((value) =>
-                                                        safeSetState(() {}));
-                                                  }
+                                                  await _showAiChooser();
                                                 },
                                               ).addWalkthrough(
                                                 iconButtonUnpkyu5g,
@@ -565,7 +579,18 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                                   maxHeight: double.infinity,
                                                 ),
                                                 decoration: BoxDecoration(
-                                                  color: Color(0xFF363636),
+                                                  gradient: LinearGradient(
+                                                    colors: [
+                                                      Color(0xFF0A7C3F),
+                                                      FlutterFlowTheme.of(context)
+                                                          .primary,
+                                                    ],
+                                                    stops: [0.0, 1.0],
+                                                    begin: AlignmentDirectional(
+                                                        -1.0, 1.0),
+                                                    end: AlignmentDirectional(
+                                                        1.0, -1.0),
+                                                  ),
                                                   boxShadow: [
                                                     BoxShadow(
                                                       blurRadius: 4.0,

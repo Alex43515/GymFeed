@@ -381,7 +381,7 @@ Nutr... */
                                                                             ),
                                                                             decoration:
                                                                                 BoxDecoration(
-                                                                              color: FlutterFlowTheme.of(context).primary,
+                                                                              color: FlutterFlowTheme.of(context).tertiary,
                                                                               boxShadow: [
                                                                                 BoxShadow(
                                                                                   blurRadius: 3.0,
@@ -394,7 +394,7 @@ Nutr... */
                                                                               ],
                                                                               borderRadius: BorderRadius.circular(12.0),
                                                                               border: Border.all(
-                                                                                color: FlutterFlowTheme.of(context).primary,
+                                                                                color: Color(0x14FFFFFF),
                                                                                 width: 1.0,
                                                                               ),
                                                                             ),
@@ -574,7 +574,7 @@ Nutr... */
                                                                           decoration:
                                                                               BoxDecoration(
                                                                             color:
-                                                                                Color(0xFFADABAB),
+                                                                                FlutterFlowTheme.of(context).primary,
                                                                             borderRadius:
                                                                                 BorderRadius.circular(12.0),
                                                                             border:
@@ -691,11 +691,7 @@ Nutr... */
                                               TextCapitalization.sentences,
                                           obscureText: false,
                                           decoration: InputDecoration(
-                                            hintText:
-                                                FFLocalizations.of(context)
-                                                    .getText(
-                                              '2td7shqp' /* How can I help you today ... */,
-                                            ),
+                                            hintText: 'Type',
                                             hintStyle:
                                                 FlutterFlowTheme.of(context)
                                                     .bodySmall
