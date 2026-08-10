@@ -152,7 +152,7 @@ class _NavBarWidgetState extends State<NavBarWidget> {
     return Align(
       alignment: const AlignmentDirectional(0.0, 1.0),
       child: Container(
-        width: double.infinity,
+        width: MediaQuery.sizeOf(context).width * 1.0,
         decoration: const BoxDecoration(
           color: Color(0xFF0A0A0A),
           border: Border(
@@ -161,12 +161,14 @@ class _NavBarWidgetState extends State<NavBarWidget> {
         ),
         child: SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(4.0, 8.0, 4.0, 8.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.max,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
+          child: SizedBox(
+            height: 62.0,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(4.0, 0.0, 4.0, 0.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
                 _tab(
                   icon: Icons.home_rounded,
                   label: 'Home',
@@ -196,7 +198,8 @@ class _NavBarWidgetState extends State<NavBarWidget> {
                   active: widget.selectPageIndex == 5,
                   onTap: () => _go(ProfileWidget.routeName),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
