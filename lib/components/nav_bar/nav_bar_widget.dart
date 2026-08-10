@@ -110,25 +110,29 @@ class _NavBarWidgetState extends State<NavBarWidget> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 32.0,
-              height: 32.0,
+              width: 40.0,
+              height: 40.0,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
+                color: theme.primary,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: active ? theme.primary : Colors.transparent,
-                  width: 1.5,
-                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.primary.withOpacity(0.35),
+                    blurRadius: 12.0,
+                    spreadRadius: 1.0,
+                  ),
+                ],
               ),
-              padding: const EdgeInsets.all(5.0),
-              child: Image.asset(
-                'assets/images/07.png',
-                fit: BoxFit.contain,
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Color(0xFF0A0A0A),
+                size: 22.0,
               ),
             ),
             const SizedBox(height: 2.0),
             Text(
-              'Workout',
+              'Coach',
               style: theme.bodyMedium.override(
                     fontFamily: 'Poppins',
                     color: active ? theme.primary : _inactive,
@@ -180,8 +184,8 @@ class _NavBarWidgetState extends State<NavBarWidget> {
                   onTap: () => _go(TrainingHomeWidget.routeName),
                 ),
                 _tab(
-                  icon: Icons.auto_awesome_rounded,
-                  label: 'Feeds',
+                  icon: Icons.emergency_rounded,
+                  label: 'FitClips',
                   active: widget.selectPageIndex == 4,
                   onTap: () =>
                       context.pushNamed(VideoReelsWidget.routeName),
