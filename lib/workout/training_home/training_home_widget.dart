@@ -1,6 +1,7 @@
 import '/ai_workout/payment/payment_widget.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/supabase/repositories/training_repository.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -28,6 +29,10 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
   // Plans / Joined / History
   int _tab = 0;
 
+  // Supabase trainings — fetched once, filtered client-side per tab so switching
+  // tabs never re-fetches. Held as a field so FutureBuilder reuses it.
+  late Future<List<Training>> _trainingsFuture;
+
   // Design tokens (GymFeed AI Coach design).
   static const Color _bg = Color(0xFF0B0B0B);
   static const Color _card = Color(0xFF141414);
@@ -48,6 +53,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => TrainingHomeModel());
+    _trainingsFuture = TrainingRepository().feed(limit: 50);
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
@@ -58,22 +64,23 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     super.dispose();
   }
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
-  void _openTraining(UsersRecord? user, DocumentReference trainingRef) {
-    context.pushNamed(
-      TrainingpostDetailsWidget.routeName,
-      queryParameters: {
-        'userRecord': serializeParam(user, ParamType.Document),
-        'trainingReference':
-            serializeParam(trainingRef, ParamType.DocumentReference),
-      }.withoutNulls,
-      extra: <String, dynamic>{'userRecord': user},
-    );
+  Future<void> _refresh() async {
+    _trainingsFuture = TrainingRepository().feed(limit: 50);
+    safeSetState(() {});
+    await _trainingsFuture;
+  }
+
+  void _openTrainings() {
+    context.pushNamed(JoinTrainingWidget.routeName);
+  }
+
+  String _thumb(Training t) {
+    if ((t.legacyPhotoUrl ?? '').isNotEmpty) return t.legacyPhotoUrl!;
+    if ((t.videoThumbnail ?? '').isNotEmpty) return t.videoThumbnail!;
+    return '';
   }
 
   // ── AI feature chooser (labeled AI Coach pill + center Coach tab) ───────────
-  // Each option keeps the freemium gate: a shared free-usage counter (gptButton)
-  // up to 5 uses, then the paywall unless the user is entitled (→ Pro screen).
   Future<void> _showAiChooser() async {
     final theme = FlutterFlowTheme.of(context);
     Widget optionRow(String label, VoidCallback onTap) => InkWell(
@@ -167,9 +174,11 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     }
     final used = valueOrDefault(currentUserDocument?.gptButton, 0);
     if (used <= 5) {
-      await currentUserReference!.update({
-        ...mapToFirestore({'gptButton': FieldValue.increment(1)}),
-      });
+      if (currentUserReference != null) {
+        await currentUserReference!.update({
+          ...mapToFirestore({'gptButton': FieldValue.increment(1)}),
+        });
+      }
       if (!mounted) return;
       context.pushNamed(
           isScanner ? GptVisionWidget.routeName : AssistantGPTWidget.routeName);
@@ -197,9 +206,8 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     final now = getCurrentTimestamp;
     final dateStr =
         '${_weekdayLong[now.weekday - 1]}, ${_months[now.month - 1]} ${now.day}';
-    final name = currentUserDisplayName.trim().isEmpty
-        ? 'athlete'
-        : currentUserDisplayName.trim().split(' ').first;
+    final display = currentUserDisplayName.trim();
+    final name = display.isEmpty ? 'athlete' : display.split(' ').first;
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(20.0, 14.0, 20.0, 0.0),
       child: Row(
@@ -277,7 +285,6 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
         children: List.generate(7, (i) {
           final d = monday.add(Duration(days: i));
           final isToday = d.day == now.day && d.month == now.month;
-          // green dot for today and earlier days this week (workout streak feel)
           final dotOn = i <= (now.weekday - 1);
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -344,148 +351,140 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     );
   }
 
-  Widget _todayCard(UserTrainingsRecord t) {
+  Widget _todayCard(Training t) {
     final theme = FlutterFlowTheme.of(context);
-    final meta = t.duration > 0
-        ? '${t.trainingCategory} · ~${t.duration} min'
-        : [t.trainingCategory, t.trainingTime]
-            .where((s) => s.isNotEmpty)
-            .join(' · ');
-    return StreamBuilder<UsersRecord>(
-      stream: t.userTraining != null
-          ? UsersRecord.getDocument(t.userTraining!)
-          : const Stream.empty(),
-      builder: (context, snap) {
-        final user = snap.data;
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.circular(18.0),
-            border: Border.all(color: _cardBorder, width: 1.0),
-          ),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
+    final desc = (t.description ?? '').trim();
+    final meta = desc.isNotEmpty
+        ? desc
+        : '${t.participantCount} joined · ${t.likeCount} likes';
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(18.0),
+        border: Border.all(color: _cardBorder, width: 1.0),
+      ),
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          t.trainingTitle.isEmpty
-                              ? 'Your next session'
-                              : t.trainingTitle,
-                          style: theme.headlineMedium.override(
-                            fontFamily: 'Poppins',
-                            color: theme.tertiary,
-                            fontSize: 20.0,
-                            letterSpacing: 0.0,
-                            fontWeight: FontWeight.w700,
-                          ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      t.title.isEmpty ? 'Your next session' : t.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.headlineMedium.override(
+                        fontFamily: 'Poppins',
+                        color: theme.tertiary,
+                        fontSize: 20.0,
+                        letterSpacing: 0.0,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          0.0, 4.0, 0.0, 0.0),
+                      child: Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.bodySmall.override(
+                          fontFamily: 'Poppins',
+                          color: _muted,
+                          fontSize: 13.0,
+                          letterSpacing: 0.0,
                         ),
-                        if (meta.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsetsDirectional.fromSTEB(
-                                0.0, 4.0, 0.0, 0.0),
-                            child: Text(
-                              meta,
-                              style: theme.bodySmall.override(
-                                fontFamily: 'Poppins',
-                                color: _muted,
-                                fontSize: 13.0,
-                                letterSpacing: 0.0,
-                              ),
-                            ),
-                          ),
-                      ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12.0),
+              Container(
+                width: 44.0,
+                height: 44.0,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.primary,
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                child: const Icon(Icons.graphic_eq_rounded,
+                    color: Color(0xFF0A0A0A), size: 22.0),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16.0),
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _openTrainings,
+                  borderRadius: BorderRadius.circular(24.0),
+                  child: Container(
+                    height: 48.0,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(24.0),
+                      border: Border.all(
+                          color: const Color(0x33FFFFFF), width: 1.5),
+                    ),
+                    child: Text(
+                      'Preview',
+                      style: theme.bodyMedium.override(
+                        fontFamily: 'Poppins',
+                        color: theme.tertiary,
+                        fontSize: 15.0,
+                        letterSpacing: 0.0,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12.0),
-                  Container(
-                    width: 44.0,
-                    height: 44.0,
+                ),
+              ),
+              const SizedBox(width: 12.0),
+              Expanded(
+                child: InkWell(
+                  onTap: _openTrainings,
+                  borderRadius: BorderRadius.circular(24.0),
+                  child: Container(
+                    height: 48.0,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: theme.primary,
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    child: const Icon(Icons.graphic_eq_rounded,
-                        color: Color(0xFF0A0A0A), size: 22.0),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16.0),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _openTraining(user, t.reference),
                       borderRadius: BorderRadius.circular(24.0),
-                      child: Container(
-                        height: 48.0,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(24.0),
-                          border:
-                              Border.all(color: const Color(0x33FFFFFF), width: 1.5),
-                        ),
-                        child: Text(
-                          'Preview',
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.play_arrow_rounded,
+                            color: Color(0xFF0A0A0A), size: 20.0),
+                        const SizedBox(width: 4.0),
+                        Text(
+                          'Start workout',
                           style: theme.bodyMedium.override(
                             fontFamily: 'Poppins',
-                            color: theme.tertiary,
+                            color: const Color(0xFF0A0A0A),
                             fontSize: 15.0,
                             letterSpacing: 0.0,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 12.0),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _openTraining(user, t.reference),
-                      borderRadius: BorderRadius.circular(24.0),
-                      child: Container(
-                        height: 48.0,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: theme.primary,
-                          borderRadius: BorderRadius.circular(24.0),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.play_arrow_rounded,
-                                color: Color(0xFF0A0A0A), size: 20.0),
-                            const SizedBox(width: 4.0),
-                            Text(
-                              'Start workout',
-                              style: theme.bodyMedium.override(
-                                fontFamily: 'Poppins',
-                                color: const Color(0xFF0A0A0A),
-                                fontSize: 15.0,
-                                letterSpacing: 0.0,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -594,137 +593,116 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     );
   }
 
-  Widget _planCard(UserTrainingsRecord t) {
+  Widget _planCard(Training t) {
     final theme = FlutterFlowTheme.of(context);
-    final metaBits = [t.difficultyLevel, t.trainingTime]
-        .where((s) => s.isNotEmpty)
-        .join(' · ');
-    return StreamBuilder<UsersRecord>(
-      stream: t.userTraining != null
-          ? UsersRecord.getDocument(t.userTraining!)
-          : const Stream.empty(),
-      builder: (context, snap) {
-        final user = snap.data;
-        return Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 14.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: _card,
-              borderRadius: BorderRadius.circular(18.0),
-              border: Border.all(color: _cardBorder, width: 1.0),
-            ),
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              children: [
-                // Thumbnail
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14.0),
-                  child: Container(
-                    width: 64.0,
-                    height: 64.0,
-                    color: const Color(0xFF1C1C1C),
-                    alignment: Alignment.center,
-                    child: t.trainingBackgroundImage.isNotEmpty
-                        ? Image.network(
-                            t.trainingBackgroundImage,
-                            width: 64.0,
-                            height: 64.0,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                                Icons.image_outlined,
-                                color: _muted,
-                                size: 24.0),
-                          )
-                        : const Icon(Icons.fitness_center_rounded,
-                            color: _muted, size: 24.0),
-                  ),
-                ),
-                const SizedBox(width: 12.0),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        t.trainingTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.bodyMedium.override(
-                          fontFamily: 'Poppins',
-                          color: theme.tertiary,
-                          fontSize: 15.0,
-                          letterSpacing: 0.0,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (t.trainingCategory.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsetsDirectional.fromSTEB(
-                              0.0, 3.0, 0.0, 0.0),
-                          child: Text(
-                            t.trainingCategory,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.bodySmall.override(
-                              fontFamily: 'Poppins',
-                              color: theme.primary,
-                              fontSize: 12.5,
-                              letterSpacing: 0.0,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      if (metaBits.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsetsDirectional.fromSTEB(
-                              0.0, 2.0, 0.0, 0.0),
-                          child: Text(
-                            metaBits,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.bodySmall.override(
-                              fontFamily: 'Poppins',
+    final url = _thumb(t);
+    final desc = (t.description ?? '').trim();
+    final meta = '${t.participantCount} joined · ${t.likeCount} likes';
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 14.0),
+      child: InkWell(
+        onTap: _openTrainings,
+        borderRadius: BorderRadius.circular(18.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(18.0),
+            border: Border.all(color: _cardBorder, width: 1.0),
+          ),
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14.0),
+                child: Container(
+                  width: 64.0,
+                  height: 64.0,
+                  color: const Color(0xFF1C1C1C),
+                  alignment: Alignment.center,
+                  child: url.isNotEmpty
+                      ? Image.network(
+                          url,
+                          width: 64.0,
+                          height: 64.0,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                              Icons.fitness_center_rounded,
                               color: _muted,
-                              fontSize: 12.0,
-                              letterSpacing: 0.0,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                              size: 24.0),
+                        )
+                      : const Icon(Icons.fitness_center_rounded,
+                          color: _muted, size: 24.0),
                 ),
-                const SizedBox(width: 8.0),
-                Column(
+              ),
+              const SizedBox(width: 12.0),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    InkWell(
-                      onTap: () => _openTraining(user, t.reference),
-                      customBorder: const CircleBorder(),
-                      child: Container(
-                        width: 38.0,
-                        height: 38.0,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: theme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.play_arrow_rounded,
-                            color: Color(0xFF0A0A0A), size: 22.0),
+                    Text(
+                      t.title.isEmpty ? 'Training' : t.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.bodyMedium.override(
+                        fontFamily: 'Poppins',
+                        color: theme.tertiary,
+                        fontSize: 15.0,
+                        letterSpacing: 0.0,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 6.0),
-                    InkWell(
-                      onTap: () => _openTraining(user, t.reference),
-                      child: const Icon(Icons.chevron_right_rounded,
-                          color: _muted, size: 20.0),
+                    if (desc.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                            0.0, 3.0, 0.0, 0.0),
+                        child: Text(
+                          desc,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.bodySmall.override(
+                            fontFamily: 'Poppins',
+                            color: theme.primary,
+                            fontSize: 12.5,
+                            letterSpacing: 0.0,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          0.0, 2.0, 0.0, 0.0),
+                      child: Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.bodySmall.override(
+                          fontFamily: 'Poppins',
+                          color: _muted,
+                          fontSize: 12.0,
+                          letterSpacing: 0.0,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8.0),
+              Container(
+                width: 38.0,
+                height: 38.0,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.play_arrow_rounded,
+                    color: Color(0xFF0A0A0A), size: 22.0),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -782,79 +760,79 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
           child: NavBarWidget(selectPageIndex: 3),
         ),
         body: SafeArea(
-          child: StreamBuilder<List<UserTrainingsRecord>>(
-            stream: queryUserTrainingsRecord(
-              queryBuilder: (userTrainingsRecord) => userTrainingsRecord
-                  .orderBy('TrainingDate')
-                  .orderBy('TrainingTime'),
-            ),
+          child: FutureBuilder<List<Training>>(
+            future: _trainingsFuture,
             builder: (context, snapshot) {
-              final loading = !snapshot.hasData;
-              final all = snapshot.data ?? <UserTrainingsRecord>[];
+              final all = snapshot.data ?? <Training>[];
+              final waiting =
+                  snapshot.connectionState == ConnectionState.waiting;
               final today = all.isNotEmpty ? all.first : null;
 
-              List<UserTrainingsRecord> visible;
+              List<Training> visible;
               String emptyText;
               if (_tab == 1) {
-                visible = all
-                    .where((t) =>
-                        t.trainingAttendees.contains(currentUserReference))
-                    .toList();
+                visible = all.where((t) => t.joinedByMe).toList();
                 emptyText = 'You haven\'t joined any trainings yet.';
               } else if (_tab == 2) {
-                visible = all
-                    .where((t) => t.userTraining == currentUserReference)
-                    .toList();
+                visible =
+                    all.where((t) => t.authorId == currentUserUid).toList();
                 emptyText = 'Trainings you create will show up here.';
               } else {
                 visible = all;
-                emptyText = 'No plans yet — tap + to schedule one.';
+                emptyText = 'No plans yet — tap + to add one.';
               }
 
-              return SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _header(all.length),
-                    _weekStrip(),
-                    Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(
-                          20.0, 22.0, 20.0, 120.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (today != null) ...[
-                            _sectionLabel("Today's plan"),
-                            _todayCard(today),
-                            const SizedBox(height: 18.0),
-                          ],
-                          _aiCoachPill(),
-                          const SizedBox(height: 22.0),
-                          _tabsRow(),
-                          const SizedBox(height: 16.0),
-                          if (loading)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 40.0),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 22.0,
-                                  height: 22.0,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        theme.primary),
+              return RefreshIndicator(
+                onRefresh: _refresh,
+                color: theme.primary,
+                backgroundColor: _card,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _header(all.length),
+                      _weekStrip(),
+                      Padding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                            20.0, 22.0, 20.0, 120.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (today != null) ...[
+                              _sectionLabel("Today's plan"),
+                              _todayCard(today),
+                              const SizedBox(height: 18.0),
+                            ],
+                            _aiCoachPill(),
+                            const SizedBox(height: 22.0),
+                            _tabsRow(),
+                            const SizedBox(height: 16.0),
+                            if (waiting)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 40.0),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 22.0,
+                                    height: 22.0,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          theme.primary),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            )
-                          else if (visible.isEmpty)
-                            _emptyState(emptyText)
-                          else
-                            ...visible.map(_planCard),
-                        ],
+                              )
+                            else if (visible.isEmpty)
+                              _emptyState(emptyText)
+                            else
+                              ...visible.map(_planCard),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },
