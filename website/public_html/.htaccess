@@ -1,0 +1,36 @@
+Options -Indexes
+
+RewriteEngine On
+
+# Use one canonical host. Android App Links verify the non-www domain.
+RewriteCond %{HTTP_HOST} ^www\.gymfeed\.io$ [NC]
+RewriteRule ^ https://gymfeed.io%{REQUEST_URI} [R=301,L]
+
+# Shared links get crawlable metadata, an app button and a web-app fallback.
+RewriteRule ^post/([0-9a-fA-F-]{36})/?$ post.php?id=$1 [L,QSA]
+
+# Keep legal and support pages indexable without booting the application.
+RewriteRule ^(privacy|terms|support)/?$ $1/index.html [L]
+
+# GoRouter history URLs must return the Flutter entry point on refresh.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
+
+<IfModule mod_mime.c>
+  AddType application/wasm .wasm
+  AddType application/json .json
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(self), microphone=(self), geolocation=(self)"
+  <FilesMatch "^(index\.html|flutter_service_worker\.js|version\.json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+<Files "assetlinks.json">
+  ForceType application/json
+</Files>

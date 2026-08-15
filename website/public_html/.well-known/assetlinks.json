@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.flutterflow.gymfeedofficial",
+      "sha256_cert_fingerprints": [
+        "EB:C8:C8:2D:65:7C:B3:1F:AF:81:BE:45:32:82:17:A4:49:4C:7D:0D:21:9C:2D:41:75:EE:08:43:9C:BB:50:F4"
+      ]
+    }
+  }
+]
