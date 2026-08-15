@@ -745,11 +745,10 @@ packages:
   google_api_headers:
     dependency: "direct main"
     description:
-      name: google_api_headers
-      sha256: "9603c492a4015492eff25f2df0a84a81f74e9ec6ae41472d8bfc841bc2bb66d2"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.3.4"
+      path: "packages/google_api_headers_compat"
+      relative: true
+    source: path
+    version: "4.3.4+gymfeed.1"
   google_fonts:
     dependency: "direct main"
     description:

@@ -1,0 +1,148 @@
+name: Deploy GymFeed Android to internal testing
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/deploy-android-internal.yml
+      - android/**
+      - assets/**
+      - lib/**
+      - packages/google_api_headers_compat/**
+      - pubspec.lock
+      - pubspec.yaml
+      - scripts/google_play_release.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gymfeed-google-play-internal
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.27.4
+  JAVA_VERSION: "17"
+  PACKAGE_NAME: com.flutterflow.gymfeedofficial
+  UPLOAD_CERT_SHA256: C07A8D59F8F5265F622053BFCDE9F2D7D0C55566E54BE49B8B226420536BD506
+
+jobs:
+  build-test-and-publish:
+    if: vars.ANDROID_AUTO_DEPLOY_ENABLED == 'true'
+    name: Build, test, and publish signed AAB
+    runs-on: ubuntu-24.04
+    environment: google-play-internal
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Install pinned Flutter SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --branch "$FLUTTER_VERSION" --depth 1 \
+            https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" config --no-analytics
+
+      - name: Install Android API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install project and Play API dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          python3 -m pip install --disable-pip-version-check google-auth requests
+
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+
+      - name: Prepare protected release credentials
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" || -z "$ANDROID_UPLOAD_KEYSTORE_BASE64" ]]; then
+            echo "::error::Google Play or Android signing secrets are missing"
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/google-play.json"
+          printf '%s' "$ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/gymfeed-upload.jks"
+          chmod 600 "$RUNNER_TEMP/google-play.json" "$RUNNER_TEMP/gymfeed-upload.jks"
+
+      - name: Allocate next Google Play version code
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_code="$(python3 scripts/google_play_release.py \
+            --credentials "$RUNNER_TEMP/google-play.json" \
+            --package "$PACKAGE_NAME" next-version-code --minimum 191)"
+          [[ "$version_code" =~ ^[0-9]+$ ]]
+          echo "PLAY_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
+
+      - name: Build signed release App Bundle
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/gymfeed-upload.jks
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for value in ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD; do
+            if [[ -z "${!value}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $value"
+              exit 1
+            fi
+          done
+          flutter build appbundle --release --no-pub --build-number "$PLAY_VERSION_CODE"
+
+      - name: Verify App Bundle signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle=build/app/outputs/bundle/release/app-release.aab
+          jarsigner -verify "$bundle" > /dev/null
+          actual_fingerprint="$(keytool -printcert -jarfile "$bundle" \
+            | awk -F'SHA256: ' '/SHA256:/{print $2; exit}' \
+            | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          if [[ "$actual_fingerprint" != "$UPLOAD_CERT_SHA256" ]]; then
+            echo "::error::The AAB was not signed by GymFeed's registered upload key"
+            exit 1
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gymfeed-android-${{ env.PLAY_VERSION_CODE }}
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to Google Play internal testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/google_play_release.py \
+            --credentials "$RUNNER_TEMP/google-play.json" \
+            --package "$PACKAGE_NAME" publish \
+            --bundle build/app/outputs/bundle/release/app-release.aab \
+            --track internal \
+            --release-name "GymFeed internal $PLAY_VERSION_CODE"

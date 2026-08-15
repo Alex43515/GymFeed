@@ -173,7 +173,11 @@ dependencies:
   cupertino_icons: ^1.0.0
 
 dependency_overrides:
-  google_api_headers: 4.3.4
+  # API 36 marks Android signing fields nullable. This local compatibility
+  # package carries the upstream null-safe fix while GymFeed remains on the
+  # Flutter 3.27 / Dart 3.6 toolchain.
+  google_api_headers:
+    path: packages/google_api_headers_compat
   http: 1.2.2
   package_info_plus: 8.0.2
   package_info_plus_platform_interface: 3.0.1
