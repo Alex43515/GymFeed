@@ -31,6 +31,9 @@ migrate_working_dir/
 /build/
 
 # Android related
+*.jks
+*.keystore
+**/android/key.properties
 **/android/**/gradle-wrapper.jar
 **/android/.gradle
 **/android/captures/

@@ -1,0 +1,21 @@
+name: google_api_headers
+description: GymFeed API 36 compatibility build of google_api_headers 4.3.4.
+version: 4.3.4+gymfeed.1
+homepage: https://github.com/zeshuaro/google_api_headers
+publish_to: none
+
+environment:
+  sdk: ">=3.6.1 <4.0.0"
+  flutter: ">=3.27.3"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  package_info_plus: ^8.1.4
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.github.zeshuaro.google_api_headers
+        pluginClass: GoogleApiHeadersPlugin
