@@ -26,6 +26,7 @@ import '/backend/supabase/supabase.dart';
 Future<UploadTicket> uploadVideoToBunny(
   Uint8List bytes,
   String title, {
+  String fileName = 'gymfeed-video.mp4',
   Future<void> Function(double progress)? onProgress,
 }) async {
   // ── 1. Presigned upload ticket from the backend ─────────────────────────
@@ -41,8 +42,15 @@ Future<UploadTicket> uploadVideoToBunny(
 
   // TUS metadata values are base64-encoded per spec.
   String b64(String s) => base64.encode(utf8.encode(s));
+  final extension = fileName.split('.').last.toLowerCase();
+  final contentType = switch (extension) {
+    'mov' => 'video/quicktime',
+    'webm' => 'video/webm',
+    'm4v' => 'video/x-m4v',
+    _ => 'video/mp4',
+  };
   final uploadMetadata =
-      'filetype ${b64('video/mp4')},title ${b64(title.isEmpty ? 'gymfeed-video' : title)}';
+      'filename ${b64(fileName)},filetype ${b64(contentType)},title ${b64(title.isEmpty ? 'gymfeed-video' : title)}';
 
   // ── 3. TUS creation request ─────────────────────────────────────────────
   final createResponse = await http.post(
@@ -52,7 +60,8 @@ Future<UploadTicket> uploadVideoToBunny(
       'Upload-Length': fileSize.toString(),
       'Upload-Metadata': uploadMetadata,
       'Content-Length': '0',
-      ...ticket.tusHeaders, // AuthorizationSignature, Expire, LibraryId, VideoId
+      ...ticket
+          .tusHeaders, // AuthorizationSignature, Expire, LibraryId, VideoId
     },
   );
   if (createResponse.statusCode != 201) {

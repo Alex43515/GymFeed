@@ -168,7 +168,7 @@ class _WelcomePageWidgetState extends State<WelcomePageWidget> {
                                       0.0, 0.0, 0.0, 0.0),
                                   iconPadding: EdgeInsetsDirectional.fromSTEB(
                                       0.0, 0.0, 0.0, 0.0),
-                                  color: FlutterFlowTheme.of(context).accent3,
+                                  color: FlutterFlowTheme.of(context).tertiary,
                                   textStyle: FlutterFlowTheme.of(context)
                                       .titleSmall
                                       .override(

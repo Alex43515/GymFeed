@@ -279,9 +279,9 @@ class _SignUpUsernameWidgetState extends State<SignUpUsernameWidget> {
                                               .usernameTextControllerValidator
                                               .asValidator(context),
                                         ),
-                                        if (_model.usernameTextController
-                                                    .text !=
-                                                '')
+                                        if (_model
+                                                .usernameTextController.text !=
+                                            '')
                                           Padding(
                                             padding:
                                                 EdgeInsetsDirectional.fromSTEB(

@@ -26,12 +26,13 @@ Future initialize(
     return;
   }
   try {
+    await Purchases.setLogLevel(
+      debugLogEnabled ? LogLevel.debug : LogLevel.info,
+    );
     if (Platform.isIOS) {
-      await Purchases.setDebugLogsEnabled(debugLogEnabled);
-      await Purchases.setup(appStoreKey);
+      await Purchases.configure(PurchasesConfiguration(appStoreKey));
     } else if (Platform.isAndroid) {
-      await Purchases.setDebugLogsEnabled(debugLogEnabled);
-      await Purchases.setup(playStoreKey);
+      await Purchases.configure(PurchasesConfiguration(playStoreKey));
     } else {
       print("RevenueCat is not supported on this platform.");
       return;
@@ -56,6 +57,9 @@ Future initialize(
 
 // Purchase a package.
 Future<bool> purchasePackage(String package) async {
+  if (kIsWeb) {
+    return false;
+  }
   try {
     final revenueCatPackage = offerings?.current?.getPackage(package);
     if (revenueCatPackage == null) {
@@ -75,6 +79,9 @@ List<String> get activeEntitlementIds => _customerInfo != null
     : [];
 
 Future loadOfferings() async {
+  if (kIsWeb) {
+    return;
+  }
   try {
     _offerings = await Purchases.getOfferings();
   } on PlatformException catch (e) {
@@ -83,6 +90,9 @@ Future loadOfferings() async {
 }
 
 Future loadCustomerInfo() async {
+  if (kIsWeb) {
+    return;
+  }
   try {
     _customerInfo = await Purchases.getCustomerInfo();
   } on PlatformException catch (e) {
@@ -93,6 +103,9 @@ Future loadCustomerInfo() async {
 // Return if the user has the entitlement.
 // Return null on errors.
 Future<bool?> isEntitled(String entitlementId) async {
+  if (kIsWeb) {
+    return null;
+  }
   try {
     customerInfo = await Purchases.getCustomerInfo();
     return customerInfo!.entitlements.all[entitlementId]?.isActive ?? false;
@@ -120,10 +133,15 @@ Future login(String? uid) async {
 }
 
 // https://docs.revenuecat.com/docs/restoring-purchases
-Future restorePurchases() async {
+Future<bool> restorePurchases() async {
+  if (kIsWeb) {
+    return false;
+  }
   try {
     customerInfo = await Purchases.restorePurchases();
+    return true;
   } on PlatformException catch (e) {
     print("Unable to restore purchases in RevenueCat: $e");
+    return false;
   }
 }

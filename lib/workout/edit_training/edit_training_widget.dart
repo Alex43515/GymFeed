@@ -1447,8 +1447,9 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                                                     children: [
                                                       Stack(
                                                         children: [
-                                                          if (_model.uploadedFileUrl1 !=
-                                                                  '')
+                                                          if (_model
+                                                                  .uploadedFileUrl1 !=
+                                                              '')
                                                             FFButtonWidget(
                                                               onPressed:
                                                                   () async {
@@ -1516,8 +1517,9 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                                                                             40.0),
                                                               ),
                                                             ),
-                                                          if (_model.uploadedFileUrl1 ==
-                                                                  '')
+                                                          if (_model
+                                                                  .uploadedFileUrl1 ==
+                                                              '')
                                                             FFButtonWidget(
                                                               onPressed:
                                                                   () async {
@@ -1596,14 +1598,13 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                                                                   }
                                                                 }
 
-                                                                await editTrainingUserTrainingsRecord
-                                                                    .reference
-                                                                    .update(
-                                                                        createUserTrainingsRecordData(
-                                                                  trainingBackgroundImage:
-                                                                      _model
-                                                                          .uploadedFileUrl1,
-                                                                ));
+                                                                await updateTrainingSupabase(
+                                                                    editTrainingUserTrainingsRecord
+                                                                        .reference
+                                                                        .id,
+                                                                    backgroundImage:
+                                                                        _model
+                                                                            .uploadedFileUrl1);
                                                               },
                                                               text: FFLocalizations
                                                                       .of(context)
@@ -1682,8 +1683,8 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                                           Stack(
                                             children: [
                                               if (editTrainingUserTrainingsRecord
-                                                          .trainingVideo !=
-                                                      '')
+                                                      .trainingVideo !=
+                                                  '')
                                                 FlutterFlowVideoPlayer(
                                                   path:
                                                       editTrainingUserTrainingsRecord
@@ -1717,8 +1718,9 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                                               children: [
                                                 Stack(
                                                   children: [
-                                                    if (_model.uploadedFileUrl2 !=
-                                                            '')
+                                                    if (_model
+                                                            .uploadedFileUrl2 !=
+                                                        '')
                                                       Padding(
                                                         padding:
                                                             EdgeInsetsDirectional
@@ -1798,8 +1800,9 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                                                           ),
                                                         ),
                                                       ),
-                                                    if (_model.uploadedFileUrl2 ==
-                                                            '')
+                                                    if (_model
+                                                            .uploadedFileUrl2 ==
+                                                        '')
                                                       Padding(
                                                         padding:
                                                             EdgeInsetsDirectional
@@ -1886,13 +1889,12 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                                                               }
                                                             }
 
-                                                            await editTrainingUserTrainingsRecord
-                                                                .reference
-                                                                .update(
-                                                                    createUserTrainingsRecordData(
-                                                              trainingVideo: _model
-                                                                  .uploadedFileUrl2,
-                                                            ));
+                                                            await updateTrainingSupabase(
+                                                                editTrainingUserTrainingsRecord
+                                                                    .reference
+                                                                    .id,
+                                                                videoUrl: _model
+                                                                    .uploadedFileUrl2);
 
                                                             safeSetState(() {});
                                                           },
@@ -2149,27 +2151,26 @@ class _EditTrainingWidgetState extends State<EditTrainingWidget>
                           EdgeInsetsDirectional.fromSTEB(16.0, 24.0, 16.0, 4.0),
                       child: FFButtonWidget(
                         onPressed: () async {
-                          await widget.trainingReference!
-                              .update(createUserTrainingsRecordData(
-                            trainingDescription: _model.textController2.text,
-                            userTraining: currentUserReference,
-                            trainingTitle: _model.textController1.text,
-                            trainingTime: dateTimeFormat(
+                          await updateTrainingSupabase(
+                            widget.trainingReference!.id,
+                            description: _model.textController2.text,
+                            title: _model.textController1.text,
+                            trainingTimeRaw: dateTimeFormat(
                               "yMMMd",
                               _model.datePicked2,
                               locale: FFLocalizations.of(context).languageCode,
                             ),
-                            trainingDate: dateTimeFormat(
+                            trainingDateRaw: dateTimeFormat(
                               "yMMMd",
                               _model.datePicked1,
                               locale: FFLocalizations.of(context).languageCode,
                             ),
-                            trainingCategory: _model.dropDownValue,
-                            trainingVideo: _model.uploadedFileUrl2,
+                            category: _model.dropDownValue,
+                            videoUrl: _model.uploadedFileUrl2,
                             duration: int.tryParse(_model.textController3.text),
-                            trainingBackgroundImage: _model.uploadedFileUrl1,
+                            backgroundImage: _model.uploadedFileUrl1,
                             difficultyLevel: _model.levelValue,
-                          ));
+                          );
 
                           context.pushNamed(JoinTrainingWidget.routeName);
                         },

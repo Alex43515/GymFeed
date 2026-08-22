@@ -31,6 +31,20 @@ class FFAppState extends ChangeNotifier {
       _selectedLanguage =
           prefs.getBool('ff_selectedLanguage') ?? _selectedLanguage;
     });
+    _safeInit(() {
+      _pendingVerificationEmail =
+          prefs.getString('ff_pendingVerificationEmail') ??
+              _pendingVerificationEmail;
+    });
+    _safeInit(() {
+      _signupEmail = prefs.getString('ff_signupEmail') ?? _signupEmail;
+    });
+    _safeInit(() {
+      _signupName = prefs.getString('ff_signupName') ?? _signupName;
+    });
+    _safeInit(() {
+      _signupUsername = prefs.getString('ff_signupUsername') ?? _signupUsername;
+    });
   }
 
   void update(VoidCallback callback) {
@@ -108,13 +122,34 @@ class FFAppState extends ChangeNotifier {
   String _signupEmail = '';
   String get signupEmail => _signupEmail;
   set signupEmail(String value) {
-    _signupEmail = value;
+    _signupEmail = value.trim();
+    if (_signupEmail.isEmpty) {
+      prefs.remove('ff_signupEmail');
+    } else {
+      prefs.setString('ff_signupEmail', _signupEmail);
+    }
+  }
+
+  String _pendingVerificationEmail = '';
+  String get pendingVerificationEmail => _pendingVerificationEmail;
+  set pendingVerificationEmail(String value) {
+    _pendingVerificationEmail = value.trim();
+    if (_pendingVerificationEmail.isEmpty) {
+      prefs.remove('ff_pendingVerificationEmail');
+    } else {
+      prefs.setString('ff_pendingVerificationEmail', _pendingVerificationEmail);
+    }
   }
 
   String _signupName = '';
   String get signupName => _signupName;
   set signupName(String value) {
-    _signupName = value;
+    _signupName = value.trim();
+    if (_signupName.isEmpty) {
+      prefs.remove('ff_signupName');
+    } else {
+      prefs.setString('ff_signupName', _signupName);
+    }
   }
 
   String _signupPassword = '';
@@ -132,7 +167,12 @@ class FFAppState extends ChangeNotifier {
   String _signupUsername = '';
   String get signupUsername => _signupUsername;
   set signupUsername(String value) {
-    _signupUsername = value;
+    _signupUsername = value.trim();
+    if (_signupUsername.isEmpty) {
+      prefs.remove('ff_signupUsername');
+    } else {
+      prefs.setString('ff_signupUsername', _signupUsername);
+    }
   }
 
   List<DocumentReference> _taggedUsers = [];
@@ -236,8 +276,8 @@ class FFAppState extends ChangeNotifier {
     prefs.setString('ff_assistantId', value);
   }
 
-  String _apiKey =
-      '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';
+  // Key removed — AI calls now route through the ai-proxy Edge Function.
+  String _apiKey = '';
   String get apiKey => _apiKey;
   set apiKey(String value) {
     _apiKey = value;
@@ -375,6 +415,16 @@ class FFAppState extends ChangeNotifier {
   String get profileImage => _profileImage;
   set profileImage(String value) {
     _profileImage = value;
+  }
+
+  // Transient: the profile photo picked during sign-up. The account doesn't
+  // exist yet at that step, so we can't upload to Supabase Storage (RLS needs
+  // an authenticated uid). We hold the bytes here and upload them in all_done2
+  // right after the account is created. Not persisted to shared prefs.
+  Uint8List? _signupProfileBytes;
+  Uint8List? get signupProfileBytes => _signupProfileBytes;
+  set signupProfileBytes(Uint8List? value) {
+    _signupProfileBytes = value;
   }
 
   LatLng? _locationPost;

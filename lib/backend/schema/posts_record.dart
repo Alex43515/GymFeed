@@ -5,7 +5,9 @@ import 'package:collection/collection.dart';
 import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
+import 'users_record.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class PostsRecord extends FirestoreRecord {
   PostsRecord._(
@@ -190,6 +192,35 @@ class PostsRecord extends FirestoreRecord {
   String get videoPreview => _videoPreview ?? '';
   bool hasVideoPreview() => _videoPreview != null;
 
+  // Author fields supplied by feed_page(). Keeping these on the post lets the
+  // Home list render at its final height immediately instead of collapsing to
+  // a loading spinner every time an off-screen item is rebuilt.
+  String? _feedAuthorUsername;
+  String get feedAuthorUsername => _feedAuthorUsername ?? '';
+  String? _feedAuthorDisplayName;
+  String get feedAuthorDisplayName => _feedAuthorDisplayName ?? '';
+  String? _feedAuthorPhotoUrl;
+  String get feedAuthorPhotoUrl => _feedAuthorPhotoUrl ?? '';
+
+  UsersRecord? get feedAuthor {
+    final reference = postUser;
+    if (reference == null ||
+        (feedAuthorUsername.isEmpty &&
+            feedAuthorDisplayName.isEmpty &&
+            feedAuthorPhotoUrl.isEmpty)) {
+      return null;
+    }
+    return UsersRecord.getDocumentFromData(
+      <String, dynamic>{
+        'uid': reference.id,
+        'username': feedAuthorUsername,
+        'display_name': feedAuthorDisplayName,
+        'photo_url': feedAuthorPhotoUrl,
+      },
+      reference,
+    );
+  }
+
   void _initializeFields() {
     _postPhoto = snapshotData['post_photo'] as String?;
     _postUser = snapshotData['post_user'] as DocumentReference?;
@@ -226,16 +257,62 @@ class PostsRecord extends FirestoreRecord {
     _carbs = snapshotData['carbs'] as String?;
     _videoThumbnail = snapshotData['videoThumbnail'] as String?;
     _videoPreview = snapshotData['videoPreview'] as String?;
+    _feedAuthorUsername = snapshotData['feed_author_username'] as String?;
+    _feedAuthorDisplayName =
+        snapshotData['feed_author_display_name'] as String?;
+    _feedAuthorPhotoUrl = snapshotData['feed_author_photo_url'] as String?;
   }
 
   static CollectionReference get collection =>
       FirebaseFirestore.instance.collection('posts');
 
-  static Stream<PostsRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => PostsRecord.fromSnapshot(s));
+  // ── Supabase-backed reads ─────────────────────────────────────────────────
 
-  static Future<PostsRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => PostsRecord.fromSnapshot(s));
+  static Stream<PostsRecord> getDocument(DocumentReference ref) =>
+      Stream.fromFuture(getDocumentOnce(ref));
+
+  static Future<PostsRecord> getDocumentOnce(DocumentReference ref) async {
+    final row = await supaById('posts', ref.id) ?? const {};
+    return PostsRecord.getDocumentFromData(_supaPostData(row), ref);
+  }
+
+  /// Build a PostsRecord straight from a Supabase `posts` row.
+  static PostsRecord fromSupabase(Map<String, dynamic> row) {
+    final id = (row['id'] ?? '').toString();
+    return PostsRecord.getDocumentFromData(
+        _supaPostData(row), supaRef('posts', id));
+  }
+
+  /// Build a PostsRecord from a `feed_page()` RPC row (carries like_count and
+  /// liked_by_me, so the like display is accurate).
+  static PostsRecord fromFeedRow(Map<String, dynamic> row) {
+    final id = (row['post_id'] ?? '').toString();
+    final data = _supaPostData({
+      'id': id,
+      'user_id': row['author_id'],
+      'created_at': row['created_at'],
+      'caption': row['caption'],
+      'legacy_photo_url': row['photo_url'],
+      'legacy_video_url': row['video_url'],
+      'video_thumbnail': row['video_thumbnail'],
+      'food_post': row['food_post'],
+      'comment_count': row['comment_count'],
+      'like_count': row['like_count'],
+      // Older feed_page() deployments do not return these columns. Treat the
+      // missing values as enabled until migration 0010 is applied.
+      'allow_comments': row['allow_comments'] ?? true,
+      'allow_likes': row['allow_likes'] ?? true,
+    });
+    final likeCount = castToType<int>(row['like_count']) ?? 0;
+    data['likes'] = likePlaceholders(
+      likeCount,
+      likedByUid: (row['liked_by_me'] == true) ? supaCurrentUid() : null,
+    );
+    data['feed_author_username'] = row['author_username'];
+    data['feed_author_display_name'] = row['author_display_name'];
+    data['feed_author_photo_url'] = row['author_photo_url'];
+    return PostsRecord.getDocumentFromData(data, supaRef('posts', id));
+  }
 
   static PostsRecord fromSnapshot(DocumentSnapshot snapshot) => PostsRecord._(
         snapshot.reference,
@@ -259,6 +336,48 @@ class PostsRecord extends FirestoreRecord {
   bool operator ==(other) =>
       other is PostsRecord &&
       reference.path.hashCode == other.reference.path.hashCode;
+}
+
+/// Maps a Supabase `posts` row to the Firestore field names PostsRecord expects.
+/// Media is read from `legacy_photo_url`/`legacy_video_url` (direct URLs).
+Map<String, dynamic> _supaPostData(Map<String, dynamic> row) {
+  final photo = row['legacy_photo_url'] ?? row['photo_url'];
+  final video = row['legacy_video_url'] ?? row['video_url'];
+  final likeCount = castToType<int>(row['like_count']) ?? 0;
+  return <String, dynamic>{
+    'post_photo': photo,
+    'post_video': video,
+    'post_user': supaUserRef(row['user_id']),
+    'time_posted': supaDate(row['created_at']),
+    'num_comments': row['comment_count'],
+    'post_caption': row['caption'],
+    'allow_comments': row['allow_comments'],
+    'allow_likes': row['allow_likes'],
+    'location': row['location'],
+    'deleted': row['deleted'],
+    'call_to_action_enabled': row['call_to_action_enabled'],
+    'call_to_action_text': row['call_to_action_text'],
+    'call_to_action_link': row['call_to_action_link'],
+    'labels': row['labels'],
+    'foodPost': row['food_post'],
+    'videoThumbnail': row['video_thumbnail'],
+    'videoPreview': row['video_preview'],
+    'postPhotoFood': photo,
+    'postVideoFood': video,
+    'postTitleFood': row['food_title'],
+    'postDescriptionFood': row['food_description'],
+    'timePostedFood': supaDate(row['created_at']),
+    'recepie': row['recipe'],
+    'nutritionFacts': row['nutrition_facts'],
+    'cookingTime': row['cooking_time'],
+    'mealType': row['meal_type'],
+    'calories': row['calories'],
+    'protein': row['protein'],
+    'fats': row['fats'],
+    'carbs': row['carbs'],
+    'numCommentsFood': row['comment_count'],
+    'likes': likePlaceholders(likeCount),
+  }..removeWhere((key, value) => value == null);
 }
 
 Map<String, dynamic> createPostsRecordData({

@@ -4,11 +4,14 @@ import '/backend/firebase_storage/storage.dart';
 import '/components/bio/bio_widget.dart';
 import '/components/editsettings/editsettings_widget.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
+import '/components/profile_story_avatar/profile_story_avatar_widget.dart';
+import '/components/post_type_badge/post_type_badge.dart';
 import '/components/qr/qr_widget.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_video_player.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '/flutter_flow/upload_data.dart';
 import '/pages/core_pages/story/story_widget.dart';
 import '/walkthroughs/profile_page_walkthrough.dart';
@@ -17,9 +20,11 @@ import '/index.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart'
     show TutorialCoachMark;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'profile_model.dart';
+import 'desktop_profile_view.dart';
 export 'profile_model.dart';
 
 class ProfileWidget extends StatefulWidget {
@@ -40,6 +45,7 @@ class ProfileWidget extends StatefulWidget {
 class _ProfileWidgetState extends State<ProfileWidget>
     with TickerProviderStateMixin {
   late ProfileModel _model;
+  final bool _showLegacyProfileStory = false;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -83,6 +89,10 @@ class _ProfileWidgetState extends State<ProfileWidget>
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
+
+    if (kIsWeb && MediaQuery.sizeOf(context).width >= 720) {
+      return const DesktopProfileView();
+    }
 
     return GestureDetector(
       onTap: () {
@@ -226,139 +236,63 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                 mainAxisSize: MainAxisSize.max,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  StreamBuilder<List<StoriesRecord>>(
-                                    stream: queryStoriesRecord(
-                                      queryBuilder: (storiesRecord) =>
-                                          storiesRecord
-                                              .where(
-                                                'user',
-                                                isEqualTo: currentUserReference,
-                                              )
-                                              .where(
-                                                'expire_time',
-                                                isGreaterThan:
-                                                    getCurrentTimestamp,
-                                              ),
-                                      singleRecord: true,
-                                    ),
-                                    builder: (context, snapshot) {
-                                      // Customize what your widget looks like when it's loading.
-                                      if (!snapshot.hasData) {
-                                        return Center(
-                                          child: SizedBox(
-                                            width: 12.0,
-                                            height: 12.0,
-                                            child: CircularProgressIndicator(
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                      List<StoriesRecord>
-                                          stackStoriesRecordList =
-                                          snapshot.data!;
-                                      final stackStoriesRecord =
-                                          stackStoriesRecordList.isNotEmpty
-                                              ? stackStoriesRecordList.first
-                                              : null;
-
-                                      return Container(
-                                        width: 100.0,
-                                        height: 100.0,
-                                        child: Stack(
-                                          alignment:
-                                              AlignmentDirectional(1.0, 1.0),
-                                          children: [
-                                            if (stackStoriesRecord != null)
-                                              Align(
-                                                alignment: AlignmentDirectional(
-                                                    0.0, 0.0),
-                                                child: InkWell(
-                                                  splashColor:
-                                                      Colors.transparent,
-                                                  focusColor:
-                                                      Colors.transparent,
-                                                  hoverColor:
-                                                      Colors.transparent,
-                                                  highlightColor:
-                                                      Colors.transparent,
-                                                  onTap: () async {
-                                                    await showModalBottomSheet(
-                                                      isScrollControlled: true,
-                                                      backgroundColor:
-                                                          Colors.transparent,
-                                                      barrierColor:
-                                                          Color(0x00000000),
-                                                      context: context,
-                                                      builder: (context) {
-                                                        return GestureDetector(
-                                                          onTap: () {
-                                                            FocusScope.of(
-                                                                    context)
-                                                                .unfocus();
-                                                            FocusManager
-                                                                .instance
-                                                                .primaryFocus
-                                                                ?.unfocus();
-                                                          },
-                                                          child: Padding(
-                                                            padding: MediaQuery
-                                                                .viewInsetsOf(
-                                                                    context),
-                                                            child: StoryWidget(
-                                                              story:
-                                                                  stackStoriesRecord,
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                    ).then((value) =>
-                                                        safeSetState(() {}));
-                                                  },
-                                                  child: Container(
-                                                    width: 100.0,
-                                                    height: 100.0,
-                                                    decoration: BoxDecoration(
-                                                      gradient: LinearGradient(
-                                                        colors: [
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                          Color(0xFF149A4F)
-                                                        ],
-                                                        stops: [0.0, 1.0],
-                                                        begin:
-                                                            AlignmentDirectional(
-                                                                1.0, -1.0),
-                                                        end:
-                                                            AlignmentDirectional(
-                                                                -1.0, 1.0),
-                                                      ),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                  ),
+                                  ProfileStoryAvatarWidget(
+                                    userId: currentUserUid,
+                                    photoUrl: currentUserPhoto,
+                                    isCurrentUser: true,
+                                  ),
+                                  if (_showLegacyProfileStory)
+                                    StreamBuilder<List<StoriesRecord>>(
+                                      stream: queryStoriesByUserStream(
+                                          currentUserUid),
+                                      builder: (context, snapshot) {
+                                        // Customize what your widget looks like when it's loading.
+                                        if (!snapshot.hasData) {
+                                          return Center(
+                                            child: SizedBox(
+                                              width: 12.0,
+                                              height: 12.0,
+                                              child: CircularProgressIndicator(
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                        Color>(
+                                                  Colors.white,
                                                 ),
                                               ),
-                                            Align(
-                                              alignment: AlignmentDirectional(
-                                                  0.0, 0.0),
-                                              child: AuthUserStreamWidget(
-                                                builder: (context) => InkWell(
-                                                  splashColor:
-                                                      Colors.transparent,
-                                                  focusColor:
-                                                      Colors.transparent,
-                                                  hoverColor:
-                                                      Colors.transparent,
-                                                  highlightColor:
-                                                      Colors.transparent,
-                                                  onTap: () async {
-                                                    if (stackStoriesRecord !=
-                                                        null) {
-                                                      showModalBottomSheet(
+                                            ),
+                                          );
+                                        }
+                                        List<StoriesRecord>
+                                            stackStoriesRecordList =
+                                            snapshot.data!;
+                                        final stackStoriesRecord =
+                                            stackStoriesRecordList.isNotEmpty
+                                                ? stackStoriesRecordList.first
+                                                : null;
+
+                                        return Container(
+                                          width: 100.0,
+                                          height: 100.0,
+                                          child: Stack(
+                                            alignment:
+                                                AlignmentDirectional(1.0, 1.0),
+                                            children: [
+                                              if (stackStoriesRecord != null)
+                                                Align(
+                                                  alignment:
+                                                      AlignmentDirectional(
+                                                          0.0, 0.0),
+                                                  child: InkWell(
+                                                    splashColor:
+                                                        Colors.transparent,
+                                                    focusColor:
+                                                        Colors.transparent,
+                                                    hoverColor:
+                                                        Colors.transparent,
+                                                    highlightColor:
+                                                        Colors.transparent,
+                                                    onTap: () async {
+                                                      await showModalBottomSheet(
                                                         isScrollControlled:
                                                             true,
                                                         backgroundColor:
@@ -391,211 +325,294 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                         },
                                                       ).then((value) =>
                                                           safeSetState(() {}));
-
-                                                      await Future.delayed(
-                                                          const Duration(
-                                                              milliseconds:
-                                                                  5000));
-                                                      Navigator.pop(context);
-                                                    }
-                                                  },
-                                                  child: Container(
-                                                    width: 93.0,
-                                                    height: 93.0,
-                                                    decoration: BoxDecoration(
-                                                      color: FlutterFlowTheme
-                                                              .of(context)
-                                                          .secondaryBackground,
-                                                      image: DecorationImage(
-                                                        fit: BoxFit.cover,
-                                                        image: Image.network(
-                                                          functions
-                                                              .bunnyCDNImagePath(
-                                                                  valueOrDefault<
-                                                                      String>(
-                                                            currentUserPhoto,
-                                                            'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                                          )),
-                                                        ).image,
-                                                      ),
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(
-                                                        color:
+                                                    },
+                                                    child: Container(
+                                                      width: 100.0,
+                                                      height: 100.0,
+                                                      decoration: BoxDecoration(
+                                                        gradient:
+                                                            LinearGradient(
+                                                          colors: [
                                                             FlutterFlowTheme.of(
                                                                     context)
                                                                 .primary,
-                                                        width: 3.0,
+                                                            Color(0xFF149A4F)
+                                                          ],
+                                                          stops: [0.0, 1.0],
+                                                          begin:
+                                                              AlignmentDirectional(
+                                                                  1.0, -1.0),
+                                                          end:
+                                                              AlignmentDirectional(
+                                                                  -1.0, 1.0),
+                                                        ),
+                                                        shape: BoxShape.circle,
                                                       ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                            ),
-                                            if (!(stackStoriesRecord != null))
                                               Align(
                                                 alignment: AlignmentDirectional(
-                                                    1.0, 1.0),
-                                                child: InkWell(
-                                                  splashColor:
-                                                      Colors.transparent,
-                                                  focusColor:
-                                                      Colors.transparent,
-                                                  hoverColor:
-                                                      Colors.transparent,
-                                                  highlightColor:
-                                                      Colors.transparent,
-                                                  onTap: () async {
-                                                    final selectedMedia =
-                                                        await selectMediaWithSourceBottomSheet(
-                                                      context: context,
-                                                      imageQuality: 80,
-                                                      allowPhoto: true,
-                                                      pickerFontFamily: 'Inter',
-                                                    );
-                                                    if (selectedMedia != null &&
-                                                        selectedMedia.every((m) =>
-                                                            validateFileFormat(
-                                                                m.storagePath,
-                                                                context))) {
-                                                      safeSetState(() => _model
-                                                              .isDataUploading =
-                                                          true);
-                                                      var selectedUploadedFiles =
-                                                          <FFUploadedFile>[];
-
-                                                      var downloadUrls =
-                                                          <String>[];
-                                                      try {
-                                                        showUploadMessage(
-                                                          context,
-                                                          'Uploading file...',
-                                                          showLoading: true,
-                                                        );
-                                                        selectedUploadedFiles =
-                                                            selectedMedia
-                                                                .map((m) =>
-                                                                    FFUploadedFile(
-                                                                      name: m
-                                                                          .storagePath
-                                                                          .split(
-                                                                              '/')
-                                                                          .last,
-                                                                      bytes: m
-                                                                          .bytes,
-                                                                      height: m
-                                                                          .dimensions
-                                                                          ?.height,
-                                                                      width: m
-                                                                          .dimensions
-                                                                          ?.width,
-                                                                      blurHash:
-                                                                          m.blurHash,
-                                                                    ))
-                                                                .toList();
-
-                                                        downloadUrls =
-                                                            (await Future.wait(
-                                                          selectedMedia.map(
-                                                            (m) async =>
-                                                                await uploadData(
-                                                                    m.storagePath,
-                                                                    m.bytes),
-                                                          ),
-                                                        ))
-                                                                .where((u) =>
-                                                                    u != null)
-                                                                .map((u) => u!)
-                                                                .toList();
-                                                      } finally {
-                                                        ScaffoldMessenger.of(
-                                                                context)
-                                                            .hideCurrentSnackBar();
-                                                        _model.isDataUploading =
-                                                            false;
-                                                      }
-                                                      if (selectedUploadedFiles
-                                                                  .length ==
-                                                              selectedMedia
-                                                                  .length &&
-                                                          downloadUrls.length ==
-                                                              selectedMedia
-                                                                  .length) {
-                                                        safeSetState(() {
-                                                          _model.uploadedLocalFile =
-                                                              selectedUploadedFiles
-                                                                  .first;
-                                                          _model.uploadedFileUrl =
-                                                              downloadUrls
-                                                                  .first;
-                                                        });
-                                                        showUploadMessage(
-                                                            context,
-                                                            'Success!');
-                                                      } else {
-                                                        safeSetState(() {});
-                                                        showUploadMessage(
-                                                            context,
-                                                            'Failed to upload data');
-                                                        return;
-                                                      }
-                                                    }
-
-                                                    if (_model.uploadedFileUrl !=
-                                                            '') {
-                                                      await StoriesRecord
-                                                          .collection
-                                                          .doc()
-                                                          .set({
-                                                        ...createStoriesRecordData(
-                                                          user:
-                                                              currentUserReference,
-                                                          storyPhoto: _model
-                                                              .uploadedFileUrl,
-                                                          timeCreated:
-                                                              getCurrentTimestamp,
-                                                          expireTime: functions
-                                                              .tomorrowTime(
-                                                                  getCurrentTimestamp),
-                                                        ),
-                                                        ...mapToFirestore(
-                                                          {
-                                                            'views':
-                                                                FFAppState()
-                                                                    .emptyList,
+                                                    0.0, 0.0),
+                                                child: AuthUserStreamWidget(
+                                                  builder: (context) => InkWell(
+                                                    splashColor:
+                                                        Colors.transparent,
+                                                    focusColor:
+                                                        Colors.transparent,
+                                                    hoverColor:
+                                                        Colors.transparent,
+                                                    highlightColor:
+                                                        Colors.transparent,
+                                                    onTap: () async {
+                                                      if (stackStoriesRecord !=
+                                                          null) {
+                                                        showModalBottomSheet(
+                                                          isScrollControlled:
+                                                              true,
+                                                          backgroundColor:
+                                                              Colors
+                                                                  .transparent,
+                                                          barrierColor:
+                                                              Color(0x00000000),
+                                                          context: context,
+                                                          builder: (context) {
+                                                            return GestureDetector(
+                                                              onTap: () {
+                                                                FocusScope.of(
+                                                                        context)
+                                                                    .unfocus();
+                                                                FocusManager
+                                                                    .instance
+                                                                    .primaryFocus
+                                                                    ?.unfocus();
+                                                              },
+                                                              child: Padding(
+                                                                padding: MediaQuery
+                                                                    .viewInsetsOf(
+                                                                        context),
+                                                                child:
+                                                                    StoryWidget(
+                                                                  story:
+                                                                      stackStoriesRecord,
+                                                                ),
+                                                              ),
+                                                            );
                                                           },
-                                                        ),
-                                                      });
-                                                    }
-                                                  },
-                                                  child: Container(
-                                                    width: 30.0,
-                                                    height: 30.0,
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .secondary,
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(
+                                                        ).then((value) =>
+                                                            safeSetState(
+                                                                () {}));
+
+                                                        await Future.delayed(
+                                                            const Duration(
+                                                                milliseconds:
+                                                                    5000));
+                                                        Navigator.pop(context);
+                                                      }
+                                                    },
+                                                    child: Container(
+                                                      width: 93.0,
+                                                      height: 93.0,
+                                                      decoration: BoxDecoration(
                                                         color: FlutterFlowTheme
                                                                 .of(context)
-                                                            .primaryBackground,
-                                                        width: 3.0,
+                                                            .secondaryBackground,
+                                                        image: DecorationImage(
+                                                          fit: BoxFit.cover,
+                                                          image:
+                                                              CachedNetworkImageProvider(
+                                                            functions
+                                                                .bunnyCDNImagePath(
+                                                                    valueOrDefault<
+                                                                        String>(
+                                                              currentUserPhoto,
+                                                              'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
+                                                            )),
+                                                          ),
+                                                        ),
+                                                        shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .primary,
+                                                          width: 3.0,
+                                                        ),
                                                       ),
-                                                    ),
-                                                    child: Icon(
-                                                      Icons.add_rounded,
-                                                      color: Colors.white,
-                                                      size: 16.0,
                                                     ),
                                                   ),
                                                 ),
                                               ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                              if (!(stackStoriesRecord != null))
+                                                Align(
+                                                  alignment:
+                                                      AlignmentDirectional(
+                                                          1.0, 1.0),
+                                                  child: InkWell(
+                                                    splashColor:
+                                                        Colors.transparent,
+                                                    focusColor:
+                                                        Colors.transparent,
+                                                    hoverColor:
+                                                        Colors.transparent,
+                                                    highlightColor:
+                                                        Colors.transparent,
+                                                    onTap: () async {
+                                                      final selectedMedia =
+                                                          await selectMediaWithSourceBottomSheet(
+                                                        context: context,
+                                                        imageQuality: 80,
+                                                        allowPhoto: true,
+                                                        pickerFontFamily:
+                                                            'Inter',
+                                                      );
+                                                      if (selectedMedia !=
+                                                              null &&
+                                                          selectedMedia.every((m) =>
+                                                              validateFileFormat(
+                                                                  m.storagePath,
+                                                                  context))) {
+                                                        safeSetState(() => _model
+                                                                .isDataUploading =
+                                                            true);
+                                                        var selectedUploadedFiles =
+                                                            <FFUploadedFile>[];
+
+                                                        var downloadUrls =
+                                                            <String>[];
+                                                        try {
+                                                          showUploadMessage(
+                                                            context,
+                                                            'Uploading file...',
+                                                            showLoading: true,
+                                                          );
+                                                          selectedUploadedFiles =
+                                                              selectedMedia
+                                                                  .map((m) =>
+                                                                      FFUploadedFile(
+                                                                        name: m
+                                                                            .storagePath
+                                                                            .split('/')
+                                                                            .last,
+                                                                        bytes: m
+                                                                            .bytes,
+                                                                        height: m
+                                                                            .dimensions
+                                                                            ?.height,
+                                                                        width: m
+                                                                            .dimensions
+                                                                            ?.width,
+                                                                        blurHash:
+                                                                            m.blurHash,
+                                                                      ))
+                                                                  .toList();
+
+                                                          downloadUrls =
+                                                              (await Future
+                                                                      .wait(
+                                                            selectedMedia.map(
+                                                              (m) async =>
+                                                                  await uploadData(
+                                                                      m.storagePath,
+                                                                      m.bytes),
+                                                            ),
+                                                          ))
+                                                                  .where((u) =>
+                                                                      u != null)
+                                                                  .map(
+                                                                      (u) => u!)
+                                                                  .toList();
+                                                        } finally {
+                                                          ScaffoldMessenger.of(
+                                                                  context)
+                                                              .hideCurrentSnackBar();
+                                                          _model.isDataUploading =
+                                                              false;
+                                                        }
+                                                        if (selectedUploadedFiles
+                                                                    .length ==
+                                                                selectedMedia
+                                                                    .length &&
+                                                            downloadUrls
+                                                                    .length ==
+                                                                selectedMedia
+                                                                    .length) {
+                                                          safeSetState(() {
+                                                            _model.uploadedLocalFile =
+                                                                selectedUploadedFiles
+                                                                    .first;
+                                                            _model.uploadedFileUrl =
+                                                                downloadUrls
+                                                                    .first;
+                                                          });
+                                                          showUploadMessage(
+                                                              context,
+                                                              'Success!');
+                                                        } else {
+                                                          safeSetState(() {});
+                                                          showUploadMessage(
+                                                              context,
+                                                              'Failed to upload data');
+                                                          return;
+                                                        }
+                                                      }
+
+                                                      if (_model
+                                                              .uploadedFileUrl !=
+                                                          '') {
+                                                        await StoriesRecord
+                                                            .collection
+                                                            .doc()
+                                                            .set({
+                                                          ...createStoriesRecordData(
+                                                            user:
+                                                                currentUserReference,
+                                                            storyPhoto: _model
+                                                                .uploadedFileUrl,
+                                                            timeCreated:
+                                                                getCurrentTimestamp,
+                                                            expireTime: functions
+                                                                .tomorrowTime(
+                                                                    getCurrentTimestamp),
+                                                          ),
+                                                          ...mapToFirestore(
+                                                            {
+                                                              'views':
+                                                                  FFAppState()
+                                                                      .emptyList,
+                                                            },
+                                                          ),
+                                                        });
+                                                      }
+                                                    },
+                                                    child: Container(
+                                                      width: 30.0,
+                                                      height: 30.0,
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .secondary,
+                                                        shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .primaryBackground,
+                                                          width: 3.0,
+                                                        ),
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.add_rounded,
+                                                        color: Colors.white,
+                                                        size: 16.0,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
                                 ],
                               ),
                               Row(
@@ -656,9 +673,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                               ),
                                             ),
                                           if (valueOrDefault(
-                                                      currentUserDocument?.bio,
-                                                      '') !=
-                                                  '')
+                                                  currentUserDocument?.bio,
+                                                  '') !=
+                                              '')
                                             Padding(
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(0.0, 4.0, 0.0, 0.0),
@@ -745,10 +762,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                               ),
                                             ),
                                           if (valueOrDefault(
-                                                      currentUserDocument
-                                                          ?.website,
-                                                      '') !=
-                                                  '')
+                                                  currentUserDocument?.website,
+                                                  '') !=
+                                              '')
                                             Padding(
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(0.0, 5.0, 0.0, 0.0),
@@ -839,8 +855,10 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                             hoverColor: Colors.transparent,
                                             highlightColor: Colors.transparent,
                                             onTap: () async {
-                                              context.pushNamed(
+                                              await context.pushNamed(
                                                   EditProfileWidget.routeName);
+                                              await refreshCurrentUserProfile();
+                                              if (mounted) safeSetState(() {});
                                             },
                                             child: Container(
                                               width: MediaQuery.sizeOf(context)
@@ -1096,11 +1114,7 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                         Colors.transparent,
                                                     highlightColor:
                                                         Colors.transparent,
-                                                    onTap: () async {
-                                                      context.pushNamed(
-                                                          MyInfoWidget
-                                                              .routeName);
-                                                    },
+                                                    onTap: null,
                                                     child: Column(
                                                       mainAxisSize:
                                                           MainAxisSize.max,
@@ -1356,10 +1370,7 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                     queryParameters: {
                                                       'followersTabIndex':
                                                           serializeParam(
-                                                        valueOrDefault<int>(
-                                                          widget.tabSelector,
-                                                          2,
-                                                        ),
+                                                        1,
                                                         ParamType.int,
                                                       ),
                                                     }.withoutNulls,
@@ -1544,23 +1555,12 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                 ),
                                                 child: StreamBuilder<
                                                     List<PostsRecord>>(
-                                                  stream: queryPostsRecord(
-                                                    queryBuilder: (postsRecord) =>
-                                                        postsRecord
-                                                            .where(
-                                                              'post_user',
-                                                              isEqualTo:
-                                                                  currentUserReference,
-                                                            )
-                                                            .where(
-                                                              'deleted',
-                                                              isEqualTo: false,
-                                                            )
-                                                            .orderBy(
-                                                                'time_posted',
-                                                                descending:
-                                                                    true),
+                                                  stream:
+                                                      queryPostsByUserStream(
+                                                    currentUserUid,
                                                   ),
+                                                  initialData: ProfileModel
+                                                      .cachedMyPosts,
                                                   builder: (context, snapshot) {
                                                     // Customize what your widget looks like when it's loading.
                                                     if (!snapshot.hasData) {
@@ -1582,15 +1582,17 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                     List<PostsRecord>
                                                         gridViewPostsRecordList =
                                                         snapshot.data!;
+                                                    ProfileModel.cachedMyPosts =
+                                                        gridViewPostsRecordList;
 
                                                     return GridView.builder(
                                                       padding: EdgeInsets.zero,
                                                       gridDelegate:
                                                           SliverGridDelegateWithFixedCrossAxisCount(
                                                         crossAxisCount: 3,
-                                                        crossAxisSpacing: 5.0,
-                                                        mainAxisSpacing: 5.0,
-                                                        childAspectRatio: 1.0,
+                                                        crossAxisSpacing: 2.0,
+                                                        mainAxisSpacing: 2.0,
+                                                        childAspectRatio: 0.86,
                                                       ),
                                                       primary: false,
                                                       shrinkWrap: true,
@@ -1642,10 +1644,6 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                                 );
                                                               }
 
-                                                              final userPostUsersRecord =
-                                                                  snapshot
-                                                                      .data!;
-
                                                               return InkWell(
                                                                 splashColor: Colors
                                                                     .transparent,
@@ -1689,23 +1687,12 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                                     minHeight:
                                                                         400.0,
                                                                   ),
+                                                                  clipBehavior:
+                                                                      Clip.antiAlias,
                                                                   decoration:
                                                                       BoxDecoration(
                                                                     color: Color(
                                                                         0xFF111111),
-                                                                    image:
-                                                                        DecorationImage(
-                                                                      fit: BoxFit
-                                                                          .contain,
-                                                                      image: Image
-                                                                          .network(
-                                                                        functions
-                                                                            .bunnyCDNImagePath(gridViewPostsRecord.postPhoto),
-                                                                      ).image,
-                                                                    ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            0.0),
                                                                     border:
                                                                         Border
                                                                             .all(
@@ -1713,35 +1700,59 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                                           0xFF111111),
                                                                     ),
                                                                   ),
-                                                                  child:
-                                                                      Visibility(
-                                                                    visible: gridViewPostsRecord.postVideo !=
-                                                                            '',
-                                                                    child:
-                                                                        FlutterFlowVideoPlayer(
-                                                                      path: functions
-                                                                          .bunnyCDNVideoPath(
-                                                                              gridViewPostsRecord.postVideo),
-                                                                      videoType:
-                                                                          VideoType
-                                                                              .network,
-                                                                      width:
-                                                                          80.0,
-                                                                      height:
-                                                                          80.0,
-                                                                      autoPlay:
-                                                                          false,
-                                                                      looping:
-                                                                          true,
-                                                                      showControls:
-                                                                          false,
-                                                                      allowFullScreen:
-                                                                          false,
-                                                                      allowPlaybackSpeedMenu:
-                                                                          false,
-                                                                      lazyLoad:
-                                                                          false,
-                                                                    ),
+                                                                  child: Stack(
+                                                                    fit: StackFit
+                                                                        .expand,
+                                                                    children: [
+                                                                      CachedNetworkImage(
+                                                                        imageUrl: functions.bunnyCDNImagePath(gridViewPostsRecord.postVideo.isNotEmpty
+                                                                            ? (gridViewPostsRecord.videoThumbnail.isNotEmpty
+                                                                                ? gridViewPostsRecord.videoThumbnail
+                                                                                : gridViewPostsRecord.postPhoto)
+                                                                            : gridViewPostsRecord.postPhoto),
+                                                                        fit: BoxFit
+                                                                            .cover,
+                                                                        placeholder:
+                                                                            (_, __) =>
+                                                                                Container(color: Color(0xFF111111)),
+                                                                        errorWidget: (_,
+                                                                                __,
+                                                                                ___) =>
+                                                                            Container(color: Color(0xFF111111)),
+                                                                      ),
+                                                                      if (gridViewPostsRecord
+                                                                          .postVideo
+                                                                          .isNotEmpty)
+                                                                        Align(
+                                                                          alignment: AlignmentDirectional(
+                                                                              gridViewPostsRecord.foodPost ? -0.9 : 0.9,
+                                                                              -0.9),
+                                                                          child:
+                                                                              Padding(
+                                                                            padding: const EdgeInsetsDirectional.fromSTEB(
+                                                                                0.0,
+                                                                                6.0,
+                                                                                6.0,
+                                                                                0.0),
+                                                                            child:
+                                                                                Icon(
+                                                                              Icons.play_circle_fill_rounded,
+                                                                              color: Colors.white,
+                                                                              size: 20.0,
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      if (gridViewPostsRecord
+                                                                          .foodPost)
+                                                                        const Positioned(
+                                                                          right:
+                                                                              6.0,
+                                                                          top:
+                                                                              6.0,
+                                                                          child:
+                                                                              FoodPostBadge(size: 26.0),
+                                                                        ),
+                                                                    ],
                                                                   ),
                                                                 ),
                                                               );
@@ -1784,23 +1795,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                           0.0, 0.0, 0.0, 150.0),
                                                   child: StreamBuilder<
                                                       List<PostsRecord>>(
-                                                    stream: queryPostsRecord(
-                                                      queryBuilder: (postsRecord) =>
-                                                          postsRecord
-                                                              .where(
-                                                                'tagged_users',
-                                                                arrayContains:
-                                                                    currentUserReference,
-                                                              )
-                                                              .where(
-                                                                'deleted',
-                                                                isEqualTo:
-                                                                    false,
-                                                              )
-                                                              .orderBy(
-                                                                  'time_posted',
-                                                                  descending:
-                                                                      true),
+                                                    stream:
+                                                        queryTaggedPostsByUserStream(
+                                                      currentUserUid,
                                                     ),
                                                     builder:
                                                         (context, snapshot) {
@@ -1913,7 +1910,8 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                                 ),
                                                                 child:
                                                                     Visibility(
-                                                                  visible: taggedPhotosPostsRecord
+                                                                  visible:
+                                                                      taggedPhotosPostsRecord
                                                                               .postVideo !=
                                                                           '',
                                                                   child:
@@ -2015,20 +2013,8 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                               child: StreamBuilder<
                                                                   List<
                                                                       UserTrainingsRecord>>(
-                                                                stream:
-                                                                    queryUserTrainingsRecord(
-                                                                  queryBuilder: (userTrainingsRecord) =>
-                                                                      userTrainingsRecord
-                                                                          .where(
-                                                                            'userTraining',
-                                                                            isEqualTo:
-                                                                                currentUserReference,
-                                                                          )
-                                                                          .orderBy(
-                                                                              'TrainingDate')
-                                                                          .orderBy(
-                                                                              'TrainingTime'),
-                                                                ),
+                                                                stream: queryTrainingsByUserStream(
+                                                                    currentUserUid),
                                                                 builder: (context,
                                                                     snapshot) {
                                                                   // Customize what your widget looks like when it's loading.
@@ -2100,9 +2086,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                                             image:
                                                                                 DecorationImage(
                                                                               fit: BoxFit.cover,
-                                                                              image: Image.network(
+                                                                              image: CachedNetworkImageProvider(
                                                                                 functions.bunnyCDNImagePath(trainingfeedUserTrainingsRecord.trainingBackgroundImage),
-                                                                              ).image,
+                                                                              ),
                                                                             ),
                                                                             boxShadow: [
                                                                               BoxShadow(
@@ -2306,6 +2292,7 @@ class _ProfileWidgetState extends State<ProfileWidget>
                 child: NavBarWidget(
                   selectPageIndex: 5,
                   hidden: false,
+                  overlay: true,
                 ),
               ),
             ],

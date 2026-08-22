@@ -1,71 +1,59 @@
-import 'dart:async';
+// MIGRATION SHIM — do not delete.
+//
+// Every widget in the app still imports this file as
+//   import '/auth/firebase_auth/auth_util.dart';
+// This shim re-exports the Supabase auth layer under exactly the same symbol
+// names so the widget layer compiles without modification.
+//
+// Firebase is kept initialised (see main.dart) to prevent compile/runtime
+// crashes in the many widget files that still hold Firestore type imports.
+// Actual data access goes through Supabase repositories.
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '/backend/backend.dart';
-import 'package:stream_transform/stream_transform.dart';
-import 'firebase_auth_manager.dart';
+import '/auth/supabase_auth/auth_util.dart' as _supa;
+import '/backend/supabase/database/profile.dart';
 
-export 'firebase_auth_manager.dart';
+// ─────────────────────────────────────────────────────────────────────────────
+// Re-export every symbol the widget layer needs from the Supabase layer.
+// ─────────────────────────────────────────────────────────────────────────────
+export '/auth/supabase_auth/auth_util.dart'
+    show
+        authManager,
+        currentUserEmail,
+        currentUserUid,
+        currentUserDisplayName,
+        currentUserPhoto,
+        currentPhoneNumber,
+        currentJwtToken,
+        currentUserEmailVerified,
+        refreshCurrentUserProfile,
+        authenticatedUserStream,
+        AuthUserStreamWidget;
 
-final _authManager = FirebaseAuthManager();
-FirebaseAuthManager get authManager => _authManager;
+// Export the Supabase auth manager class (replaces FirebaseAuthManager).
+export '/auth/supabase_auth/supabase_auth_manager.dart';
 
-String get currentUserEmail =>
-    currentUserDocument?.email ?? currentUser?.email ?? '';
+// ─────────────────────────────────────────────────────────────────────────────
+// Renamed / aliased symbols
+// ─────────────────────────────────────────────────────────────────────────────
 
-String get currentUserUid => currentUser?.uid ?? '';
+/// Drop-in for the old `UsersRecord? currentUserDocument`.
+/// [Profile] has all the same getter names as the old UsersRecord so widgets
+/// using `currentUserDocument?.gptprompt` etc. continue to work.
+Profile? get currentUserDocument => _supa.currentUserProfile;
 
-String get currentUserDisplayName =>
-    currentUserDocument?.displayName ?? currentUser?.displayName ?? '';
-
-String get currentUserPhoto =>
-    currentUserDocument?.photoUrl ?? currentUser?.photoUrl ?? '';
-
-String get currentPhoneNumber =>
-    currentUserDocument?.phoneNumber ?? currentUser?.phoneNumber ?? '';
-
-String get currentJwtToken => _currentJwtToken ?? '';
-
-bool get currentUserEmailVerified => currentUser?.emailVerified ?? false;
-
-/// Create a Stream that listens to the current user's JWT Token, since Firebase
-/// generates a new token every hour.
-String? _currentJwtToken;
-final jwtTokenStream = FirebaseAuth.instance
-    .idTokenChanges()
-    .map((user) async => _currentJwtToken = await user?.getIdToken())
-    .asBroadcastStream();
-
-DocumentReference? get currentUserReference =>
-    loggedIn ? UsersRecord.collection.doc(currentUser!.uid) : null;
-
-UsersRecord? currentUserDocument;
-final authenticatedUserStream = FirebaseAuth.instance
-    .authStateChanges()
-    .map<String>((user) => user?.uid ?? '')
-    .switchMap(
-      (uid) => uid.isEmpty
-          ? Stream.value(null)
-          : UsersRecord.getDocument(UsersRecord.collection.doc(uid))
-              .handleError((_) {}),
-    )
-    .map((user) {
-  currentUserDocument = user;
-
-  return currentUserDocument;
-}).asBroadcastStream();
-
-class AuthUserStreamWidget extends StatelessWidget {
-  const AuthUserStreamWidget({Key? key, required this.builder})
-      : super(key: key);
-
-  final WidgetBuilder builder;
-
-  @override
-  Widget build(BuildContext context) => StreamBuilder(
-        stream: authenticatedUserStream,
-        builder: (context, _) => builder(context),
-      );
+/// Firestore DocumentReference for auth checks and legacy Firestore writes.
+/// Writes go to the empty Firebase project (harmless on clean slate).
+/// Returns null when not logged in — same semantics as the Firebase original.
+DocumentReference? get currentUserReference {
+  final uid = _supa.currentUserUid;
+  if (uid.isEmpty) return null;
+  return FirebaseFirestore.instance.doc('users/$uid');
 }
+
+/// Satisfies `jwtTokenStream.listen((_) {})` in main.dart.
+/// Supabase handles access-token refresh automatically; the stream is only
+/// needed so the listen call doesn't break compilation.
+final Stream<dynamic> jwtTokenStream =
+    _supa.authenticatedUserStream.map<dynamic>((_) => null).asBroadcastStream();

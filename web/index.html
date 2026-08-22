@@ -18,11 +18,13 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080808">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="GymFeed ">
+  <meta name="apple-mobile-web-app-title" content="GymFeed">
 
   
 
@@ -32,26 +34,37 @@
   <link rel="icon" type="image/png" href="favicon.png" />
 
   <!-- Open Graph & SEO tags -->
-  <meta property="og:title" content="Image Sharing Social Media App" />
-  <meta property="og:description" content="Built with FlutterFlow." />
-  <meta property="og:image" content="https://storage.googleapis.com/flutterflow-prod-hosting/og_splash_gradient.png" /> 
-  <meta name="twitter:title" content="Image Sharing Social Media App" />
-  <meta name="twitter:description" content="Built with FlutterFlow." />
-  <meta name="twitter:image" content="https://storage.googleapis.com/flutterflow-prod-hosting/og_splash_gradient.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="GymFeed" />
+  <meta property="og:title" content="GymFeed — Your fitness. Your people. Your progress." />
+  <meta property="og:description" content="Train, track nutrition, follow your progress and share the journey with your fitness community." />
+  <meta property="og:image" content="https://gymfeed.io/gymfeed-social-card.png" />
+  <meta property="og:url" content="https://gymfeed.io/" />
+  <meta name="twitter:title" content="GymFeed — Your fitness. Your people. Your progress." />
+  <meta name="twitter:description" content="Train, track nutrition, follow your progress and share the journey with your fitness community." />
+  <meta name="twitter:image" content="https://gymfeed.io/gymfeed-social-card.png" />
   <meta name="twitter:card" content="summary_large_image" />
 
-  <title> Image Sharing Social Media App </title>
-  <meta name="description" content="Built with FlutterFlow." />
+  <title>GymFeed</title>
+  <meta name="description" content="The GymFeed fitness community and AI training experience." />
     
 
   <!-- Status Bar color in Safari browser (iOS) and PWA -->
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#ffffff">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#080808">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#080808">
 
   <link rel="manifest" href="manifest.json">
+  <!-- video_player_web cannot decode Bunny HLS in Chrome/Edge/Firefox. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.6.13/dist/hls.min.js"></script>
   
 </head>
-<body>
+<body style="margin:0;background:#080808;overflow:hidden">
+  <div id="web-loader" role="status" aria-label="Loading GymFeed" style="position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#080808;color:#fff;font-family:Arial,sans-serif">
+    <div style="display:flex;align-items:center;gap:14px;font-size:28px;font-weight:800;letter-spacing:-1px">
+      <img src="favicon.png" alt="" width="52" height="52" style="border-radius:14px">
+      <span>GymFeed</span>
+    </div>
+  </div>
   
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBaAKbRwjQpBxUxfa46HZYGwxPTwpXqy4g"></script>
   
@@ -59,6 +72,12 @@
   
   <script>
     {{flutter_bootstrap_js}}
+  </script>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      const loader = document.getElementById('web-loader');
+      if (loader) loader.remove();
+    });
   </script>
 </body>
 </html>

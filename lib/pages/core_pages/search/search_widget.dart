@@ -345,12 +345,7 @@ class _SearchWidgetState extends State<SearchWidget>
                           animationsMap['textOnPageLoadAnimation']!),
                     ),
                   StreamBuilder<List<PostsRecord>>(
-                    stream: queryPostsRecord(
-                      queryBuilder: (postsRecord) => postsRecord.where(
-                        'deleted',
-                        isEqualTo: false,
-                      ),
-                    ),
+                    stream: queryPostsRecord(),
                     builder: (context, snapshot) {
                       // Customize what your widget looks like when it's loading.
                       if (!snapshot.hasData) {
@@ -503,16 +498,8 @@ class _SearchWidgetState extends State<SearchWidget>
                                             hoverColor: Colors.transparent,
                                             highlightColor: Colors.transparent,
                                             onTap: () async {
-                                              await RecentSearchesRecord
-                                                      .createDoc(
-                                                          currentUserReference!)
-                                                  .set(
-                                                      createRecentSearchesRecordData(
-                                                userRef:
-                                                    searchUsersItem.reference,
-                                                timeSearched:
-                                                    getCurrentTimestamp,
-                                              ));
+                                              await addRecentSearchSupabase(
+                                                  searchUsersItem.reference.id);
 
                                               context.pushNamed(
                                                 ProfileOtherWidget.routeName,
@@ -691,9 +678,6 @@ class _SearchWidgetState extends State<SearchWidget>
                   child: StreamBuilder<List<RecentSearchesRecord>>(
                     stream: queryRecentSearchesRecord(
                       parent: currentUserReference,
-                      queryBuilder: (recentSearchesRecord) =>
-                          recentSearchesRecord.orderBy('time_searched',
-                              descending: true),
                     ),
                     builder: (context, snapshot) {
                       // Customize what your widget looks like when it's loading.
@@ -833,9 +817,9 @@ class _SearchWidgetState extends State<SearchWidget>
                                         hoverColor: Colors.transparent,
                                         highlightColor: Colors.transparent,
                                         onTap: () async {
-                                          await recentSearchesRecentSearchesRecord
-                                              .reference
-                                              .delete();
+                                          await removeRecentSearchSupabase(
+                                              recentSearchesRecentSearchesRecord
+                                                  .reference.id);
                                         },
                                         child: Icon(
                                           Icons.close_rounded,
@@ -872,11 +856,6 @@ class _SearchWidgetState extends State<SearchWidget>
                             future: (_model.firestoreRequestCompleter ??=
                                     Completer<List<PostsRecord>>()
                                       ..complete(queryPostsRecordOnce(
-                                        queryBuilder: (postsRecord) =>
-                                            postsRecord.where(
-                                          'deleted',
-                                          isEqualTo: false,
-                                        ),
                                         limit: 18,
                                       )))
                                 .future,

@@ -1,12 +1,11 @@
 import 'dart:async';
 
-import 'package:firebase_dynamic_links/firebase_dynamic_links.dart';
+import 'package:app_links/app_links.dart';
 import '../../flutter_flow/flutter_flow_util.dart';
+import '../marketing/marketing_attribution.dart';
 import 'package:flutter/material.dart';
 
-const _kDynamicLinksUrl = 'https://gymfeed.page.link';
-const _kAppBundleId = 'com.flutterflow.gymfeedofficial';
-const _kIosAppId = '6480524639';
+const _kGymFeedWebOrigin = 'https://gymfeed.io';
 
 Future<String> generateCurrentPageLink(
   BuildContext context, {
@@ -16,31 +15,8 @@ Future<String> generateCurrentPageLink(
   bool isShortLink = true,
   bool forceRedirect = false,
 }) async {
-  final dynamicLinkParams = DynamicLinkParameters(
-    link: Uri.parse(
-        '$_kDynamicLinksUrl${GoRouterState.of(context).uri.toString()}'),
-    uriPrefix: _kDynamicLinksUrl,
-    androidParameters: const AndroidParameters(packageName: _kAppBundleId),
-    iosParameters: const IOSParameters(
-      bundleId: _kAppBundleId,
-      appStoreId: _kIosAppId,
-    ),
-    socialMetaTagParameters: SocialMetaTagParameters(
-      title: title,
-      description: description,
-      imageUrl: imageUrl != null ? Uri.tryParse(imageUrl) : null,
-    ),
-    navigationInfoParameters: forceRedirect
-        ? NavigationInfoParameters(forcedRedirectEnabled: true)
-        : null,
-  );
-  return isShortLink
-      ? FirebaseDynamicLinks.instance
-          .buildShortLink(dynamicLinkParams)
-          .then((link) => link.shortUrl.toString())
-      : FirebaseDynamicLinks.instance
-          .buildLink(dynamicLinkParams)
-          .then((link) => link.toString());
+  final location = GoRouterState.of(context).uri;
+  return Uri.parse(_kGymFeedWebOrigin).resolveUri(location).toString();
 }
 
 class DynamicLinksHandler extends StatefulWidget {
@@ -58,45 +34,95 @@ class DynamicLinksHandler extends StatefulWidget {
 }
 
 class _DynamicLinksHandlerState extends State<DynamicLinksHandler> {
-  StreamSubscription? linkSubscription;
+  StreamSubscription<Uri>? appLinkSubscription;
+  final AppLinks _appLinks = AppLinks();
+  String? _initialAppLink;
 
-  static Set<String> kInitialLinks = {};
-
-  Future handleOpenedDynamicLink() async {
-    final linkData = await FirebaseDynamicLinks.instance.getInitialLink();
-    final link = linkData?.link.toString();
-    if (linkData != null && link != null && !kInitialLinks.contains(link)) {
-      kInitialLinks.add(link);
-      _handleDynamicLink(linkData);
-    }
-    linkSubscription ??=
-        FirebaseDynamicLinks.instance.onLink.listen(_handleDynamicLink);
-  }
-
-  /// Extracts the path from the dynamic link, and routes to it.
-  void _handleDynamicLink(PendingDynamicLinkData linkData) {
-    final link = linkData.link.toString();
-    final host = linkData.link.host;
-    final location = link.split(host).last;
-    if (widget.router.getCurrentLocation() != location) {
+  void _handleAppLink(Uri uri) {
+    unawaited(captureMarketingAttribution(uri));
+    final location = appLocationFromIncomingLink(uri);
+    if (location.isNotEmpty && widget.router.getCurrentLocation() != location) {
       widget.router.push(location);
     }
+  }
+
+  Future<void> handleAppLinks() async {
+    try {
+      final initial = await _appLinks.getInitialLink();
+      if (initial != null) {
+        _initialAppLink = initial.toString();
+        _handleAppLink(initial);
+      }
+    } catch (error) {
+      debugPrint('Initial app link handling failed: $error');
+    }
+    appLinkSubscription ??= _appLinks.uriLinkStream.listen(
+      (uri) {
+        // Some platforms replay getInitialLink() as the first stream event.
+        if (_initialAppLink == uri.toString()) {
+          _initialAppLink = null;
+          return;
+        }
+        _handleAppLink(uri);
+      },
+      onError: (Object error, StackTrace stack) {
+        debugPrint('App link handling failed: $error');
+      },
+    );
   }
 
   @override
   void initState() {
     super.initState();
     if (!isWeb) {
-      handleOpenedDynamicLink();
+      unawaited(handleAppLinks());
     }
   }
 
   @override
   void dispose() {
-    linkSubscription?.cancel();
+    appLinkSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+String appLocationFromIncomingLink(Uri uri) {
+  if (uri.scheme == 'com.flutterflow.gymfeedofficial') {
+    // Prefer a path-style custom URI (`scheme:/postDetails`). Also accept the
+    // older host-style form (`scheme://postDetails`) for links already shared.
+    var path = uri.path.isNotEmpty
+        ? uri.path
+        : uri.host.isNotEmpty
+            ? '/${uri.host}'
+            : '/';
+    path = switch (path.toLowerCase()) {
+      '/postdetails' => '/postDetails',
+      '/authcallback' => '/authCallback',
+      '/emailverification' => '/emailVerification',
+      '/changepassword' => '/changePassword',
+      _ => path,
+    };
+    return Uri(path: path, queryParameters: uri.queryParameters).toString();
+  }
+
+  final isGymFeedWebLink = (uri.scheme == 'https' || uri.scheme == 'http') &&
+      uri.host.toLowerCase() == 'gymfeed.io';
+  if (isGymFeedWebLink && uri.pathSegments.length == 2) {
+    final section = uri.pathSegments.first.toLowerCase();
+    final postId = uri.pathSegments.last.trim();
+    if (section == 'post' && postId.isNotEmpty) {
+      return Uri(
+        path: '/postDetails',
+        queryParameters: {'post': postId},
+      ).toString();
+    }
+  }
+
+  final path = uri.path.isEmpty ? '/' : uri.path;
+  return uri.queryParameters.isEmpty
+      ? path
+      : Uri(path: path, queryParameters: uri.queryParameters).toString();
 }

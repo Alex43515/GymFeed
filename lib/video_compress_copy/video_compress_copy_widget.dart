@@ -1,4 +1,5 @@
-import '/backend/firebase_storage/storage.dart';
+import '/custom_code/actions/index.dart' as actions;
+import '/custom_code/widgets/upload_progress_screen.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -89,52 +90,47 @@ class _VideoCompressCopyWidgetState extends State<VideoCompressCopyWidget> {
                     allowPhoto: false,
                     allowVideo: true,
                   );
-                  if (selectedMedia != null &&
-                      selectedMedia.every(
-                          (m) => validateFileFormat(m.storagePath, context))) {
+                  if (selectedMedia != null && selectedMedia.isNotEmpty) {
+                    final selected = selectedMedia.first;
+                    if (!validateFileFormat(selected.storagePath, context) ||
+                        selected.filePath == null) {
+                      return;
+                    }
                     safeSetState(() => _model.isDataUploading = true);
-                    var selectedUploadedFiles = <FFUploadedFile>[];
-
-                    var downloadUrls = <String>[];
                     try {
                       showUploadMessage(
                         context,
-                        'Uploading file...',
+                        'Compressing video...',
                         showLoading: true,
                       );
-                      selectedUploadedFiles = selectedMedia
-                          .map((m) => FFUploadedFile(
-                                name: m.storagePath.split('/').last,
-                                bytes: m.bytes,
-                                height: m.dimensions?.height,
-                                width: m.dimensions?.width,
-                                blurHash: m.blurHash,
-                              ))
-                          .toList();
-
-                      downloadUrls = (await Future.wait(
-                        selectedMedia.map(
-                          (m) async => await uploadData(m.storagePath, m.bytes),
-                        ),
-                      ))
-                          .where((u) => u != null)
-                          .map((u) => u!)
-                          .toList();
-                    } finally {
+                      final compressed =
+                          await actions.compressVideo(selected.filePath!);
+                      if (compressed?.bytes == null ||
+                          compressed!.bytes!.isEmpty) {
+                        throw StateError('Video compression failed.');
+                      }
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                      _model.isDataUploading = false;
-                    }
-                    if (selectedUploadedFiles.length == selectedMedia.length &&
-                        downloadUrls.length == selectedMedia.length) {
+                      final upload = await showUploadProgress(
+                        context,
+                        videoBytes: compressed.bytes!,
+                        videoTitle: 'GymFeed video',
+                      );
+                      final url = upload?.videoPlaylistUrl;
+                      if (url == null || url.isEmpty) {
+                        throw StateError('Video upload failed.');
+                      }
                       safeSetState(() {
-                        _model.uploadedLocalFile = selectedUploadedFiles.first;
-                        _model.uploadedFileUrl = downloadUrls.first;
+                        _model.uploadedLocalFile = compressed;
+                        _model.uploadedFileUrl = url;
                       });
                       showUploadMessage(context, 'Success!');
-                    } else {
-                      safeSetState(() {});
-                      showUploadMessage(context, 'Failed to upload data');
-                      return;
+                    } catch (error) {
+                      if (context.mounted) {
+                        showUploadMessage(context, 'Failed to upload video');
+                      }
+                    } finally {
+                      _model.isDataUploading = false;
                     }
                   }
                 },

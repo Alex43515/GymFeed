@@ -2,8 +2,13 @@
 *.class
 *.log
 *.pyc
+__pycache__/
 *.swp
 .DS_Store
+.codex-design-review-*/
+.codex-remote-attachments/
+.codex-worktrees/
+build_log.txt
 .atom/
 .buildlog/
 .history
@@ -31,6 +36,9 @@ migrate_working_dir/
 /build/
 
 # Android related
+*.jks
+*.keystore
+**/android/key.properties
 **/android/**/gradle-wrapper.jar
 **/android/.gradle
 **/android/captures/
@@ -67,7 +75,6 @@ migrate_working_dir/
 **/ios/**/Runner/GeneratedPluginRegistrant.*
 
 # Web related
-lib/generated_plugin_registrant.dart
 
 # Secrets — never commit these
 .env
@@ -77,3 +84,7 @@ lib/generated_plugin_registrant.dart
 **/service-account*.json
 supabase/.temp/
 firebase/functions/node_modules/
+marketing/node_modules/
+scripts/node_modules/
+website/full_app/
+website/*.zip

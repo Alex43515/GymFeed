@@ -70,16 +70,8 @@ class _JoinTrainingWidgetState extends State<JoinTrainingWidget>
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<WorkoutRecord>>(
-      stream: queryWorkoutRecord(
-        queryBuilder: (workoutRecord) => workoutRecord
-            .where(
-              'userWorkout',
-              isEqualTo: currentUserReference,
-            )
-            .where(
-              'date',
-              isEqualTo: _model.calendarSelectedDay?.start,
-            ),
+      stream: queryWorkoutsByDateStream(
+        _model.calendarSelectedDay?.start,
       ),
       builder: (context, snapshot) {
         // Customize what your widget looks like when it's loading.
@@ -339,19 +331,8 @@ class _JoinTrainingWidgetState extends State<JoinTrainingWidget>
                                               child: StreamBuilder<
                                                   List<UserTrainingsRecord>>(
                                                 stream:
-                                                    queryUserTrainingsRecord(
-                                                  queryBuilder:
-                                                      (userTrainingsRecord) =>
-                                                          userTrainingsRecord
-                                                              .where(
-                                                                'TrainingAttendees',
-                                                                arrayContains:
-                                                                    currentUserReference,
-                                                              )
-                                                              .orderBy(
-                                                                  'TrainingDate')
-                                                              .orderBy(
-                                                                  'TrainingTime'),
+                                                    queryJoinedTrainingsStream(
+                                                  currentUserUid,
                                                 ),
                                                 builder: (context, snapshot) {
                                                   // Customize what your widget looks like when it's loading.
@@ -765,18 +746,8 @@ class _JoinTrainingWidgetState extends State<JoinTrainingWidget>
                                                                 List<
                                                                     UserTrainingsRecord>>(
                                                               stream:
-                                                                  queryUserTrainingsRecord(
-                                                                queryBuilder: (userTrainingsRecord) =>
-                                                                    userTrainingsRecord
-                                                                        .where(
-                                                                          'userTraining',
-                                                                          isEqualTo:
-                                                                              currentUserReference,
-                                                                        )
-                                                                        .orderBy(
-                                                                            'TrainingDate')
-                                                                        .orderBy(
-                                                                            'TrainingTime'),
+                                                                  queryTrainingsByUserStream(
+                                                                currentUserUid,
                                                               ),
                                                               builder: (context,
                                                                   snapshot) {
@@ -1287,21 +1258,10 @@ class _JoinTrainingWidgetState extends State<JoinTrainingWidget>
                                                     child: StreamBuilder<
                                                         List<WorkoutRecord>>(
                                                       stream:
-                                                          queryWorkoutRecord(
-                                                        queryBuilder:
-                                                            (workoutRecord) =>
-                                                                workoutRecord
-                                                                    .where(
-                                                                      'userWorkout',
-                                                                      isEqualTo:
-                                                                          currentUserReference,
-                                                                    )
-                                                                    .where(
-                                                                      'date',
-                                                                      isEqualTo: _model
-                                                                          .calendarSelectedDay
-                                                                          ?.start,
-                                                                    ),
+                                                          queryWorkoutsByDateStream(
+                                                        _model
+                                                            .calendarSelectedDay
+                                                            ?.start,
                                                       ),
                                                       builder:
                                                           (context, snapshot) {
@@ -1559,15 +1519,7 @@ class _JoinTrainingWidgetState extends State<JoinTrainingWidget>
                                                                                           value: _model.checkboxValueMap[trainingfeedWorkoutRecord] ??= trainingfeedWorkoutRecord.isChecked,
                                                                                           onChanged: (newValue) async {
                                                                                             safeSetState(() => _model.checkboxValueMap[trainingfeedWorkoutRecord] = newValue!);
-                                                                                            if (newValue!) {
-                                                                                              await trainingfeedWorkoutRecord.reference.update(createWorkoutRecordData(
-                                                                                                isChecked: true,
-                                                                                              ));
-                                                                                            } else {
-                                                                                              await trainingfeedWorkoutRecord.reference.update(createWorkoutRecordData(
-                                                                                                isChecked: false,
-                                                                                              ));
-                                                                                            }
+                                                                                            await setWorkoutCheckedSupabase(trainingfeedWorkoutRecord.reference.id, newValue!);
                                                                                           },
                                                                                           side: BorderSide(
                                                                                             width: 2,

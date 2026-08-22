@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '/flutter_flow/flutter_flow_util.dart';
+import '/auth/supabase_auth/auth_util.dart' show currentJwtToken;
 import 'api_manager.dart';
 
 export 'api_manager.dart' show ApiCallResponse;
@@ -12,12 +13,12 @@ const _kPrivateApiFunctionName = 'ffPrivateApiCall';
 /// Start OpenAI API Assistant Group Code
 
 class OpenAIAPIAssistantGroup {
-  static String getBaseUrl({
-    String? token = '',
-  }) =>
-      'https://api.openai.com/v1';
+  // Routed through the ai-proxy Edge Function. Supabase JWT is added per-call.
+  static const _proxyBase =
+      'https://bzinwojowkxavfzilvat.supabase.co/functions/v1/ai-proxy/openai/v1';
+  static String getBaseUrl({String? token = ''}) => _proxyBase;
   static Map<String, String> headers = {
-    'Authorization': 'Bearer [token]',
+    'Authorization': 'Bearer [currentJwtToken]',
     'OpenAI-Beta': 'assistants=v2',
   };
   static ThreadsCall threadsCall = ThreadsCall();
@@ -40,7 +41,7 @@ class ThreadsCall {
       apiUrl: '${baseUrl}/threads',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${token}',
+        'Authorization': 'Bearer ${currentJwtToken}',
         'OpenAI-Beta': 'assistants=v2',
       },
       params: {},
@@ -81,7 +82,7 @@ class MessageCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${token}',
+        'Authorization': 'Bearer ${currentJwtToken}',
         'OpenAI-Beta': 'assistants=v2',
       },
       params: {},
@@ -118,7 +119,7 @@ class RunCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${token}',
+        'Authorization': 'Bearer ${currentJwtToken}',
         'OpenAI-Beta': 'assistants=v2',
       },
       params: {},
@@ -154,7 +155,7 @@ class RetrieverunCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${token}',
+        'Authorization': 'Bearer ${currentJwtToken}',
         'OpenAI-Beta': 'assistants=v2',
       },
       params: {},
@@ -187,7 +188,7 @@ class MessagesCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${token}',
+        'Authorization': 'Bearer ${currentJwtToken}',
         'OpenAI-Beta': 'assistants=v2',
       },
       params: {
@@ -213,11 +214,10 @@ class MessagesCall {
 /// Start OpenAI API Group Code
 
 class OpenAIAPIGroup {
-  static String getBaseUrl({
-    String? apiKey =
-        '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',
-  }) =>
-      'https://api.openai.com/v1';
+  // Routed through the ai-proxy Edge Function. Key is stored as an Edge secret.
+  static const _proxyBase =
+      'https://bzinwojowkxavfzilvat.supabase.co/functions/v1/ai-proxy/openai/v1';
+  static String getBaseUrl({String? apiKey = ''}) => _proxyBase;
   static Map<String, String> headers = {};
   static CreateChatCompletionCall createChatCompletionCall =
       CreateChatCompletionCall();
@@ -314,8 +314,7 @@ class CreateChatCompletionCall {
     String? query = '',
     String? imagePath = '',
     String? assistantId = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -348,8 +347,7 @@ class CreateChatCompletionCall {
       apiUrl: '${baseUrl}/chat/completions',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization':
-            'Bearer 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',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -372,8 +370,7 @@ class CreateChatCompletionCall {
 class CreateCompletionCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -407,7 +404,7 @@ class CreateCompletionCall {
       apiUrl: '${baseUrl}/completions',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -425,8 +422,7 @@ class CreateCompletionCall {
 class CreateImageCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -448,7 +444,7 @@ class CreateImageCall {
       apiUrl: '${baseUrl}/images/generations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -466,8 +462,7 @@ class CreateImageCall {
 class CreateImageEditCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -478,7 +473,7 @@ class CreateImageEditCall {
       apiUrl: '${baseUrl}/images/edits',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -495,8 +490,7 @@ class CreateImageEditCall {
 class CreateImageVariationCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -507,7 +501,7 @@ class CreateImageVariationCall {
       apiUrl: '${baseUrl}/images/variations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -524,8 +518,7 @@ class CreateImageVariationCall {
 class CreateEmbeddingCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -544,7 +537,7 @@ class CreateEmbeddingCall {
       apiUrl: '${baseUrl}/embeddings',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -562,8 +555,7 @@ class CreateEmbeddingCall {
 class CreateSpeechCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -582,7 +574,7 @@ class CreateSpeechCall {
       apiUrl: '${baseUrl}/audio/speech',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -600,8 +592,7 @@ class CreateSpeechCall {
 class CreateTranscriptionCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -612,7 +603,7 @@ class CreateTranscriptionCall {
       apiUrl: '${baseUrl}/audio/transcriptions',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -629,8 +620,7 @@ class CreateTranscriptionCall {
 class CreateTranslationCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -641,7 +631,7 @@ class CreateTranslationCall {
       apiUrl: '${baseUrl}/audio/translations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -659,8 +649,7 @@ class ListFilesCall {
   Future<ApiCallResponse> call({
     String? purpose = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -671,7 +660,7 @@ class ListFilesCall {
       apiUrl: '${baseUrl}/files',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'purpose': purpose,
@@ -689,8 +678,7 @@ class ListFilesCall {
 class CreateFileCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -701,7 +689,7 @@ class CreateFileCall {
       apiUrl: '${baseUrl}/files',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -719,8 +707,7 @@ class DeleteFileCall {
   Future<ApiCallResponse> call({
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -731,7 +718,7 @@ class DeleteFileCall {
       apiUrl: '${baseUrl}/files/${fileId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -748,8 +735,7 @@ class RetrieveFileCall {
   Future<ApiCallResponse> call({
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -760,7 +746,7 @@ class RetrieveFileCall {
       apiUrl: '${baseUrl}/files/${fileId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -777,8 +763,7 @@ class DownloadFileCall {
   Future<ApiCallResponse> call({
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -789,7 +774,7 @@ class DownloadFileCall {
       apiUrl: '${baseUrl}/files/${fileId}/content',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -805,8 +790,7 @@ class DownloadFileCall {
 class CreateUploadCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -824,7 +808,7 @@ class CreateUploadCall {
       apiUrl: '${baseUrl}/uploads',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -843,8 +827,7 @@ class AddUploadPartCall {
   Future<ApiCallResponse> call({
     String? uploadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -855,7 +838,7 @@ class AddUploadPartCall {
       apiUrl: '${baseUrl}/uploads/${uploadId}/parts',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -873,8 +856,7 @@ class CompleteUploadCall {
   Future<ApiCallResponse> call({
     String? uploadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -892,7 +874,7 @@ class CompleteUploadCall {
       apiUrl: '${baseUrl}/uploads/${uploadId}/complete',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -911,8 +893,7 @@ class CancelUploadCall {
   Future<ApiCallResponse> call({
     String? uploadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -923,7 +904,7 @@ class CancelUploadCall {
       apiUrl: '${baseUrl}/uploads/${uploadId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -940,8 +921,7 @@ class CancelUploadCall {
 class CreateFineTuningJobCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -978,7 +958,7 @@ class CreateFineTuningJobCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -998,8 +978,7 @@ class ListPaginatedFineTuningJobsCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1010,7 +989,7 @@ class ListPaginatedFineTuningJobsCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -1030,8 +1009,7 @@ class RetrieveFineTuningJobCall {
   Future<ApiCallResponse> call({
     String? fineTuningJobId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1042,7 +1020,7 @@ class RetrieveFineTuningJobCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1061,8 +1039,7 @@ class ListFineTuningEventsCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1073,7 +1050,7 @@ class ListFineTuningEventsCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}/events',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -1093,8 +1070,7 @@ class CancelFineTuningJobCall {
   Future<ApiCallResponse> call({
     String? fineTuningJobId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1105,7 +1081,7 @@ class CancelFineTuningJobCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -1125,8 +1101,7 @@ class ListFineTuningJobCheckpointsCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1137,7 +1112,7 @@ class ListFineTuningJobCheckpointsCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}/checkpoints',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -1156,8 +1131,7 @@ class ListFineTuningJobCheckpointsCall {
 class ListModelsCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1168,7 +1142,7 @@ class ListModelsCall {
       apiUrl: '${baseUrl}/models',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1185,8 +1159,7 @@ class RetrieveModelCall {
   Future<ApiCallResponse> call({
     String? model = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1197,7 +1170,7 @@ class RetrieveModelCall {
       apiUrl: '${baseUrl}/models/${model}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1214,8 +1187,7 @@ class DeleteModelCall {
   Future<ApiCallResponse> call({
     String? model = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1226,7 +1198,7 @@ class DeleteModelCall {
       apiUrl: '${baseUrl}/models/${model}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1242,8 +1214,7 @@ class DeleteModelCall {
 class CreateModerationCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1259,7 +1230,7 @@ class CreateModerationCall {
       apiUrl: '${baseUrl}/moderations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1281,8 +1252,7 @@ class ListAssistantsCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1293,7 +1263,7 @@ class ListAssistantsCall {
       apiUrl: '${baseUrl}/assistants',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -1314,8 +1284,7 @@ class ListAssistantsCall {
 class CreateAssistantCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1361,7 +1330,7 @@ class CreateAssistantCall {
       apiUrl: '${baseUrl}/assistants',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1380,8 +1349,7 @@ class GetAssistantCall {
   Future<ApiCallResponse> call({
     String? assistantId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1392,7 +1360,7 @@ class GetAssistantCall {
       apiUrl: '${baseUrl}/assistants/${assistantId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1409,8 +1377,7 @@ class ModifyAssistantCall {
   Future<ApiCallResponse> call({
     String? assistantId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1447,7 +1414,7 @@ class ModifyAssistantCall {
       apiUrl: '${baseUrl}/assistants/${assistantId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1466,8 +1433,7 @@ class DeleteAssistantCall {
   Future<ApiCallResponse> call({
     String? assistantId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1478,7 +1444,7 @@ class DeleteAssistantCall {
       apiUrl: '${baseUrl}/assistants/${assistantId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1494,8 +1460,7 @@ class DeleteAssistantCall {
 class CreateThreadCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1546,7 +1511,7 @@ class CreateThreadCall {
       apiUrl: '${baseUrl}/threads',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1565,8 +1530,7 @@ class GetThreadCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1577,7 +1541,7 @@ class GetThreadCall {
       apiUrl: '${baseUrl}/threads/${threadId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1594,8 +1558,7 @@ class ModifyThreadCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1622,7 +1585,7 @@ class ModifyThreadCall {
       apiUrl: '${baseUrl}/threads/${threadId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1641,8 +1604,7 @@ class DeleteThreadCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1653,7 +1615,7 @@ class DeleteThreadCall {
       apiUrl: '${baseUrl}/threads/${threadId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1675,8 +1637,7 @@ class ListMessagesCall {
     String? before = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1687,7 +1648,7 @@ class ListMessagesCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -1710,8 +1671,7 @@ class CreateMessageCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1736,7 +1696,7 @@ class CreateMessageCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1756,8 +1716,7 @@ class GetMessageCall {
     String? threadId = '',
     String? messageId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1768,7 +1727,7 @@ class GetMessageCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages/${messageId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1786,8 +1745,7 @@ class ModifyMessageCall {
     String? threadId = '',
     String? messageId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1802,7 +1760,7 @@ class ModifyMessageCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages/${messageId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1822,8 +1780,7 @@ class DeleteMessageCall {
     String? threadId = '',
     String? messageId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1834,7 +1791,7 @@ class DeleteMessageCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages/${messageId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -1850,8 +1807,7 @@ class DeleteMessageCall {
 class CreateThreadAndRunCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1935,7 +1891,7 @@ class CreateThreadAndRunCall {
       apiUrl: '${baseUrl}/threads/runs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -1958,8 +1914,7 @@ class ListRunsCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -1970,7 +1925,7 @@ class ListRunsCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -1992,8 +1947,7 @@ class CreateRunCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2042,7 +1996,7 @@ class CreateRunCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2062,8 +2016,7 @@ class GetRunCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2074,7 +2027,7 @@ class GetRunCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2092,8 +2045,7 @@ class ModifyRunCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2108,7 +2060,7 @@ class ModifyRunCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2128,8 +2080,7 @@ class SubmitToolOuputsToRunCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2151,7 +2102,7 @@ class SubmitToolOuputsToRunCall {
           '${baseUrl}/threads/${threadId}/runs/${runId}/submit_tool_outputs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2171,8 +2122,7 @@ class CancelRunCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2183,7 +2133,7 @@ class CancelRunCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -2206,8 +2156,7 @@ class ListRunStepsCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2218,7 +2167,7 @@ class ListRunStepsCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}/steps',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -2242,8 +2191,7 @@ class GetRunStepCall {
     String? runId = '',
     String? stepId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2254,7 +2202,7 @@ class GetRunStepCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}/steps/${stepId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2274,8 +2222,7 @@ class ListVectorStoresCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2286,7 +2233,7 @@ class ListVectorStoresCall {
       apiUrl: '${baseUrl}/vector_stores',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -2307,8 +2254,7 @@ class ListVectorStoresCall {
 class CreateVectorStoreCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2332,7 +2278,7 @@ class CreateVectorStoreCall {
       apiUrl: '${baseUrl}/vector_stores',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2351,8 +2297,7 @@ class GetVectorStoreCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2363,7 +2308,7 @@ class GetVectorStoreCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2380,8 +2325,7 @@ class ModifyVectorStoreCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2401,7 +2345,7 @@ class ModifyVectorStoreCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2420,8 +2364,7 @@ class DeleteVectorStoreCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2432,7 +2375,7 @@ class DeleteVectorStoreCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2454,8 +2397,7 @@ class ListVectorStoreFilesCall {
     String? before = '',
     String? filter = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2466,7 +2408,7 @@ class ListVectorStoreFilesCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -2489,8 +2431,7 @@ class CreateVectorStoreFileCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2506,7 +2447,7 @@ class CreateVectorStoreFileCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2526,8 +2467,7 @@ class GetVectorStoreFileCall {
     String? vectorStoreId = '',
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2538,7 +2478,7 @@ class GetVectorStoreFileCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files/${fileId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2556,8 +2496,7 @@ class DeleteVectorStoreFileCall {
     String? vectorStoreId = '',
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2568,7 +2507,7 @@ class DeleteVectorStoreFileCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files/${fileId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2585,8 +2524,7 @@ class CreateVectorStoreFileBatchCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2604,7 +2542,7 @@ class CreateVectorStoreFileBatchCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/file_batches',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2624,8 +2562,7 @@ class GetVectorStoreFileBatchCall {
     String? vectorStoreId = '',
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2637,7 +2574,7 @@ class GetVectorStoreFileBatchCall {
           '${baseUrl}/vector_stores/${vectorStoreId}/file_batches/${batchId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2655,8 +2592,7 @@ class CancelVectorStoreFileBatchCall {
     String? vectorStoreId = '',
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2668,7 +2604,7 @@ class CancelVectorStoreFileBatchCall {
           '${baseUrl}/vector_stores/${vectorStoreId}/file_batches/${batchId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -2692,8 +2628,7 @@ class ListFilesInVectorStoreBatchCall {
     String? before = '',
     String? filter = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2705,7 +2640,7 @@ class ListFilesInVectorStoreBatchCall {
           '${baseUrl}/vector_stores/${vectorStoreId}/file_batches/${batchId}/files',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -2727,8 +2662,7 @@ class ListFilesInVectorStoreBatchCall {
 class CreateBatchCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2746,7 +2680,7 @@ class CreateBatchCall {
       apiUrl: '${baseUrl}/batches',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -2766,8 +2700,7 @@ class ListBatchesCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2778,7 +2711,7 @@ class ListBatchesCall {
       apiUrl: '${baseUrl}/batches',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -2798,8 +2731,7 @@ class RetrieveBatchCall {
   Future<ApiCallResponse> call({
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2810,7 +2742,7 @@ class RetrieveBatchCall {
       apiUrl: '${baseUrl}/batches/${batchId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -2827,8 +2759,7 @@ class CancelBatchCall {
   Future<ApiCallResponse> call({
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGroup.getBaseUrl(
       apiKey: apiKey,
@@ -2839,7 +2770,7 @@ class CancelBatchCall {
       apiUrl: '${baseUrl}/batches/${batchId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -2859,8 +2790,7 @@ class CancelBatchCall {
 
 class OpenAIAPIGPTResponseGroup {
   static String getBaseUrl({
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) =>
       'https://api.openai.com/v1';
   static Map<String, String> headers = {};
@@ -2974,8 +2904,7 @@ class OpenAIAPIGPTResponseGroup {
 class CreateChatCompletionCopyCall {
   Future<ApiCallResponse> call({
     String? query = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3002,8 +2931,7 @@ class CreateChatCompletionCopyCall {
       apiUrl: '${baseUrl}/chat/completions',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization':
-            'Bearer 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',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3026,8 +2954,7 @@ class CreateChatCompletionCopyCall {
 class CreateCompletionCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3061,7 +2988,7 @@ class CreateCompletionCopyCall {
       apiUrl: '${baseUrl}/completions',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3079,8 +3006,7 @@ class CreateCompletionCopyCall {
 class CreateImageCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3102,7 +3028,7 @@ class CreateImageCopyCall {
       apiUrl: '${baseUrl}/images/generations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3120,8 +3046,7 @@ class CreateImageCopyCall {
 class CreateImageEditCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3132,7 +3057,7 @@ class CreateImageEditCopyCall {
       apiUrl: '${baseUrl}/images/edits',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -3149,8 +3074,7 @@ class CreateImageEditCopyCall {
 class CreateImageVariationCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3161,7 +3085,7 @@ class CreateImageVariationCopyCall {
       apiUrl: '${baseUrl}/images/variations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -3178,8 +3102,7 @@ class CreateImageVariationCopyCall {
 class CreateEmbeddingCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3198,7 +3121,7 @@ class CreateEmbeddingCopyCall {
       apiUrl: '${baseUrl}/embeddings',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3216,8 +3139,7 @@ class CreateEmbeddingCopyCall {
 class CreateSpeechCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3236,7 +3158,7 @@ class CreateSpeechCopyCall {
       apiUrl: '${baseUrl}/audio/speech',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3254,8 +3176,7 @@ class CreateSpeechCopyCall {
 class CreateTranscriptionCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3266,7 +3187,7 @@ class CreateTranscriptionCopyCall {
       apiUrl: '${baseUrl}/audio/transcriptions',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -3283,8 +3204,7 @@ class CreateTranscriptionCopyCall {
 class CreateTranslationCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3295,7 +3215,7 @@ class CreateTranslationCopyCall {
       apiUrl: '${baseUrl}/audio/translations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -3313,8 +3233,7 @@ class ListFilesCopyCall {
   Future<ApiCallResponse> call({
     String? purpose = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3325,7 +3244,7 @@ class ListFilesCopyCall {
       apiUrl: '${baseUrl}/files',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'purpose': purpose,
@@ -3343,8 +3262,7 @@ class ListFilesCopyCall {
 class CreateFileCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3355,7 +3273,7 @@ class CreateFileCopyCall {
       apiUrl: '${baseUrl}/files',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -3373,8 +3291,7 @@ class DeleteFileCopyCall {
   Future<ApiCallResponse> call({
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3385,7 +3302,7 @@ class DeleteFileCopyCall {
       apiUrl: '${baseUrl}/files/${fileId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -3402,8 +3319,7 @@ class RetrieveFileCopyCall {
   Future<ApiCallResponse> call({
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3414,7 +3330,7 @@ class RetrieveFileCopyCall {
       apiUrl: '${baseUrl}/files/${fileId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -3431,8 +3347,7 @@ class DownloadFileCopyCall {
   Future<ApiCallResponse> call({
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3443,7 +3358,7 @@ class DownloadFileCopyCall {
       apiUrl: '${baseUrl}/files/${fileId}/content',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -3459,8 +3374,7 @@ class DownloadFileCopyCall {
 class CreateUploadCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3478,7 +3392,7 @@ class CreateUploadCopyCall {
       apiUrl: '${baseUrl}/uploads',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3497,8 +3411,7 @@ class AddUploadPartCopyCall {
   Future<ApiCallResponse> call({
     String? uploadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3509,7 +3422,7 @@ class AddUploadPartCopyCall {
       apiUrl: '${baseUrl}/uploads/${uploadId}/parts',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.MULTIPART,
@@ -3527,8 +3440,7 @@ class CompleteUploadCopyCall {
   Future<ApiCallResponse> call({
     String? uploadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3546,7 +3458,7 @@ class CompleteUploadCopyCall {
       apiUrl: '${baseUrl}/uploads/${uploadId}/complete',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3565,8 +3477,7 @@ class CancelUploadCopyCall {
   Future<ApiCallResponse> call({
     String? uploadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3577,7 +3488,7 @@ class CancelUploadCopyCall {
       apiUrl: '${baseUrl}/uploads/${uploadId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -3594,8 +3505,7 @@ class CancelUploadCopyCall {
 class CreateFineTuningJobCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3632,7 +3542,7 @@ class CreateFineTuningJobCopyCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3652,8 +3562,7 @@ class ListPaginatedFineTuningJobsCopyCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3664,7 +3573,7 @@ class ListPaginatedFineTuningJobsCopyCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -3684,8 +3593,7 @@ class RetrieveFineTuningJobCopyCall {
   Future<ApiCallResponse> call({
     String? fineTuningJobId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3696,7 +3604,7 @@ class RetrieveFineTuningJobCopyCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -3715,8 +3623,7 @@ class ListFineTuningEventsCopyCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3727,7 +3634,7 @@ class ListFineTuningEventsCopyCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}/events',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -3747,8 +3654,7 @@ class CancelFineTuningJobCopyCall {
   Future<ApiCallResponse> call({
     String? fineTuningJobId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3759,7 +3665,7 @@ class CancelFineTuningJobCopyCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -3779,8 +3685,7 @@ class ListFineTuningJobCheckpointsCopyCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3791,7 +3696,7 @@ class ListFineTuningJobCheckpointsCopyCall {
       apiUrl: '${baseUrl}/fine_tuning/jobs/${fineTuningJobId}/checkpoints',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -3810,8 +3715,7 @@ class ListFineTuningJobCheckpointsCopyCall {
 class ListModelsCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3822,7 +3726,7 @@ class ListModelsCopyCall {
       apiUrl: '${baseUrl}/models',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -3839,8 +3743,7 @@ class RetrieveModelCopyCall {
   Future<ApiCallResponse> call({
     String? model = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3851,7 +3754,7 @@ class RetrieveModelCopyCall {
       apiUrl: '${baseUrl}/models/${model}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -3868,8 +3771,7 @@ class DeleteModelCopyCall {
   Future<ApiCallResponse> call({
     String? model = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3880,7 +3782,7 @@ class DeleteModelCopyCall {
       apiUrl: '${baseUrl}/models/${model}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -3896,8 +3798,7 @@ class DeleteModelCopyCall {
 class CreateModerationCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3913,7 +3814,7 @@ class CreateModerationCopyCall {
       apiUrl: '${baseUrl}/moderations',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -3935,8 +3836,7 @@ class ListAssistantsCopyCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -3947,7 +3847,7 @@ class ListAssistantsCopyCall {
       apiUrl: '${baseUrl}/assistants',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -3968,8 +3868,7 @@ class ListAssistantsCopyCall {
 class CreateAssistantCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4015,7 +3914,7 @@ class CreateAssistantCopyCall {
       apiUrl: '${baseUrl}/assistants',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4034,8 +3933,7 @@ class GetAssistantCopyCall {
   Future<ApiCallResponse> call({
     String? assistantId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4046,7 +3944,7 @@ class GetAssistantCopyCall {
       apiUrl: '${baseUrl}/assistants/${assistantId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4063,8 +3961,7 @@ class ModifyAssistantCopyCall {
   Future<ApiCallResponse> call({
     String? assistantId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4101,7 +3998,7 @@ class ModifyAssistantCopyCall {
       apiUrl: '${baseUrl}/assistants/${assistantId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4120,8 +4017,7 @@ class DeleteAssistantCopyCall {
   Future<ApiCallResponse> call({
     String? assistantId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4132,7 +4028,7 @@ class DeleteAssistantCopyCall {
       apiUrl: '${baseUrl}/assistants/${assistantId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4148,8 +4044,7 @@ class DeleteAssistantCopyCall {
 class CreateThreadCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4200,7 +4095,7 @@ class CreateThreadCopyCall {
       apiUrl: '${baseUrl}/threads',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4219,8 +4114,7 @@ class GetThreadCopyCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4231,7 +4125,7 @@ class GetThreadCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4248,8 +4142,7 @@ class ModifyThreadCopyCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4276,7 +4169,7 @@ class ModifyThreadCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4295,8 +4188,7 @@ class DeleteThreadCopyCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4307,7 +4199,7 @@ class DeleteThreadCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4329,8 +4221,7 @@ class ListMessagesCopyCall {
     String? before = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4341,7 +4232,7 @@ class ListMessagesCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -4364,8 +4255,7 @@ class CreateMessageCopyCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4390,7 +4280,7 @@ class CreateMessageCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4410,8 +4300,7 @@ class GetMessageCopyCall {
     String? threadId = '',
     String? messageId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4422,7 +4311,7 @@ class GetMessageCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages/${messageId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4440,8 +4329,7 @@ class ModifyMessageCopyCall {
     String? threadId = '',
     String? messageId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4456,7 +4344,7 @@ class ModifyMessageCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages/${messageId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4476,8 +4364,7 @@ class DeleteMessageCopyCall {
     String? threadId = '',
     String? messageId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4488,7 +4375,7 @@ class DeleteMessageCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/messages/${messageId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4504,8 +4391,7 @@ class DeleteMessageCopyCall {
 class CreateThreadAndRunCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4589,7 +4475,7 @@ class CreateThreadAndRunCopyCall {
       apiUrl: '${baseUrl}/threads/runs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4612,8 +4498,7 @@ class ListRunsCopyCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4624,7 +4509,7 @@ class ListRunsCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -4646,8 +4531,7 @@ class CreateRunCopyCall {
   Future<ApiCallResponse> call({
     String? threadId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4696,7 +4580,7 @@ class CreateRunCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4716,8 +4600,7 @@ class GetRunCopyCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4728,7 +4611,7 @@ class GetRunCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4746,8 +4629,7 @@ class ModifyRunCopyCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4762,7 +4644,7 @@ class ModifyRunCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4782,8 +4664,7 @@ class SubmitToolOuputsToRunCopyCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4805,7 +4686,7 @@ class SubmitToolOuputsToRunCopyCall {
           '${baseUrl}/threads/${threadId}/runs/${runId}/submit_tool_outputs',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -4825,8 +4706,7 @@ class CancelRunCopyCall {
     String? threadId = '',
     String? runId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4837,7 +4717,7 @@ class CancelRunCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -4860,8 +4740,7 @@ class ListRunStepsCopyCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4872,7 +4751,7 @@ class ListRunStepsCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}/steps',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -4896,8 +4775,7 @@ class GetRunStepCopyCall {
     String? runId = '',
     String? stepId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4908,7 +4786,7 @@ class GetRunStepCopyCall {
       apiUrl: '${baseUrl}/threads/${threadId}/runs/${runId}/steps/${stepId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -4928,8 +4806,7 @@ class ListVectorStoresCopyCall {
     String? after = '',
     String? before = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4940,7 +4817,7 @@ class ListVectorStoresCopyCall {
       apiUrl: '${baseUrl}/vector_stores',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -4961,8 +4838,7 @@ class ListVectorStoresCopyCall {
 class CreateVectorStoreCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -4986,7 +4862,7 @@ class CreateVectorStoreCopyCall {
       apiUrl: '${baseUrl}/vector_stores',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -5005,8 +4881,7 @@ class GetVectorStoreCopyCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5017,7 +4892,7 @@ class GetVectorStoreCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -5034,8 +4909,7 @@ class ModifyVectorStoreCopyCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5055,7 +4929,7 @@ class ModifyVectorStoreCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -5074,8 +4948,7 @@ class DeleteVectorStoreCopyCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5086,7 +4959,7 @@ class DeleteVectorStoreCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -5108,8 +4981,7 @@ class ListVectorStoreFilesCopyCall {
     String? before = '',
     String? filter = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5120,7 +4992,7 @@ class ListVectorStoreFilesCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -5143,8 +5015,7 @@ class CreateVectorStoreFileCopyCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5160,7 +5031,7 @@ class CreateVectorStoreFileCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -5180,8 +5051,7 @@ class GetVectorStoreFileCopyCall {
     String? vectorStoreId = '',
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5192,7 +5062,7 @@ class GetVectorStoreFileCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files/${fileId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -5210,8 +5080,7 @@ class DeleteVectorStoreFileCopyCall {
     String? vectorStoreId = '',
     String? fileId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5222,7 +5091,7 @@ class DeleteVectorStoreFileCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/files/${fileId}',
       callType: ApiCallType.DELETE,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -5239,8 +5108,7 @@ class CreateVectorStoreFileBatchCopyCall {
   Future<ApiCallResponse> call({
     String? vectorStoreId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5258,7 +5126,7 @@ class CreateVectorStoreFileBatchCopyCall {
       apiUrl: '${baseUrl}/vector_stores/${vectorStoreId}/file_batches',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -5278,8 +5146,7 @@ class GetVectorStoreFileBatchCopyCall {
     String? vectorStoreId = '',
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5291,7 +5158,7 @@ class GetVectorStoreFileBatchCopyCall {
           '${baseUrl}/vector_stores/${vectorStoreId}/file_batches/${batchId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -5309,8 +5176,7 @@ class CancelVectorStoreFileBatchCopyCall {
     String? vectorStoreId = '',
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5322,7 +5188,7 @@ class CancelVectorStoreFileBatchCopyCall {
           '${baseUrl}/vector_stores/${vectorStoreId}/file_batches/${batchId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,
@@ -5346,8 +5212,7 @@ class ListFilesInVectorStoreBatchCopyCall {
     String? before = '',
     String? filter = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5359,7 +5224,7 @@ class ListFilesInVectorStoreBatchCopyCall {
           '${baseUrl}/vector_stores/${vectorStoreId}/file_batches/${batchId}/files',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'limit': limit,
@@ -5381,8 +5246,7 @@ class ListFilesInVectorStoreBatchCopyCall {
 class CreateBatchCopyCall {
   Future<ApiCallResponse> call({
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5400,7 +5264,7 @@ class CreateBatchCopyCall {
       apiUrl: '${baseUrl}/batches',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       body: ffApiRequestBody,
@@ -5420,8 +5284,7 @@ class ListBatchesCopyCall {
     String? after = '',
     int? limit,
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5432,7 +5295,7 @@ class ListBatchesCopyCall {
       apiUrl: '${baseUrl}/batches',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {
         'after': after,
@@ -5452,8 +5315,7 @@ class RetrieveBatchCopyCall {
   Future<ApiCallResponse> call({
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5464,7 +5326,7 @@ class RetrieveBatchCopyCall {
       apiUrl: '${baseUrl}/batches/${batchId}',
       callType: ApiCallType.GET,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       returnBody: true,
@@ -5481,8 +5343,7 @@ class CancelBatchCopyCall {
   Future<ApiCallResponse> call({
     String? batchId = '',
     String? apiKeyAuth = '',
-    String? apiKey =
-        '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',
+    String? apiKey = '',
   }) async {
     final baseUrl = OpenAIAPIGPTResponseGroup.getBaseUrl(
       apiKey: apiKey,
@@ -5493,7 +5354,7 @@ class CancelBatchCopyCall {
       apiUrl: '${baseUrl}/batches/${batchId}/cancel',
       callType: ApiCallType.POST,
       headers: {
-        'Authorization': 'Bearer ${apiKeyAuth}',
+        'Authorization': 'Bearer ${currentJwtToken}',
       },
       params: {},
       bodyType: BodyType.JSON,

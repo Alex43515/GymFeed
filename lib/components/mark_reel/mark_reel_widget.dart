@@ -47,10 +47,11 @@ class _MarkReelWidgetState extends State<MarkReelWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<UserTrainingsRecord>>(
-      stream: queryUserTrainingsRecord(
-        singleRecord: true,
-      ),
+    final trainingReference = widget.postReference;
+    if (trainingReference == null) return const SizedBox.shrink();
+
+    return StreamBuilder<UserTrainingsRecord>(
+      stream: UserTrainingsRecord.getDocument(trainingReference),
       builder: (context, snapshot) {
         // Customize what your widget looks like when it's loading.
         if (!snapshot.hasData) {
@@ -66,16 +67,7 @@ class _MarkReelWidgetState extends State<MarkReelWidget> {
             ),
           );
         }
-        List<UserTrainingsRecord> columnUserTrainingsRecordList =
-            snapshot.data!;
-        // Return an empty Container when the item does not exist.
-        if (snapshot.data!.isEmpty) {
-          return Container();
-        }
-        final columnUserTrainingsRecord =
-            columnUserTrainingsRecordList.isNotEmpty
-                ? columnUserTrainingsRecordList.first
-                : null;
+        final columnUserTrainingsRecord = snapshot.data!;
 
         return Column(
           mainAxisSize: MainAxisSize.max,
@@ -85,7 +77,7 @@ class _MarkReelWidgetState extends State<MarkReelWidget> {
               padding: EdgeInsetsDirectional.fromSTEB(0.0, 50.0, 40.0, 0.0),
               child: StreamBuilder<UsersRecord>(
                 stream: UsersRecord.getDocument(
-                    columnUserTrainingsRecord!.userTraining!),
+                    columnUserTrainingsRecord.userTraining!),
                 builder: (context, snapshot) {
                   // Customize what your widget looks like when it's loading.
                   if (!snapshot.hasData) {
@@ -101,8 +93,6 @@ class _MarkReelWidgetState extends State<MarkReelWidget> {
                       ),
                     );
                   }
-
-                  final containerUsersRecord = snapshot.data!;
 
                   return Container(
                     width: 300.0,

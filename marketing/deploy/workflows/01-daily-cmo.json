@@ -1,0 +1,34 @@
+{
+  "name": "GymFeed 01 - Daily CMO",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }] } },
+      "id": "dc91ae21-3da4-4648-af18-22afd8fd90bd",
+      "name": "06:00 ET daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://marketing-worker:3000/v1/runs/daily",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-marketing-token", "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}" }] },
+        "options": { "timeout": 600000 }
+      },
+      "id": "c3ac33d4-7e77-4881-8a73-6a21cde31aa9",
+      "name": "Run daily decision engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    }
+  ],
+  "connections": { "06:00 ET daily": { "main": [[{ "node": "Run daily decision engine", "type": "main", "index": 0 }]] } },
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "America/New_York" },
+  "versionId": "f065a9df-00ac-4b5b-be10-f9e8749e4da7",
+  "meta": {},
+  "pinData": {},
+  "tags": []
+}

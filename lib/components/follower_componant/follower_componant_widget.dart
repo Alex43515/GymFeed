@@ -1,11 +1,9 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/backend/push_notifications/push_notifications_util.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_timer.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
-import 'package:stop_watch_timer/stop_watch_timer.dart';
 import 'package:flutter/material.dart';
 import 'follower_componant_model.dart';
 export 'follower_componant_model.dart';
@@ -14,9 +12,11 @@ class FollowerComponantWidget extends StatefulWidget {
   const FollowerComponantWidget({
     super.key,
     this.users,
+    this.onRelationshipChanged,
   });
 
   final DocumentReference? users;
+  final Future<void> Function()? onRelationshipChanged;
 
   @override
   State<FollowerComponantWidget> createState() =>
@@ -25,6 +25,10 @@ class FollowerComponantWidget extends StatefulWidget {
 
 class _FollowerComponantWidgetState extends State<FollowerComponantWidget> {
   late FollowerComponantModel _model;
+  bool _isFollowing = false;
+  bool _followsYou = false;
+  bool _isLoadingRelationship = true;
+  bool _isUpdatingRelationship = false;
 
   @override
   void setState(VoidCallback callback) {
@@ -37,7 +41,68 @@ class _FollowerComponantWidgetState extends State<FollowerComponantWidget> {
     super.initState();
     _model = createModel(context, () => FollowerComponantModel());
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRelationship());
+  }
+
+  Future<void> _loadRelationship() async {
+    final targetId = widget.users?.id ?? '';
+    if (targetId.isEmpty || targetId == currentUserUid) {
+      if (mounted) safeSetState(() => _isLoadingRelationship = false);
+      return;
+    }
+    final state = await ProfileRepository().socialState(targetId);
+    if (!mounted) return;
+    safeSetState(() {
+      _isFollowing = state.isFollowing;
+      _followsYou = state.followsYou;
+      _isLoadingRelationship = false;
+    });
+  }
+
+  Future<void> _toggleRelationship() async {
+    final targetId = widget.users?.id ?? '';
+    if (targetId.isEmpty || _isUpdatingRelationship) return;
+    final wasFollowing = _isFollowing;
+    safeSetState(() {
+      _isFollowing = !wasFollowing;
+      _isUpdatingRelationship = true;
+    });
+    var succeeded = false;
+    try {
+      if (wasFollowing) {
+        await ProfileRepository().unfollow(targetId);
+      } else {
+        await ProfileRepository().follow(targetId);
+      }
+      await refreshCurrentUserProfile();
+      succeeded = true;
+      if (mounted) {
+        final state = await ProfileRepository().socialState(targetId);
+        if (mounted) {
+          safeSetState(() {
+            _isFollowing = state.isFollowing;
+            _followsYou = state.followsYou;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        safeSetState(() => _isFollowing = wasFollowing);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update follow. Try again.')),
+        );
+      }
+    } finally {
+      if (mounted) safeSetState(() => _isUpdatingRelationship = false);
+    }
+    if (succeeded) {
+      try {
+        await widget.onRelationshipChanged?.call();
+      } catch (_) {
+        // The relationship is already persisted. A list refresh failure should
+        // not roll the button back or report that the follow itself failed.
+      }
+    }
   }
 
   @override
@@ -153,217 +218,48 @@ class _FollowerComponantWidgetState extends State<FollowerComponantWidget> {
                 ),
                 Padding(
                   padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 6.0, 0.0),
-                  child: AuthUserStreamWidget(
-                    builder: (context) => StreamBuilder<List<FollowersRecord>>(
-                      stream: queryFollowersRecord(
-                        parent: rowUsersRecord.reference,
-                        singleRecord: true,
-                      ),
-                      builder: (context, snapshot) {
-                        // Customize what your widget looks like when it's loading.
-                        if (!snapshot.hasData) {
-                          return Center(
-                            child: SizedBox(
-                              width: 12.0,
-                              height: 12.0,
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-                        List<FollowersRecord> containerFollowersRecordList =
-                            snapshot.data!;
-                        final containerFollowersRecord =
-                            containerFollowersRecordList.isNotEmpty
-                                ? containerFollowersRecordList.first
-                                : null;
-
-                        return InkWell(
+                  child: rowUsersRecord.uid == currentUserUid
+                      ? const SizedBox.shrink()
+                      : InkWell(
                           splashColor: Colors.transparent,
                           focusColor: Colors.transparent,
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
-                          onTap: () async {
-                            if ((currentUserDocument?.following.toList() ?? [])
-                                .contains(rowUsersRecord.reference)) {
-                              await currentUserReference!.update({
-                                ...mapToFirestore(
-                                  {
-                                    'following': FieldValue.arrayRemove(
-                                        [rowUsersRecord.reference]),
-                                  },
-                                ),
-                              });
-
-                              await containerFollowersRecord!.reference.update({
-                                ...mapToFirestore(
-                                  {
-                                    'userRefs': FieldValue.arrayRemove(
-                                        [currentUserReference]),
-                                  },
-                                ),
-                              });
-                              _model.timerController.onResetTimer();
-                            } else {
-                              await currentUserReference!.update({
-                                ...mapToFirestore(
-                                  {
-                                    'following': FieldValue.arrayUnion(
-                                        [rowUsersRecord.reference]),
-                                  },
-                                ),
-                              });
-
-                              await containerFollowersRecord!.reference.update({
-                                ...mapToFirestore(
-                                  {
-                                    'userRefs': FieldValue.arrayUnion(
-                                        [currentUserReference]),
-                                  },
-                                ),
-                              });
-                              _model.timerController.onStartTimer();
-                            }
-                          },
+                          onTap:
+                              _isLoadingRelationship || _isUpdatingRelationship
+                                  ? null
+                                  : _toggleRelationship,
                           child: Container(
                             width: 110.0,
                             height: 35.0,
                             decoration: BoxDecoration(
-                              color:
-                                  (currentUserDocument?.following.toList() ??
-                                              [])
-                                          .contains(rowUsersRecord.reference)
-                                      ? Color(0xFFEFEFEF)
-                                      : FlutterFlowTheme.of(context).primary,
+                              color: _isFollowing
+                                  ? const Color(0xFFEFEFEF)
+                                  : FlutterFlowTheme.of(context).primary,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
-                            child: Align(
-                              alignment: AlignmentDirectional(0.0, 0.0),
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    8.0, 6.0, 8.0, 6.0),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      () {
-                                        if (rowUsersRecord.following.contains(
-                                                currentUserReference) &&
-                                            !(currentUserDocument?.following
-                                                        .toList() ??
-                                                    [])
-                                                .contains(
-                                                    rowUsersRecord.reference)) {
-                                          return 'Follow back';
-                                        } else if (!rowUsersRecord.following
-                                                .contains(
-                                                    currentUserReference) &&
-                                            !(currentUserDocument?.following
-                                                        .toList() ??
-                                                    [])
-                                                .contains(
-                                                    rowUsersRecord.reference)) {
-                                          return 'Follow';
-                                        } else {
-                                          return 'Unfollow';
-                                        }
-                                      }(),
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            fontFamily: 'Poppins',
-                                            color: (currentUserDocument
-                                                            ?.following
-                                                            .toList() ??
-                                                        [])
-                                                    .contains(rowUsersRecord
-                                                        .reference)
-                                                ? FlutterFlowTheme.of(context)
-                                                    .secondary
-                                                : FlutterFlowTheme.of(context)
-                                                    .secondary,
-                                            fontSize: 13.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            alignment: const AlignmentDirectional(0.0, 0.0),
+                            child: Text(
+                              _isLoadingRelationship || _isUpdatingRelationship
+                                  ? 'Updating...'
+                                  : _isFollowing
+                                      ? 'Following'
+                                      : _followsYou
+                                          ? 'Follow back'
+                                          : 'Follow',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    fontFamily: 'Poppins',
+                                    color:
+                                        FlutterFlowTheme.of(context).secondary,
+                                    fontSize: 13.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                FlutterFlowTimer(
-                  initialTime: _model.timerInitialTimeMs,
-                  getDisplayTime: (value) => StopWatchTimer.getDisplayTime(
-                    value,
-                    hours: false,
-                    minute: false,
-                    milliSecond: false,
-                  ),
-                  controller: _model.timerController,
-                  onChanged: (value, displayTime, shouldUpdate) {
-                    _model.timerMilliseconds = value;
-                    _model.timerValue = displayTime;
-                    if (shouldUpdate) safeSetState(() {});
-                  },
-                  onEnded: () async {
-                    var notificationsRecordReference =
-                        NotificationsRecord.createDoc(rowUsersRecord.reference);
-                    await notificationsRecordReference
-                        .set(createNotificationsRecordData(
-                      notificationType: 'Follow',
-                      userRef: currentUserReference,
-                      timeCreated: getCurrentTimestamp,
-                    ));
-                    _model.notification =
-                        NotificationsRecord.getDocumentFromData(
-                            createNotificationsRecordData(
-                              notificationType: 'Follow',
-                              userRef: currentUserReference,
-                              timeCreated: getCurrentTimestamp,
-                            ),
-                            notificationsRecordReference);
-
-                    await rowUsersRecord.reference.update({
-                      ...mapToFirestore(
-                        {
-                          'unreadNotifications': FieldValue.arrayUnion(
-                              [_model.notification?.reference]),
-                        },
-                      ),
-                    });
-                    triggerPushNotification(
-                      notificationTitle: 'Instagram',
-                      notificationText:
-                          '${valueOrDefault(currentUserDocument?.username, '')} started following you.',
-                      notificationImageUrl: currentUserPhoto,
-                      notificationSound: 'default',
-                      userRefs: [rowUsersRecord.reference],
-                      initialPageName: 'ProfileOther',
-                      parameterData: {
-                        'username':
-                            valueOrDefault(currentUserDocument?.username, ''),
-                      },
-                    );
-
-                    safeSetState(() {});
-                  },
-                  textAlign: TextAlign.start,
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        fontFamily: 'Poppins',
-                        color: FlutterFlowTheme.of(context).primary,
-                        fontSize: 0.0,
-                        letterSpacing: 0.0,
-                      ),
+                        ),
                 ),
               ],
             ),

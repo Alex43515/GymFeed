@@ -12,7 +12,8 @@ const Color kCreateSurface = Color(0xFF1C1C1C); // filled field / grouped card
 const Color kCreateSurfaceAlt = Color(0xFF242424); // secondary / inactive track
 const Color kCreateHint = Color(0xFF8A8A8A); // muted labels & placeholders
 const Color kCreateStroke = Color(0xFF2A2A2A); // hairline separators / borders
-const Color kCreateOnAccent = Color(0xFF0A0A0A); // text/icon on the green accent
+const Color kCreateOnAccent =
+    Color(0xFF0A0A0A); // text/icon on the green accent
 const double kCreateRadius = 16.0; // grouped card radius
 const double kCreateFieldRadius = 14.0; // input field radius
 
@@ -172,8 +173,8 @@ Widget createChoiceRow(
                 ),
                 if (subtitle != null && subtitle.isNotEmpty)
                   Padding(
-                    padding:
-                        const EdgeInsetsDirectional.fromSTEB(0.0, 3.0, 0.0, 0.0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                        0.0, 3.0, 0.0, 0.0),
                     child: Text(
                       subtitle,
                       style: theme.bodySmall.override(

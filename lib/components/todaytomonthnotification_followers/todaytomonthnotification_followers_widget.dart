@@ -207,11 +207,10 @@ class _TodaytomonthnotificationFollowersWidgetState
                         width: 110.0,
                         height: 35.0,
                         decoration: BoxDecoration(
-                          color:
-                              (currentUserDocument?.following.toList() ?? [])
-                                      .contains(rowUsersRecord.reference)
-                                  ? Color(0xFFEFEFEF)
-                                  : FlutterFlowTheme.of(context).secondary,
+                          color: (currentUserDocument?.following.toList() ?? [])
+                                  .contains(rowUsersRecord.reference)
+                              ? Color(0xFFEFEFEF)
+                              : FlutterFlowTheme.of(context).secondary,
                           borderRadius: BorderRadius.circular(8.0),
                         ),
                         child: Align(

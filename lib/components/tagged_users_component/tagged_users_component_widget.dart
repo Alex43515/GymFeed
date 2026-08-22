@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_timer.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -181,44 +182,14 @@ class _TaggedUsersComponentWidgetState
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           onTap: () async {
+                            final targetFollowId = rowUsersRecord.reference.id;
                             if ((currentUserDocument?.following.toList() ?? [])
                                 .contains(rowUsersRecord.reference)) {
-                              await currentUserReference!.update({
-                                ...mapToFirestore(
-                                  {
-                                    'following': FieldValue.arrayRemove(
-                                        [rowUsersRecord.reference]),
-                                  },
-                                ),
-                              });
-
-                              await containerFollowersRecord!.reference.update({
-                                ...mapToFirestore(
-                                  {
-                                    'userRefs': FieldValue.arrayRemove(
-                                        [currentUserReference]),
-                                  },
-                                ),
-                              });
+                              await ProfileRepository()
+                                  .unfollow(targetFollowId);
                               _model.timerController.onResetTimer();
                             } else {
-                              await currentUserReference!.update({
-                                ...mapToFirestore(
-                                  {
-                                    'following': FieldValue.arrayUnion(
-                                        [rowUsersRecord.reference]),
-                                  },
-                                ),
-                              });
-
-                              await containerFollowersRecord!.reference.update({
-                                ...mapToFirestore(
-                                  {
-                                    'userRefs': FieldValue.arrayUnion(
-                                        [currentUserReference]),
-                                  },
-                                ),
-                              });
+                              await ProfileRepository().follow(targetFollowId);
                               _model.timerController.onStartTimer();
                             }
                           },
@@ -226,12 +197,11 @@ class _TaggedUsersComponentWidgetState
                             width: 110.0,
                             height: 35.0,
                             decoration: BoxDecoration(
-                              color:
-                                  (currentUserDocument?.following.toList() ??
-                                              [])
-                                          .contains(rowUsersRecord.reference)
-                                      ? Color(0xFFEFEFEF)
-                                      : FlutterFlowTheme.of(context).secondary,
+                              color: (currentUserDocument?.following.toList() ??
+                                          [])
+                                      .contains(rowUsersRecord.reference)
+                                  ? Color(0xFFEFEFEF)
+                                  : FlutterFlowTheme.of(context).secondary,
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             child: Align(

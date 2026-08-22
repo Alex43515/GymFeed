@@ -6,6 +6,8 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class ChatsRecord extends FirestoreRecord {
   ChatsRecord._(
@@ -66,10 +68,42 @@ class ChatsRecord extends FirestoreRecord {
       FirebaseFirestore.instance.collection('chats');
 
   static Stream<ChatsRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => ChatsRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<ChatsRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => ChatsRecord.fromSnapshot(s));
+  static Future<ChatsRecord> getDocumentOnce(DocumentReference ref) async {
+    final me = supabase.auth.currentUser?.id ?? '';
+    final row = await supaById('chats', ref.id) ?? {'id': ref.id};
+    final members = await supabase
+        .from('chat_members')
+        .select('user_id')
+        .eq('chat_id', ref.id);
+    final memberIds = (members as List)
+        .map((m) => (m['user_id'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return ChatsRecord.fromSupabase(row, memberIds, me);
+  }
+
+  /// Build from a Supabase `chats` row + its member ids. For 1-1 chats the
+  /// caller becomes user_a and the other member user_b.
+  static ChatsRecord fromSupabase(
+    Map<String, dynamic> row,
+    List<String> memberIds,
+    String me,
+  ) {
+    final id = (row['id'] ?? '').toString();
+    final others = memberIds.where((m) => m != me).toList();
+    return ChatsRecord.getDocumentFromData(
+        <String, dynamic>{
+          'user_a': supaUserRef(me),
+          'user_b': others.isNotEmpty ? supaUserRef(others.first) : null,
+          'users': memberIds.map((m) => supaRef('users', m)).toList(),
+          'last_message': row['last_message'],
+          'last_message_time': supaDate(row['last_message_at']),
+          'last_message_sent_by': supaUserRef(row['last_message_sent_by']),
+        }..removeWhere((_, v) => v == null),
+        supaRef('chats', id));
+  }
 
   static ChatsRecord fromSnapshot(DocumentSnapshot snapshot) => ChatsRecord._(
         snapshot.reference,

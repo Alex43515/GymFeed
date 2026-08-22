@@ -1,0 +1,90 @@
+name: gymfeed-marketing
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - n8n-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.32.6
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_HOST: ${N8N_DOMAIN}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-https}
+      N8N_PORT: 5678
+      WEBHOOK_URL: ${N8N_PUBLIC_URL}/
+      N8N_EDITOR_BASE_URL: ${N8N_PUBLIC_URL}/
+      N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-true}
+      N8N_PROXY_HOPS: 1
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/New_York}
+      TZ: ${GENERIC_TIMEZONE:-America/New_York}
+      MARKETING_INTERNAL_TOKEN: ${MARKETING_INTERNAL_TOKEN}
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ./workflows:/imports:ro
+    ports:
+      - "127.0.0.1:5678:5678"
+    expose:
+      - "5678"
+
+  marketing-worker:
+    build:
+      context: ../..
+      dockerfile: marketing/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    depends_on:
+      - n8n
+    environment:
+      N8N_DOMAIN: ${N8N_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  n8n-postgres:
+  n8n-data:
+  caddy-data:
+  caddy-config:

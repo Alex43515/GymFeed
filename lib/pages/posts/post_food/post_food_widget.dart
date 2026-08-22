@@ -2,14 +2,15 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
 import '/components/personal_post_options/personal_post_options_widget.dart';
+import '/components/post_type_badge/post_type_badge.dart';
 import '/components/send_post/send_post_widget.dart';
 import '/components/tagged_users/tagged_users_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_toggle_icon.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_video_player.dart';
 import '/pages/posts/post_options/post_options_widget.dart';
+import '/custom_code/widgets/feed_video_player.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
@@ -17,7 +18,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:share_plus/share_plus.dart';
 import 'post_food_model.dart';
 export 'post_food_model.dart';
 
@@ -26,10 +26,12 @@ class PostFoodWidget extends StatefulWidget {
     super.key,
     this.postFood,
     this.isHomePage,
+    this.onPostChanged,
   });
 
   final PostsRecord? postFood;
   final bool? isHomePage;
+  final Future<void> Function()? onPostChanged;
 
   @override
   State<PostFoodWidget> createState() => _PostFoodWidgetState();
@@ -38,6 +40,11 @@ class PostFoodWidget extends StatefulWidget {
 class _PostFoodWidgetState extends State<PostFoodWidget>
     with TickerProviderStateMixin {
   late PostFoodModel _model;
+  late Future<UsersRecord> _authorFuture;
+  UsersRecord? _initialAuthor;
+  late bool _allowLikes;
+  late bool _allowComments;
+  bool _deleted = false;
 
   final animationsMap = <String, AnimationInfo>{};
 
@@ -51,6 +58,8 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
   void initState() {
     super.initState();
     _model = createModel(context, () => PostFoodModel());
+    _readPermissionState();
+    _prepareAuthor();
 
     animationsMap.addAll({
       'iconOnActionTriggerAnimation': AnimationInfo(
@@ -110,18 +119,87 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
   }
 
   @override
+  void didUpdateWidget(covariant PostFoodWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postFood?.reference.id != widget.postFood?.reference.id ||
+        oldWidget.postFood?.allowLikes != widget.postFood?.allowLikes ||
+        oldWidget.postFood?.allowComments != widget.postFood?.allowComments ||
+        oldWidget.postFood?.deleted != widget.postFood?.deleted) {
+      _readPermissionState();
+    }
+    if (oldWidget.postFood?.postUser?.id != widget.postFood?.postUser?.id) {
+      _prepareAuthor();
+    }
+  }
+
+  void _readPermissionState() {
+    _allowLikes =
+        !widget.postFood!.hasAllowLikes() || widget.postFood!.allowLikes;
+    _allowComments =
+        !widget.postFood!.hasAllowComments() || widget.postFood!.allowComments;
+    _deleted = widget.postFood?.deleted ?? false;
+  }
+
+  Future<void> _applyOwnerAction(PersonalPostOptionsResult? result) async {
+    if (result == null || !mounted) return;
+    if (result.editRequested) {
+      await context.pushNamed(
+        EditPostWidget.routeName,
+        queryParameters: {
+          'post': serializeParam(widget.postFood, ParamType.Document),
+        }.withoutNulls,
+        extra: <String, dynamic>{'post': widget.postFood},
+      );
+      await widget.onPostChanged?.call();
+      return;
+    }
+    setState(() {
+      if (result.allowLikes != null) _allowLikes = result.allowLikes!;
+      if (result.allowComments != null) {
+        _allowComments = result.allowComments!;
+      }
+      if (result.deleted) _deleted = true;
+    });
+    await widget.onPostChanged?.call();
+    if (result.deleted && mounted && widget.isHomePage == false) {
+      context.pop();
+    }
+  }
+
+  void _prepareAuthor() {
+    final post = widget.postFood!;
+    _initialAuthor = post.feedAuthor;
+    _authorFuture = UsersRecord.getDocumentOnce(post.postUser!);
+  }
+
+  @override
   void dispose() {
     _model.maybeDispose();
 
     super.dispose();
   }
 
+  void _openAuthorProfile(UsersRecord author) {
+    if (author.reference == currentUserReference) {
+      context.pushNamed(ProfileWidget.routeName);
+      return;
+    }
+    context.pushNamed(
+      ProfileOtherWidget.routeName,
+      queryParameters: {
+        'username': serializeParam(author.username, ParamType.String),
+      }.withoutNulls,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_deleted) return const SizedBox.shrink();
     return Padding(
       padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 25.0),
       child: FutureBuilder<UsersRecord>(
-        future: UsersRecord.getDocumentOnce(widget.postFood!.postUser!),
+        initialData: _initialAuthor,
+        future: _authorFuture,
         builder: (context, snapshot) {
           // Customize what your widget looks like when it's loading.
           if (!snapshot.hasData) {
@@ -141,6 +219,8 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
           final columnUsersRecord = snapshot.data!;
 
           return SingleChildScrollView(
+            primary: false,
+            physics: const NeverScrollableScrollPhysics(),
             child: Column(
               mainAxisSize: MainAxisSize.max,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,25 +238,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                         hoverColor: Colors.transparent,
                         highlightColor: Colors.transparent,
                         onTap: () async {
-                          if (columnUsersRecord.reference ==
-                              currentUserReference) {
-                            context.pushNamed(ProfileWidget.routeName);
-                          } else {
-                            if (columnUsersRecord.userBlocked
-                                .contains(currentUserReference)) {
-                              context.pushNamed(BlockedPageWidget.routeName);
-                            } else {
-                              context.pushNamed(
-                                ProfileOtherWidget.routeName,
-                                queryParameters: {
-                                  'username': serializeParam(
-                                    columnUsersRecord.username,
-                                    ParamType.String,
-                                  ),
-                                }.withoutNulls,
-                              );
-                            }
-                          }
+                          _openAuthorProfile(columnUsersRecord);
                         },
                         child: Row(
                           mainAxisSize: MainAxisSize.max,
@@ -187,26 +249,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                               hoverColor: Colors.transparent,
                               highlightColor: Colors.transparent,
                               onTap: () async {
-                                if (columnUsersRecord.reference ==
-                                    currentUserReference) {
-                                  context.pushNamed(ProfileWidget.routeName);
-                                } else {
-                                  if (columnUsersRecord.userBlocked
-                                      .contains(currentUserReference)) {
-                                    context
-                                        .pushNamed(BlockedPageWidget.routeName);
-                                  } else {
-                                    context.pushNamed(
-                                      ProfileOtherWidget.routeName,
-                                      queryParameters: {
-                                        'username': serializeParam(
-                                          columnUsersRecord.username,
-                                          ParamType.String,
-                                        ),
-                                      }.withoutNulls,
-                                    );
-                                  }
-                                }
+                                _openAuthorProfile(columnUsersRecord);
                               },
                               child: Container(
                                 width: 35.0,
@@ -245,27 +288,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                     hoverColor: Colors.transparent,
                                     highlightColor: Colors.transparent,
                                     onTap: () async {
-                                      if (columnUsersRecord.reference ==
-                                          currentUserReference) {
-                                        context
-                                            .pushNamed(ProfileWidget.routeName);
-                                      } else {
-                                        if (columnUsersRecord.userBlocked
-                                            .contains(currentUserReference)) {
-                                          context.pushNamed(
-                                              BlockedPageWidget.routeName);
-                                        } else {
-                                          context.pushNamed(
-                                            ProfileOtherWidget.routeName,
-                                            queryParameters: {
-                                              'username': serializeParam(
-                                                columnUsersRecord.username,
-                                                ParamType.String,
-                                              ),
-                                            }.withoutNulls,
-                                          );
-                                        }
-                                      }
+                                      _openAuthorProfile(columnUsersRecord);
                                     },
                                     child: Text(
                                       valueOrDefault<String>(
@@ -308,50 +331,59 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                           ],
                         ),
                       ),
-                      InkWell(
-                        splashColor: Colors.transparent,
-                        focusColor: Colors.transparent,
-                        hoverColor: Colors.transparent,
-                        highlightColor: Colors.transparent,
-                        onTap: () async {
-                          if (widget.postFood?.postUser ==
-                              currentUserReference) {
-                            await showModalBottomSheet(
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              barrierColor: Color(0x00000000),
-                              context: context,
-                              builder: (context) {
-                                return Padding(
-                                  padding: MediaQuery.viewInsetsOf(context),
-                                  child: PersonalPostOptionsWidget(
-                                    post: widget.postFood,
-                                  ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const FoodPostBadge(size: 28.0),
+                          const SizedBox(width: 10.0),
+                          InkWell(
+                            splashColor: Colors.transparent,
+                            focusColor: Colors.transparent,
+                            hoverColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            onTap: () async {
+                              if (widget.postFood?.postUser ==
+                                  currentUserReference) {
+                                final result = await showModalBottomSheet<
+                                    PersonalPostOptionsResult>(
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  barrierColor: Color(0x00000000),
+                                  context: context,
+                                  builder: (context) {
+                                    return Padding(
+                                      padding: MediaQuery.viewInsetsOf(context),
+                                      child: PersonalPostOptionsWidget(
+                                        post: widget.postFood,
+                                      ),
+                                    );
+                                  },
                                 );
-                              },
-                            ).then((value) => safeSetState(() {}));
-                          } else {
-                            await showModalBottomSheet(
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              barrierColor: Color(0x00000000),
-                              context: context,
-                              builder: (context) {
-                                return Padding(
-                                  padding: MediaQuery.viewInsetsOf(context),
-                                  child: PostOptionsWidget(
-                                    post: widget.postFood,
-                                  ),
-                                );
-                              },
-                            ).then((value) => safeSetState(() {}));
-                          }
-                        },
-                        child: Icon(
-                          FFIcons.kmore,
-                          color: FlutterFlowTheme.of(context).tertiary,
-                          size: 24.0,
-                        ),
+                                await _applyOwnerAction(result);
+                              } else {
+                                await showModalBottomSheet(
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  barrierColor: Color(0x00000000),
+                                  context: context,
+                                  builder: (context) {
+                                    return Padding(
+                                      padding: MediaQuery.viewInsetsOf(context),
+                                      child: PostOptionsWidget(
+                                        post: widget.postFood,
+                                      ),
+                                    );
+                                  },
+                                ).then((value) => safeSetState(() {}));
+                              }
+                            },
+                            child: Icon(
+                              FFIcons.kmore,
+                              color: FlutterFlowTheme.of(context).tertiary,
+                              size: 24.0,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -394,7 +426,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                     }
                                   },
                                   onDoubleTap: () async {
-                                    if (widget.postFood!.allowLikes) {
+                                    if (_allowLikes) {
                                       if (widget.postFood!.likes
                                           .contains(currentUserReference)) {
                                         await widget.postFood!.reference
@@ -437,8 +469,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                                   createNotificationsRecordData(
                                             notificationType: 'Post_Like',
                                             userRef: currentUserReference,
-                                            postRef:
-                                                widget.postFood?.reference,
+                                            postRef: widget.postFood?.reference,
                                             timeCreated: getCurrentTimestamp,
                                           ));
                                           _model.notificationCopy =
@@ -528,18 +559,33 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                     widget.postFood?.postVideo != '')
                                   Align(
                                     alignment: AlignmentDirectional(0.0, 0.0),
-                                    child: FlutterFlowVideoPlayer(
-                                      path: functions.bunnyCDNVideoPath(
-                                          widget.postFood!.postVideo),
-                                      videoType: VideoType.network,
+                                    child: SizedBox(
                                       width: MediaQuery.sizeOf(context).width *
                                           1.0,
                                       height: 350.0,
-                                      autoPlay: false,
-                                      looping: true,
-                                      showControls: true,
-                                      allowFullScreen: true,
-                                      allowPlaybackSpeedMenu: false,
+                                      child: FeedVideoPlayer(
+                                        videoUrl: functions.bunnyCDNVideoPath(
+                                            widget.postFood!.postVideo),
+                                        thumbnailUrl: widget.postFood!
+                                                .videoThumbnail.isNotEmpty
+                                            ? functions.bunnyCDNImagePath(
+                                                widget.postFood!.videoThumbnail)
+                                            : null,
+                                        borderRadius: 20.0,
+                                        onTap: widget.isHomePage == true
+                                            ? () => context.pushNamed(
+                                                  PostDetailsWidget.routeName,
+                                                  queryParameters: {
+                                                    'post': serializeParam(
+                                                      widget
+                                                          .postFood?.reference,
+                                                      ParamType
+                                                          .DocumentReference,
+                                                    ),
+                                                  }.withoutNulls,
+                                                )
+                                            : null,
+                                      ),
                                     ),
                                   ),
                               ],
@@ -690,7 +736,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                           mainAxisSize: MainAxisSize.max,
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            if (widget.postFood?.allowLikes ?? true)
+                            if (_allowLikes)
                               Padding(
                                 padding: EdgeInsetsDirectional.fromSTEB(
                                     0.0, 0.0, 5.0, 5.0),
@@ -814,7 +860,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                   },
                                 ),
                               ),
-                            if (widget.postFood?.allowComments ?? true)
+                            if (_allowComments)
                               Padding(
                                 padding: EdgeInsetsDirectional.fromSTEB(
                                     0.0, 0.0, 16.0, 0.0),
@@ -867,47 +913,6 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                 FFIcons.kshare,
                                 color: FlutterFlowTheme.of(context).tertiary,
                                 size: 26.0,
-                              ),
-                            ),
-                            Builder(
-                              builder: (context) => Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    12.0, 0.0, 0.0, 0.0),
-                                child: InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: () async {
-                                    _model.currentPageLink =
-                                        await generateCurrentPageLink(
-                                      context,
-                                      title: widget.postFood?.postCaption,
-                                      imageUrl: widget.postFood?.postPhoto,
-                                      description:
-                                          'Check out this GymFeed post !',
-                                      isShortLink: false,
-                                    );
-
-                                    _model.linkGenerator =
-                                        _model.currentPageLink;
-                                    safeSetState(() {});
-                                    await Share.share(
-                                      _model.linkGenerator!,
-                                      sharePositionOrigin:
-                                          getWidgetBoundingBox(context),
-                                    );
-                                  },
-                                  child: Icon(
-                                    Icons.share,
-                                    color:
-                                        FlutterFlowTheme.of(context).tertiary,
-                                    size:
-                                        MediaQuery.sizeOf(context).width < 768.0
-                                            ? 26.0
-                                            : 38.0,
-                                  ),
-                                ),
                               ),
                             ),
                           ],
@@ -969,9 +974,8 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                       size: 24.0,
                                     ),
                                   ),
-                                if (stackBookmarksRecord.foodPostRef.contains(
-                                        widget.postFood?.reference) ??
-                                    true)
+                                if (stackBookmarksRecord.foodPostRef
+                                    .contains(widget.postFood?.reference))
                                   InkWell(
                                     splashColor: Colors.transparent,
                                     focusColor: Colors.transparent,
@@ -1005,8 +1009,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                       ],
                     ),
                   ),
-                if (widget.postFood!.allowLikes &&
-                    (widget.isHomePage == false))
+                if (_allowLikes && (widget.isHomePage == false))
                   Padding(
                     padding:
                         EdgeInsetsDirectional.fromSTEB(15.0, 0.0, 15.0, 13.0),
@@ -1161,7 +1164,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                           ),
                         ),
                         if ((widget.postFood?.numComments != 0) &&
-                            widget.postFood!.allowComments)
+                            _allowComments)
                           Row(
                             mainAxisSize: MainAxisSize.max,
                             children: [
@@ -1186,9 +1189,8 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                         ),
                                       );
                                     }
-                                    List<CommentsRecord>
-                                        textCommentsRecordList = snapshot.data!;
-
+                                    final textCommentsRecordList =
+                                        snapshot.data!;
                                     return InkWell(
                                       splashColor: Colors.transparent,
                                       focusColor: Colors.transparent,
@@ -1251,9 +1253,6 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                         ),
                                       );
                                     }
-                                    List<CommentsRecord>
-                                        textCommentsRecordList = snapshot.data!;
-
                                     return InkWell(
                                       splashColor: Colors.transparent,
                                       focusColor: Colors.transparent,
@@ -1296,16 +1295,15 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                 ),
                             ],
                           ),
-                        if (widget.postFood?.allowComments ?? true)
+                        if (_allowComments)
                           Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(
                                 0.0, 8.0, 0.0, 0.0),
                             child: StreamBuilder<List<CommentsRecord>>(
                               stream: queryCommentsRecord(
                                 parent: widget.postFood?.reference,
-                                queryBuilder: (commentsRecord) => commentsRecord
-                                    .orderBy('time_posted', descending: true),
                                 limit: 2,
+                                descending: true,
                               ),
                               builder: (context, snapshot) {
                                 // Customize what your widget looks like when it's loading.
@@ -1481,7 +1479,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                               },
                             ),
                           ),
-                        if (widget.postFood?.allowComments ?? true)
+                        if (_allowComments)
                           Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(
                                 0.0, 8.0, 0.0, 0.0),
@@ -1491,7 +1489,7 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                               hoverColor: Colors.transparent,
                               highlightColor: Colors.transparent,
                               onTap: () async {
-                                if (widget.postFood!.allowComments) {
+                                if (_allowComments) {
                                   context.pushNamed(
                                     CommentsWidget.routeName,
                                     queryParameters: {

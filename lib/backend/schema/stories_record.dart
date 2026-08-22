@@ -6,6 +6,7 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class StoriesRecord extends FirestoreRecord {
   StoriesRecord._(
@@ -58,10 +59,26 @@ class StoriesRecord extends FirestoreRecord {
       FirebaseFirestore.instance.collection('stories');
 
   static Stream<StoriesRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => StoriesRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<StoriesRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => StoriesRecord.fromSnapshot(s));
+  static Future<StoriesRecord> getDocumentOnce(DocumentReference ref) async {
+    final row = await supaById('stories', ref.id) ?? const {};
+    return StoriesRecord.fromSupabase({...row, 'id': ref.id});
+  }
+
+  /// Build from a Supabase `stories` row.
+  static StoriesRecord fromSupabase(Map<String, dynamic> row) {
+    final id = (row['id'] ?? '').toString();
+    return StoriesRecord.getDocumentFromData(
+        <String, dynamic>{
+          'user': supaUserRef(row['user_id']),
+          'storyPhoto': row['legacy_photo_url'],
+          'storyVideo': row['legacy_video_url'],
+          'time_created': supaDate(row['created_at']),
+          'expire_time': supaDate(row['expires_at']),
+        }..removeWhere((_, v) => v == null),
+        supaRef('stories', id));
+  }
 
   static StoriesRecord fromSnapshot(DocumentSnapshot snapshot) =>
       StoriesRecord._(

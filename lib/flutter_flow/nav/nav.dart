@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '/backend/backend.dart';
+import '/backend/supabase/supabase.dart';
 
 import '/auth/base_auth_user_provider.dart';
 
 import '/backend/push_notifications/push_notifications_handler.dart'
     show PushNotificationsHandler;
-import '/flutter_flow/flutter_flow_theme.dart';
+import '/auth/supabase_auth/onboarding_route_guard.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/custom_code/widgets/animated_splash.dart';
 
 import '/index.dart';
 
@@ -43,6 +45,7 @@ class AppStateNotifier extends ChangeNotifier {
 
   bool get loading => user == null || showSplashImage;
   bool get loggedIn => user?.loggedIn ?? false;
+  bool get emailVerified => user?.emailVerified ?? false;
   bool get initiallyLoggedIn => initialUser?.loggedIn ?? false;
   bool get shouldRedirect => loggedIn && _redirectLocation != null;
 
@@ -55,9 +58,23 @@ class AppStateNotifier extends ChangeNotifier {
   /// to perform subsequent actions (such as navigation) afterwards.
   void updateNotifyOnAuthChange(bool notify) => notifyOnAuthChange = notify;
 
+  /// Synchronizes a successful explicit sign-in before the caller navigates.
+  /// `prepareAuthEvent()` intentionally suppresses the auth-stream rebuild so
+  /// that a login handler is not interrupted mid-flight. Supabase can emit its
+  /// stream event after the sign-in Future completes, so the router otherwise
+  /// still considers the protected destination logged out for one navigation.
+  void completeAuthEvent(BaseAuthUser authenticatedUser) {
+    initialUser ??= authenticatedUser;
+    user = authenticatedUser;
+    updateNotifyOnAuthChange(true);
+  }
+
   void update(BaseAuthUser newUser) {
-    final shouldUpdate =
-        user?.uid == null || newUser.uid == null || user?.uid != newUser.uid;
+    final shouldUpdate = user?.uid == null ||
+        newUser.uid == null ||
+        user?.uid != newUser.uid ||
+        user?.loggedIn != newUser.loggedIn ||
+        user?.emailVerified != newUser.emailVerified;
     initialUser ??= newUser;
     user = newUser;
     // Refresh the app on auth change unless explicitly marked otherwise.
@@ -81,16 +98,33 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
       debugLogDiagnostics: true,
       refreshListenable: appStateNotifier,
       navigatorKey: appNavigatorKey,
+      redirect: (context, state) {
+        return signupOnboardingRedirect(
+          loggedIn: appStateNotifier.loggedIn,
+          emailVerified: appStateNotifier.emailVerified,
+          matchedLocation: state.matchedLocation,
+          onboardingStage: supabase
+              .auth.currentUser?.userMetadata?['gymfeed_onboarding_stage']
+              ?.toString(),
+        );
+      },
       errorBuilder: (context, state) => _RouteErrorBuilder(
         state: state,
-        child: appStateNotifier.loggedIn ? FeedWidget() : WelcomePageWidget(),
+        child: appStateNotifier.loggedIn
+            ? appStateNotifier.emailVerified
+                ? FeedWidget()
+                : EmailVerificationWidget()
+            : WelcomePageWidget(),
       ),
       routes: [
         FFRoute(
           name: '_initialize',
           path: '/',
-          builder: (context, _) =>
-              appStateNotifier.loggedIn ? FeedWidget() : WelcomePageWidget(),
+          builder: (context, _) => appStateNotifier.loggedIn
+              ? appStateNotifier.emailVerified
+                  ? FeedWidget()
+                  : EmailVerificationWidget()
+              : WelcomePageWidget(),
           routes: [
             FFRoute(
               name: FeedWidget.routeName,
@@ -254,6 +288,10 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
                   isList: false,
                   collectionNamePath: ['users'],
                 ),
+                followersTabIndex: params.getParam(
+                  'followersTabIndex',
+                  ParamType.int,
+                ),
               ),
             ),
             FFRoute(
@@ -305,25 +343,25 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
               name: AssistantGPTWidget.routeName,
               path: AssistantGPTWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => AssistantGPTWidget(),
+              builder: (context, params) => CoachTrainerWidget(),
             ),
             FFRoute(
               name: AssistantGPTProWidget.routeName,
               path: AssistantGPTProWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => AssistantGPTProWidget(),
+              builder: (context, params) => CoachTrainerWidget(),
             ),
             FFRoute(
               name: GptVisionWidget.routeName,
               path: GptVisionWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => GptVisionWidget(),
+              builder: (context, params) => CoachEquipmentScannerWidget(),
             ),
             FFRoute(
               name: GptVisionProWidget.routeName,
               path: GptVisionProWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => GptVisionProWidget(),
+              builder: (context, params) => CoachEquipmentScannerWidget(),
             ),
             FFRoute(
               name: ScheduleTrainingWidget.routeName,
@@ -376,6 +414,62 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
               path: TrainingHomeWidget.routePath,
               requireAuth: true,
               builder: (context, params) => TrainingHomeWidget(),
+            ),
+            FFRoute(
+              name: CoachHomeWidget.routeName,
+              path: CoachHomeWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CoachHomeWidget(),
+            ),
+            FFRoute(
+              name: CoachEventsWidget.routeName,
+              path: CoachEventsWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CoachEventsWidget(),
+            ),
+            FFRoute(
+              name: CoachFoodScannerWidget.routeName,
+              path: CoachFoodScannerWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CoachFoodScannerWidget(
+                initialLogDate: DateTime.tryParse(
+                  params.getParam('logDate', ParamType.String) ?? '',
+                ),
+              ),
+            ),
+            FFRoute(
+              name: NutritionDiaryWidget.routeName,
+              path: NutritionDiaryWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => NutritionDiaryWidget(
+                initialDate: DateTime.tryParse(
+                  params.getParam('date', ParamType.String) ?? '',
+                ),
+              ),
+            ),
+            FFRoute(
+              name: StarterPlanReadyWidget.routeName,
+              path: StarterPlanReadyWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => const StarterPlanReadyWidget(),
+            ),
+            FFRoute(
+              name: CoachEquipmentScannerWidget.routeName,
+              path: CoachEquipmentScannerWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CoachEquipmentScannerWidget(),
+            ),
+            FFRoute(
+              name: CoachTrainerWidget.routeName,
+              path: CoachTrainerWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CoachTrainerWidget(),
+            ),
+            FFRoute(
+              name: CoachBodyScanWidget.routeName,
+              path: CoachBodyScanWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CoachBodyScanWidget(),
             ),
             FFRoute(
               name: JoinTrainingWidget.routeName,
@@ -445,6 +539,11 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
               name: EmailVerificationWidget.routeName,
               path: EmailVerificationWidget.routePath,
               builder: (context, params) => EmailVerificationWidget(),
+            ),
+            FFRoute(
+              name: SocialAuthCallbackWidget.routeName,
+              path: SocialAuthCallbackWidget.routePath,
+              builder: (context, params) => const SocialAuthCallbackWidget(),
             ),
             FFRoute(
               name: AllMostDoneWidget.routeName,
@@ -591,32 +690,25 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
               name: MealScannerWidget.routeName,
               path: MealScannerWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => MealScannerWidget(
-                mealRef: params.getParam(
-                  'mealRef',
-                  ParamType.DocumentReference,
-                  isList: false,
-                  collectionNamePath: ['mealScanner'],
-                ),
-              ),
+              builder: (context, params) => CoachFoodScannerWidget(),
             ),
             FFRoute(
               name: MealScannerProWidget.routeName,
               path: MealScannerProWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => MealScannerProWidget(),
+              builder: (context, params) => CoachFoodScannerWidget(),
             ),
             FFRoute(
               name: BodyScannerWidget.routeName,
               path: BodyScannerWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => BodyScannerWidget(),
+              builder: (context, params) => CoachBodyScanWidget(),
             ),
             FFRoute(
               name: BodyScannerProWidget.routeName,
               path: BodyScannerProWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => BodyScannerProWidget(),
+              builder: (context, params) => CoachBodyScanWidget(),
             ),
             FFRoute(
               name: ReportWidget.routeName,
@@ -794,6 +886,21 @@ extension NavParamExtensions on Map<String, String?> {
 }
 
 extension NavigationExtensions on BuildContext {
+  /// Leaves the authentication stack after a successful explicit sign-in.
+  /// If auth originally interrupted a protected deep link, resume it;
+  /// otherwise replace Welcome/SignIn with the supplied authenticated page.
+  void goAfterAuth(String fallbackRouteName) {
+    final router = GoRouter.of(this);
+    final appState = router.appState;
+    if (appState.hasRedirect()) {
+      final target = appState.getRedirectLocation();
+      appState.clearRedirectLocation();
+      go(target);
+      return;
+    }
+    goNamed(fallbackRouteName);
+  }
+
   void goNamedAuth(
     String name,
     bool mounted, {
@@ -967,17 +1074,7 @@ class FFRoute {
                 )
               : builder(context, ffParams);
           final child = appStateNotifier.loading
-              ? Container(
-                  color: FlutterFlowTheme.of(context).secondary,
-                  child: Center(
-                    child: Image.asset(
-                      'assets/images/07.png',
-                      width: 200.0,
-                      height: 200.0,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                )
+              ? const AnimatedSplash()
               : PushNotificationsHandler(child: page);
 
           final transitionInfo = state.transitionInfo;

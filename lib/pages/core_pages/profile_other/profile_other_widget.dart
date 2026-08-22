@@ -1,17 +1,20 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/backend/push_notifications/push_notifications_util.dart';
+import '/backend/supabase/repositories/chat_repository.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
+import '/backend/supabase/supabase_records.dart';
 import '/components/bio/bio_widget.dart';
 import '/components/blocked/blocked_widget.dart';
+import '/components/content_safety/blocked_account_view.dart';
+import '/components/profile_story_avatar/profile_story_avatar_widget.dart';
+import '/components/post_type_badge/post_type_badge.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_timer.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_video_player.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '/pages/core_pages/story/story_widget.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
-import 'package:stop_watch_timer/stop_watch_timer.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'profile_other_model.dart';
@@ -35,6 +38,19 @@ class ProfileOtherWidget extends StatefulWidget {
 class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
     with TickerProviderStateMixin {
   late ProfileOtherModel _model;
+  late Future<List<UsersRecord>> _profileFuture;
+  UsersRecord? _loadedProfile;
+  AccountBlockRelationship _blockRelationship = AccountBlockRelationship.none;
+  bool _relationshipResolved = false;
+
+  String _targetUserId = '';
+  bool _isFollowing = false;
+  bool _followsYou = false;
+  bool _followBusy = false;
+  int _followerCount = 0;
+  int _followingCount = 0;
+  final bool _showLegacyProfileStory = false;
+  final bool _showLegacyProfileChatButtons = false;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -42,6 +58,8 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
   void initState() {
     super.initState();
     _model = createModel(context, () => ProfileOtherModel());
+    _profileFuture = _loadProfile();
+    _finishRelationshipLoad();
 
     _model.tabBarController = TabController(
       vsync: this,
@@ -49,6 +67,94 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
       initialIndex: 0,
     )..addListener(() => safeSetState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+  }
+
+  Stream<List<UsersRecord>> get _profileStream => _profileFuture.asStream();
+
+  String _profileUserId(UsersRecord? profile) {
+    final uid = profile?.uid.trim() ?? '';
+    return uid.isNotEmpty ? uid : (profile?.reference.id ?? '');
+  }
+
+  Future<List<UsersRecord>> _loadProfile() async {
+    final profile = await ProfileRepository()
+        .getPublicProfileByUsername(widget.username ?? '');
+    if (profile == null) return const <UsersRecord>[];
+
+    _targetUserId = profile.id;
+    _loadedProfile = UsersRecord.fromSupabase(profile.data);
+    _blockRelationship =
+        await ProfileRepository().blockRelationship(profile.id);
+    if (_blockRelationship == AccountBlockRelationship.none) {
+      final social = await ProfileRepository().socialState(profile.id);
+      _applySocialState(social, notify: false);
+    }
+    return <UsersRecord>[_loadedProfile!];
+  }
+
+  void _finishRelationshipLoad() {
+    _profileFuture.whenComplete(() {
+      if (mounted) safeSetState(() => _relationshipResolved = true);
+    });
+  }
+
+  void _reloadAfterRelationshipChange() {
+    safeSetState(() {
+      _relationshipResolved = false;
+      _blockRelationship = AccountBlockRelationship.none;
+      _profileFuture = _loadProfile();
+    });
+    _finishRelationshipLoad();
+  }
+
+  void _applySocialState(ProfileSocialState social, {bool notify = true}) {
+    void apply() {
+      _isFollowing = social.isFollowing;
+      _followsYou = social.followsYou;
+      _followerCount = social.followerCount;
+      _followingCount = social.followingCount;
+    }
+
+    if (notify && mounted) {
+      safeSetState(apply);
+    } else {
+      apply();
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    if (_targetUserId.isEmpty || _followBusy) return;
+    final wasFollowing = _isFollowing;
+    safeSetState(() {
+      _followBusy = true;
+      _isFollowing = !wasFollowing;
+      _followerCount =
+          (_followerCount + (wasFollowing ? -1 : 1)).clamp(0, 1 << 30);
+    });
+
+    try {
+      if (wasFollowing) {
+        await ProfileRepository().unfollow(_targetUserId);
+      } else {
+        await ProfileRepository().follow(_targetUserId);
+      }
+      await refreshCurrentUserProfile();
+      final fresh = await ProfileRepository().socialState(_targetUserId);
+      _applySocialState(fresh);
+    } catch (_) {
+      if (mounted) {
+        safeSetState(() {
+          _isFollowing = wasFollowing;
+          _followerCount =
+              (_followerCount + (wasFollowing ? 1 : -1)).clamp(0, 1 << 30);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update follow. Try again.')),
+        );
+      }
+    } finally {
+      if (mounted) safeSetState(() => _followBusy = false);
+    }
   }
 
   @override
@@ -61,6 +167,23 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
+
+    if (!_relationshipResolved) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF080808),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF16E57A)),
+        ),
+      );
+    }
+    if (_blockRelationship != AccountBlockRelationship.none) {
+      return BlockedAccountView(
+        relationship: _blockRelationship,
+        account: _loadedProfile,
+        onBack: () => context.safePop(),
+        onUnblocked: _reloadAfterRelationshipChange,
+      );
+    }
 
     return GestureDetector(
       onTap: () {
@@ -101,13 +224,7 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                         ),
                       ),
                       child: StreamBuilder<List<UsersRecord>>(
-                        stream: queryUsersRecord(
-                          queryBuilder: (usersRecord) => usersRecord.where(
-                            'username',
-                            isEqualTo: widget.username,
-                          ),
-                          singleRecord: true,
-                        ),
+                        stream: _profileStream,
                         builder: (context, snapshot) {
                           // Customize what your widget looks like when it's loading.
                           if (!snapshot.hasData) {
@@ -145,14 +262,7 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                   padding: EdgeInsetsDirectional.fromSTEB(
                                       10.0, 10.0, 10.0, 5.0),
                                   child: StreamBuilder<List<UsersRecord>>(
-                                    stream: queryUsersRecord(
-                                      queryBuilder: (usersRecord) =>
-                                          usersRecord.where(
-                                        'username',
-                                        isEqualTo: widget.username,
-                                      ),
-                                      singleRecord: true,
-                                    ),
+                                    stream: _profileStream,
                                     builder: (context, snapshot) {
                                       // Customize what your widget looks like when it's loading.
                                       if (!snapshot.hasData) {
@@ -258,22 +368,20 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                       padding: MediaQuery
                                                           .viewInsetsOf(
                                                               context),
-                                                      child: Container(
-                                                        height:
-                                                            MediaQuery.sizeOf(
-                                                                        context)
-                                                                    .height *
-                                                                0.5,
-                                                        child: BlockedWidget(
-                                                          userDetails:
-                                                              rowUsersRecord,
-                                                        ),
+                                                      child: BlockedWidget(
+                                                        userDetails:
+                                                            rowUsersRecord,
                                                       ),
                                                     ),
                                                   );
                                                 },
-                                              ).then((value) =>
-                                                  safeSetState(() {}));
+                                              ).then((value) {
+                                                if (value == true) {
+                                                  _reloadAfterRelationshipChange();
+                                                } else {
+                                                  safeSetState(() {});
+                                                }
+                                              });
                                             },
                                           ),
                                         ],
@@ -285,150 +393,149 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                   mainAxisSize: MainAxisSize.max,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Stack(
-                                      alignment: AlignmentDirectional(0.0, 0.0),
-                                      children: [
-                                        StreamBuilder<List<StoriesRecord>>(
-                                          stream: queryStoriesRecord(
-                                            queryBuilder: (storiesRecord) =>
-                                                storiesRecord
-                                                    .where(
-                                                      'user',
-                                                      isEqualTo:
-                                                          columnUsersRecord
-                                                              ?.reference,
-                                                    )
-                                                    .where(
-                                                      'expire_time',
-                                                      isGreaterThan:
-                                                          getCurrentTimestamp,
+                                    ProfileStoryAvatarWidget(
+                                      userId:
+                                          columnUsersRecord?.reference.id ?? '',
+                                      photoUrl:
+                                          columnUsersRecord?.photoUrl ?? '',
+                                      isCurrentUser: false,
+                                    ),
+                                    if (_showLegacyProfileStory)
+                                      Stack(
+                                        alignment:
+                                            AlignmentDirectional(0.0, 0.0),
+                                        children: [
+                                          StreamBuilder<List<StoriesRecord>>(
+                                            stream: queryStoriesByUserStream(
+                                              _profileUserId(columnUsersRecord),
+                                            ),
+                                            builder: (context, snapshot) {
+                                              // Customize what your widget looks like when it's loading.
+                                              if (!snapshot.hasData) {
+                                                return Center(
+                                                  child: SizedBox(
+                                                    width: 12.0,
+                                                    height: 12.0,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                              Color>(
+                                                        Colors.white,
+                                                      ),
                                                     ),
-                                            singleRecord: true,
-                                          ),
-                                          builder: (context, snapshot) {
-                                            // Customize what your widget looks like when it's loading.
-                                            if (!snapshot.hasData) {
-                                              return Center(
-                                                child: SizedBox(
-                                                  width: 12.0,
-                                                  height: 12.0,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<
-                                                            Color>(
-                                                      Colors.white,
+                                                  ),
+                                                );
+                                              }
+                                              List<StoriesRecord>
+                                                  activeStoryIndicatorStoriesRecordList =
+                                                  snapshot.data!;
+                                              // Return an empty Container when the item does not exist.
+                                              if (snapshot.data!.isEmpty) {
+                                                return Container();
+                                              }
+                                              final activeStoryIndicatorStoriesRecord =
+                                                  activeStoryIndicatorStoriesRecordList
+                                                          .isNotEmpty
+                                                      ? activeStoryIndicatorStoriesRecordList
+                                                          .first
+                                                      : null;
+
+                                              return InkWell(
+                                                splashColor: Colors.transparent,
+                                                focusColor: Colors.transparent,
+                                                hoverColor: Colors.transparent,
+                                                highlightColor:
+                                                    Colors.transparent,
+                                                onTap: () async {
+                                                  await showModalBottomSheet(
+                                                    isScrollControlled: true,
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    barrierColor:
+                                                        Color(0x00000000),
+                                                    context: context,
+                                                    builder: (context) {
+                                                      return GestureDetector(
+                                                        onTap: () {
+                                                          FocusScope.of(context)
+                                                              .unfocus();
+                                                          FocusManager.instance
+                                                              .primaryFocus
+                                                              ?.unfocus();
+                                                        },
+                                                        child: Padding(
+                                                          padding: MediaQuery
+                                                              .viewInsetsOf(
+                                                                  context),
+                                                          child: StoryWidget(
+                                                            story:
+                                                                activeStoryIndicatorStoriesRecord,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ).then((value) =>
+                                                      safeSetState(() {}));
+                                                },
+                                                child: Container(
+                                                  width: 100.0,
+                                                  height: 100.0,
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      colors: [
+                                                        FlutterFlowTheme.of(
+                                                                context)
+                                                            .primary,
+                                                        Color(0xFF0D723A)
+                                                      ],
+                                                      stops: [0.0, 1.0],
+                                                      begin:
+                                                          AlignmentDirectional(
+                                                              1.0, -1.0),
+                                                      end: AlignmentDirectional(
+                                                          -1.0, 1.0),
                                                     ),
+                                                    shape: BoxShape.circle,
                                                   ),
                                                 ),
                                               );
-                                            }
-                                            List<StoriesRecord>
-                                                activeStoryIndicatorStoriesRecordList =
-                                                snapshot.data!;
-                                            // Return an empty Container when the item does not exist.
-                                            if (snapshot.data!.isEmpty) {
-                                              return Container();
-                                            }
-                                            final activeStoryIndicatorStoriesRecord =
-                                                activeStoryIndicatorStoriesRecordList
-                                                        .isNotEmpty
-                                                    ? activeStoryIndicatorStoriesRecordList
-                                                        .first
-                                                    : null;
-
-                                            return InkWell(
-                                              splashColor: Colors.transparent,
-                                              focusColor: Colors.transparent,
-                                              hoverColor: Colors.transparent,
-                                              highlightColor:
-                                                  Colors.transparent,
-                                              onTap: () async {
-                                                await showModalBottomSheet(
-                                                  isScrollControlled: true,
-                                                  backgroundColor:
-                                                      Colors.transparent,
-                                                  barrierColor:
-                                                      Color(0x00000000),
-                                                  context: context,
-                                                  builder: (context) {
-                                                    return GestureDetector(
-                                                      onTap: () {
-                                                        FocusScope.of(context)
-                                                            .unfocus();
-                                                        FocusManager.instance
-                                                            .primaryFocus
-                                                            ?.unfocus();
-                                                      },
-                                                      child: Padding(
-                                                        padding: MediaQuery
-                                                            .viewInsetsOf(
-                                                                context),
-                                                        child: StoryWidget(
-                                                          story:
-                                                              activeStoryIndicatorStoriesRecord,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                ).then((value) =>
-                                                    safeSetState(() {}));
-                                              },
-                                              child: Container(
-                                                width: 100.0,
-                                                height: 100.0,
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .primary,
-                                                      Color(0xFF0D723A)
-                                                    ],
-                                                    stops: [0.0, 1.0],
-                                                    begin: AlignmentDirectional(
-                                                        1.0, -1.0),
-                                                    end: AlignmentDirectional(
-                                                        -1.0, 1.0),
-                                                  ),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        Align(
-                                          alignment:
-                                              AlignmentDirectional(0.0, 0.0),
-                                          child: Container(
-                                            width: 93.0,
-                                            height: 93.0,
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryBackground,
-                                              image: DecorationImage(
-                                                fit: BoxFit.cover,
-                                                image: Image.network(
-                                                  functions.bunnyCDNImagePath(
-                                                      valueOrDefault<String>(
-                                                    columnUsersRecord?.photoUrl,
-                                                    'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                                  )),
-                                                ).image,
-                                              ),
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
+                                            },
+                                          ),
+                                          Align(
+                                            alignment:
+                                                AlignmentDirectional(0.0, 0.0),
+                                            child: Container(
+                                              width: 93.0,
+                                              height: 93.0,
+                                              decoration: BoxDecoration(
                                                 color:
                                                     FlutterFlowTheme.of(context)
-                                                        .primary,
-                                                width: 3.0,
+                                                        .secondaryBackground,
+                                                image: DecorationImage(
+                                                  fit: BoxFit.cover,
+                                                  image:
+                                                      CachedNetworkImageProvider(
+                                                    functions.bunnyCDNImagePath(
+                                                        valueOrDefault<String>(
+                                                      columnUsersRecord
+                                                          ?.photoUrl,
+                                                      'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
+                                                    )),
+                                                  ),
+                                                ),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .primary,
+                                                  width: 3.0,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
                                   ],
                                 ),
                                 Column(
@@ -607,16 +714,6 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                     ),
                                                   );
                                                 }
-                                                List<FollowersRecord>
-                                                    followUnfollowButtonFollowersRecordList =
-                                                    snapshot.data!;
-                                                final followUnfollowButtonFollowersRecord =
-                                                    followUnfollowButtonFollowersRecordList
-                                                            .isNotEmpty
-                                                        ? followUnfollowButtonFollowersRecordList
-                                                            .first
-                                                        : null;
-
                                                 return InkWell(
                                                   splashColor:
                                                       Colors.transparent,
@@ -626,76 +723,9 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                       Colors.transparent,
                                                   highlightColor:
                                                       Colors.transparent,
-                                                  onTap: () async {
-                                                    if ((currentUserDocument
-                                                                ?.following
-                                                                .toList() ??
-                                                            [])
-                                                        .contains(
-                                                            columnUsersRecord
-                                                                ?.reference)) {
-                                                      await currentUserReference!
-                                                          .update({
-                                                        ...mapToFirestore(
-                                                          {
-                                                            'following':
-                                                                FieldValue
-                                                                    .arrayRemove([
-                                                              columnUsersRecord
-                                                                  ?.reference
-                                                            ]),
-                                                          },
-                                                        ),
-                                                      });
-
-                                                      await followUnfollowButtonFollowersRecord!
-                                                          .reference
-                                                          .update({
-                                                        ...mapToFirestore(
-                                                          {
-                                                            'userRefs': FieldValue
-                                                                .arrayRemove([
-                                                              currentUserReference
-                                                            ]),
-                                                          },
-                                                        ),
-                                                      });
-                                                      _model
-                                                          .timerFollowButtonActionsController
-                                                          .onResetTimer();
-                                                    } else {
-                                                      await currentUserReference!
-                                                          .update({
-                                                        ...mapToFirestore(
-                                                          {
-                                                            'following':
-                                                                FieldValue
-                                                                    .arrayUnion([
-                                                              columnUsersRecord
-                                                                  ?.reference
-                                                            ]),
-                                                          },
-                                                        ),
-                                                      });
-
-                                                      await followUnfollowButtonFollowersRecord!
-                                                          .reference
-                                                          .update({
-                                                        ...mapToFirestore(
-                                                          {
-                                                            'userRefs':
-                                                                FieldValue
-                                                                    .arrayUnion([
-                                                              currentUserReference
-                                                            ]),
-                                                          },
-                                                        ),
-                                                      });
-                                                      _model
-                                                          .timerFollowButtonActionsController
-                                                          .onStartTimer();
-                                                    }
-                                                  },
+                                                  onTap: _followBusy
+                                                      ? null
+                                                      : _toggleFollow,
                                                   child: Container(
                                                     width: MediaQuery.sizeOf(
                                                                 context)
@@ -703,17 +733,8 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                         0.45,
                                                     height: 38.0,
                                                     decoration: BoxDecoration(
-                                                      color: (currentUserDocument
-                                                                      ?.following
-                                                                      .toList() ??
-                                                                  [])
-                                                              .contains(
-                                                                  columnUsersRecord
-                                                                      ?.reference)
-                                                          ? FlutterFlowTheme.of(
-                                                                  context)
-                                                              .secondary
-                                                          : FlutterFlowTheme.of(
+                                                      color:
+                                                          FlutterFlowTheme.of(
                                                                   context)
                                                               .secondary,
                                                       borderRadius:
@@ -740,39 +761,20 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                                   .center,
                                                           children: [
                                                             Text(
-                                                              () {
-                                                                if (columnUsersRecord!
-                                                                        .following
-                                                                        .contains(
-                                                                            currentUserReference) &&
-                                                                    !(currentUserDocument?.following.toList() ??
-                                                                            [])
-                                                                        .contains(columnUsersRecord
-                                                                            .reference)) {
-                                                                  return 'Follow back';
-                                                                } else if (!columnUsersRecord
-                                                                        .following
-                                                                        .contains(
-                                                                            currentUserReference) &&
-                                                                    !(currentUserDocument?.following.toList() ??
-                                                                            [])
-                                                                        .contains(
-                                                                            columnUsersRecord.reference)) {
-                                                                  return 'Follow';
-                                                                } else {
-                                                                  return 'Unfollow';
-                                                                }
-                                                              }(),
+                                                              _followBusy
+                                                                  ? 'Updating...'
+                                                                  : _isFollowing
+                                                                      ? 'Following'
+                                                                      : _followsYou
+                                                                          ? 'Follow back'
+                                                                          : 'Follow',
                                                               style: FlutterFlowTheme
                                                                       .of(context)
                                                                   .bodyMedium
                                                                   .override(
                                                                     fontFamily:
                                                                         'Poppins',
-                                                                    color: (currentUserDocument?.following.toList() ??
-                                                                                [])
-                                                                            .contains(columnUsersRecord
-                                                                                ?.reference)
+                                                                    color: _isFollowing
                                                                         ? FlutterFlowTheme.of(context)
                                                                             .tertiary
                                                                         : Colors
@@ -814,84 +816,39 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                 highlightColor:
                                                     Colors.transparent,
                                                 onTap: () async {
-                                                  FFAppState().tempUserList =
-                                                      [];
-                                                  FFAppState().addToTempUserList(
-                                                      currentUserReference!);
-                                                  FFAppState().update(() {});
-                                                  FFAppState()
-                                                      .addToTempUserList(
-                                                          columnUsersRecord!
-                                                              .reference);
-                                                  FFAppState().update(() {});
-
-                                                  var chatsRecordReference =
-                                                      ChatsRecord.collection
-                                                          .doc();
-                                                  await chatsRecordReference
-                                                      .set({
-                                                    ...createChatsRecordData(
-                                                      userA:
-                                                          currentUserReference,
-                                                      userB: columnUsersRecord
-                                                          .reference,
-                                                      lastMessage:
-                                                          'Hey! Let\'s chat!',
-                                                      lastMessageTime:
-                                                          getCurrentTimestamp,
-                                                      lastMessageSentBy:
-                                                          currentUserReference,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'last_message_seen_by':
-                                                            [
-                                                          currentUserReference
-                                                        ],
-                                                        'users': FFAppState()
-                                                            .tempUserList,
-                                                      },
-                                                    ),
-                                                  });
-                                                  _model.chat = ChatsRecord
-                                                      .getDocumentFromData({
-                                                    ...createChatsRecordData(
-                                                      userA:
-                                                          currentUserReference,
-                                                      userB: columnUsersRecord
-                                                          .reference,
-                                                      lastMessage:
-                                                          'Hey! Let\'s chat!',
-                                                      lastMessageTime:
-                                                          getCurrentTimestamp,
-                                                      lastMessageSentBy:
-                                                          currentUserReference,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'last_message_seen_by':
-                                                            [
-                                                          currentUserReference
-                                                        ],
-                                                        'users': FFAppState()
-                                                            .tempUserList,
-                                                      },
-                                                    ),
-                                                  }, chatsRecordReference);
-
-                                                  context.pushNamed(
-                                                    IndividualMessageWidget
-                                                        .routeName,
-                                                    queryParameters: {
-                                                      'chat': serializeParam(
-                                                        _model.chat?.reference,
-                                                        ParamType
-                                                            .DocumentReference,
+                                                  try {
+                                                    final chatId =
+                                                        await ChatRepository()
+                                                            .getOrCreateDirectChat(
+                                                      columnUsersRecord!
+                                                          .reference.id,
+                                                    );
+                                                    if (!context.mounted)
+                                                      return;
+                                                    context.pushNamed(
+                                                      IndividualMessageWidget
+                                                          .routeName,
+                                                      queryParameters: {
+                                                        'chat': serializeParam(
+                                                          supaRef(
+                                                              'chats', chatId),
+                                                          ParamType
+                                                              .DocumentReference,
+                                                        ),
+                                                      }.withoutNulls,
+                                                    );
+                                                  } catch (error) {
+                                                    if (!context.mounted)
+                                                      return;
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                            'Could not open messages: $error'),
                                                       ),
-                                                    }.withoutNulls,
-                                                  );
-
-                                                  safeSetState(() {});
+                                                    );
+                                                  }
                                                 },
                                                 child: Container(
                                                   width:
@@ -953,367 +910,271 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                   ),
                                                 ),
                                               ),
-                                              StreamBuilder<List<ChatsRecord>>(
-                                                stream: queryChatsRecord(
-                                                  queryBuilder: (chatsRecord) =>
-                                                      chatsRecord
-                                                          .where(
-                                                            'user_a',
-                                                            isEqualTo:
-                                                                columnUsersRecord
-                                                                    ?.reference,
-                                                          )
-                                                          .where(
-                                                            'user_b',
-                                                            isEqualTo:
-                                                                currentUserReference,
+                                              if (_showLegacyProfileChatButtons)
+                                                StreamBuilder<
+                                                    List<ChatsRecord>>(
+                                                  stream:
+                                                      queryDirectChatWithUserStream(
+                                                    _profileUserId(
+                                                        columnUsersRecord),
+                                                  ),
+                                                  builder: (context, snapshot) {
+                                                    // Customize what your widget looks like when it's loading.
+                                                    if (!snapshot.hasData) {
+                                                      return Center(
+                                                        child: SizedBox(
+                                                          width: 12.0,
+                                                          height: 12.0,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            valueColor:
+                                                                AlwaysStoppedAnimation<
+                                                                    Color>(
+                                                              Colors.white,
+                                                            ),
                                                           ),
-                                                  singleRecord: true,
-                                                ),
-                                                builder: (context, snapshot) {
-                                                  // Customize what your widget looks like when it's loading.
-                                                  if (!snapshot.hasData) {
-                                                    return Center(
-                                                      child: SizedBox(
-                                                        width: 12.0,
-                                                        height: 12.0,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                          valueColor:
-                                                              AlwaysStoppedAnimation<
-                                                                  Color>(
-                                                            Colors.white,
+                                                        ),
+                                                      );
+                                                    }
+                                                    List<ChatsRecord>
+                                                        messageButton1ChatsRecordList =
+                                                        snapshot.data!;
+                                                    // Return an empty Container when the item does not exist.
+                                                    if (snapshot
+                                                        .data!.isEmpty) {
+                                                      return Container();
+                                                    }
+                                                    final messageButton1ChatsRecord =
+                                                        messageButton1ChatsRecordList
+                                                                .isNotEmpty
+                                                            ? messageButton1ChatsRecordList
+                                                                .first
+                                                            : null;
+
+                                                    return InkWell(
+                                                      splashColor:
+                                                          Colors.transparent,
+                                                      focusColor:
+                                                          Colors.transparent,
+                                                      hoverColor:
+                                                          Colors.transparent,
+                                                      highlightColor:
+                                                          Colors.transparent,
+                                                      onTap: () async {
+                                                        context.pushNamed(
+                                                          IndividualMessageWidget
+                                                              .routeName,
+                                                          queryParameters: {
+                                                            'chat':
+                                                                serializeParam(
+                                                              messageButton1ChatsRecord
+                                                                  ?.reference,
+                                                              ParamType
+                                                                  .DocumentReference,
+                                                            ),
+                                                          }.withoutNulls,
+                                                        );
+                                                      },
+                                                      child: Container(
+                                                        width:
+                                                            MediaQuery.sizeOf(
+                                                                        context)
+                                                                    .width *
+                                                                0.45,
+                                                        height: 38.0,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .primary,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      15.0),
+                                                        ),
+                                                        child: Align(
+                                                          alignment:
+                                                              AlignmentDirectional(
+                                                                  0.0, 0.0),
+                                                          child: Padding(
+                                                            padding:
+                                                                EdgeInsetsDirectional
+                                                                    .fromSTEB(
+                                                                        8.0,
+                                                                        6.0,
+                                                                        8.0,
+                                                                        6.0),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .max,
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .center,
+                                                              children: [
+                                                                Text(
+                                                                  FFLocalizations.of(
+                                                                          context)
+                                                                      .getText(
+                                                                    'l6zbnbid' /* Message */,
+                                                                  ),
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .override(
+                                                                        fontFamily:
+                                                                            'Poppins',
+                                                                        fontSize:
+                                                                            13.0,
+                                                                        letterSpacing:
+                                                                            0.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                ),
+                                                              ],
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     );
-                                                  }
-                                                  List<ChatsRecord>
-                                                      messageButton1ChatsRecordList =
-                                                      snapshot.data!;
-                                                  // Return an empty Container when the item does not exist.
-                                                  if (snapshot.data!.isEmpty) {
-                                                    return Container();
-                                                  }
-                                                  final messageButton1ChatsRecord =
-                                                      messageButton1ChatsRecordList
-                                                              .isNotEmpty
-                                                          ? messageButton1ChatsRecordList
-                                                              .first
-                                                          : null;
-
-                                                  return InkWell(
-                                                    splashColor:
-                                                        Colors.transparent,
-                                                    focusColor:
-                                                        Colors.transparent,
-                                                    hoverColor:
-                                                        Colors.transparent,
-                                                    highlightColor:
-                                                        Colors.transparent,
-                                                    onTap: () async {
-                                                      context.pushNamed(
-                                                        IndividualMessageWidget
-                                                            .routeName,
-                                                        queryParameters: {
-                                                          'chat':
-                                                              serializeParam(
-                                                            messageButton1ChatsRecord
-                                                                ?.reference,
-                                                            ParamType
-                                                                .DocumentReference,
-                                                          ),
-                                                        }.withoutNulls,
-                                                      );
-                                                    },
-                                                    child: Container(
-                                                      width: MediaQuery.sizeOf(
-                                                                  context)
-                                                              .width *
-                                                          0.45,
-                                                      height: 38.0,
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(15.0),
-                                                      ),
-                                                      child: Align(
-                                                        alignment:
-                                                            AlignmentDirectional(
-                                                                0.0, 0.0),
-                                                        child: Padding(
-                                                          padding:
-                                                              EdgeInsetsDirectional
-                                                                  .fromSTEB(
-                                                                      8.0,
-                                                                      6.0,
-                                                                      8.0,
-                                                                      6.0),
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .center,
-                                                            children: [
-                                                              Text(
-                                                                FFLocalizations.of(
-                                                                        context)
-                                                                    .getText(
-                                                                  'l6zbnbid' /* Message */,
-                                                                ),
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium
-                                                                    .override(
-                                                                      fontFamily:
-                                                                          'Poppins',
-                                                                      fontSize:
-                                                                          13.0,
-                                                                      letterSpacing:
-                                                                          0.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                    ),
-                                                              ),
-                                                            ],
+                                                  },
+                                                ),
+                                              if (_showLegacyProfileChatButtons)
+                                                StreamBuilder<
+                                                    List<ChatsRecord>>(
+                                                  stream:
+                                                      queryDirectChatWithUserStream(
+                                                    _profileUserId(
+                                                        columnUsersRecord),
+                                                  ),
+                                                  builder: (context, snapshot) {
+                                                    // Customize what your widget looks like when it's loading.
+                                                    if (!snapshot.hasData) {
+                                                      return Center(
+                                                        child: SizedBox(
+                                                          width: 12.0,
+                                                          height: 12.0,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            valueColor:
+                                                                AlwaysStoppedAnimation<
+                                                                    Color>(
+                                                              Colors.white,
+                                                            ),
                                                           ),
                                                         ),
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              StreamBuilder<List<ChatsRecord>>(
-                                                stream: queryChatsRecord(
-                                                  queryBuilder: (chatsRecord) =>
-                                                      chatsRecord
-                                                          .where(
-                                                            'user_a',
-                                                            isEqualTo:
-                                                                currentUserReference,
-                                                          )
-                                                          .where(
-                                                            'user_b',
-                                                            isEqualTo:
-                                                                columnUsersRecord
-                                                                    ?.reference,
-                                                          ),
-                                                  singleRecord: true,
-                                                ),
-                                                builder: (context, snapshot) {
-                                                  // Customize what your widget looks like when it's loading.
-                                                  if (!snapshot.hasData) {
-                                                    return Center(
-                                                      child: SizedBox(
-                                                        width: 12.0,
-                                                        height: 12.0,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                          valueColor:
-                                                              AlwaysStoppedAnimation<
-                                                                  Color>(
-                                                            Colors.white,
+                                                      );
+                                                    }
+                                                    List<ChatsRecord>
+                                                        messageButton2ChatsRecordList =
+                                                        snapshot.data!;
+                                                    // Return an empty Container when the item does not exist.
+                                                    if (snapshot
+                                                        .data!.isEmpty) {
+                                                      return Container();
+                                                    }
+                                                    final messageButton2ChatsRecord =
+                                                        messageButton2ChatsRecordList
+                                                                .isNotEmpty
+                                                            ? messageButton2ChatsRecordList
+                                                                .first
+                                                            : null;
+
+                                                    return InkWell(
+                                                      splashColor:
+                                                          Colors.transparent,
+                                                      focusColor:
+                                                          Colors.transparent,
+                                                      hoverColor:
+                                                          Colors.transparent,
+                                                      highlightColor:
+                                                          Colors.transparent,
+                                                      onTap: () async {
+                                                        context.pushNamed(
+                                                          IndividualMessageWidget
+                                                              .routeName,
+                                                          queryParameters: {
+                                                            'chat':
+                                                                serializeParam(
+                                                              messageButton2ChatsRecord
+                                                                  ?.reference,
+                                                              ParamType
+                                                                  .DocumentReference,
+                                                            ),
+                                                          }.withoutNulls,
+                                                        );
+                                                      },
+                                                      child: Container(
+                                                        width:
+                                                            MediaQuery.sizeOf(
+                                                                        context)
+                                                                    .width *
+                                                                0.45,
+                                                        height: 38.0,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .primary,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      15.0),
+                                                        ),
+                                                        child: Align(
+                                                          alignment:
+                                                              AlignmentDirectional(
+                                                                  0.0, 0.0),
+                                                          child: Padding(
+                                                            padding:
+                                                                EdgeInsetsDirectional
+                                                                    .fromSTEB(
+                                                                        8.0,
+                                                                        6.0,
+                                                                        8.0,
+                                                                        6.0),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .max,
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .center,
+                                                              children: [
+                                                                Text(
+                                                                  FFLocalizations.of(
+                                                                          context)
+                                                                      .getText(
+                                                                    'rmn8ix5j' /* Message */,
+                                                                  ),
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .override(
+                                                                        fontFamily:
+                                                                            'Poppins',
+                                                                        fontSize: functions
+                                                                            .resizeFontBasedOnScreenSize(MediaQuery.sizeOf(context).width,
+                                                                                13)
+                                                                            .toDouble(),
+                                                                        letterSpacing:
+                                                                            0.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                ),
+                                                              ],
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     );
-                                                  }
-                                                  List<ChatsRecord>
-                                                      messageButton2ChatsRecordList =
-                                                      snapshot.data!;
-                                                  // Return an empty Container when the item does not exist.
-                                                  if (snapshot.data!.isEmpty) {
-                                                    return Container();
-                                                  }
-                                                  final messageButton2ChatsRecord =
-                                                      messageButton2ChatsRecordList
-                                                              .isNotEmpty
-                                                          ? messageButton2ChatsRecordList
-                                                              .first
-                                                          : null;
-
-                                                  return InkWell(
-                                                    splashColor:
-                                                        Colors.transparent,
-                                                    focusColor:
-                                                        Colors.transparent,
-                                                    hoverColor:
-                                                        Colors.transparent,
-                                                    highlightColor:
-                                                        Colors.transparent,
-                                                    onTap: () async {
-                                                      context.pushNamed(
-                                                        IndividualMessageWidget
-                                                            .routeName,
-                                                        queryParameters: {
-                                                          'chat':
-                                                              serializeParam(
-                                                            messageButton2ChatsRecord
-                                                                ?.reference,
-                                                            ParamType
-                                                                .DocumentReference,
-                                                          ),
-                                                        }.withoutNulls,
-                                                      );
-                                                    },
-                                                    child: Container(
-                                                      width: MediaQuery.sizeOf(
-                                                                  context)
-                                                              .width *
-                                                          0.45,
-                                                      height: 38.0,
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(15.0),
-                                                      ),
-                                                      child: Align(
-                                                        alignment:
-                                                            AlignmentDirectional(
-                                                                0.0, 0.0),
-                                                        child: Padding(
-                                                          padding:
-                                                              EdgeInsetsDirectional
-                                                                  .fromSTEB(
-                                                                      8.0,
-                                                                      6.0,
-                                                                      8.0,
-                                                                      6.0),
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .center,
-                                                            children: [
-                                                              Text(
-                                                                FFLocalizations.of(
-                                                                        context)
-                                                                    .getText(
-                                                                  'rmn8ix5j' /* Message */,
-                                                                ),
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium
-                                                                    .override(
-                                                                      fontFamily:
-                                                                          'Poppins',
-                                                                      fontSize: functions
-                                                                          .resizeFontBasedOnScreenSize(
-                                                                              MediaQuery.sizeOf(context).width,
-                                                                              13)
-                                                                          .toDouble(),
-                                                                      letterSpacing:
-                                                                          0.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                    ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
+                                                  },
+                                                ),
                                             ],
                                           ),
                                         ),
-                                      ),
-                                      FlutterFlowTimer(
-                                        initialTime: _model
-                                            .timerFollowButtonActionsInitialTimeMs,
-                                        getDisplayTime: (value) =>
-                                            StopWatchTimer.getDisplayTime(value,
-                                                milliSecond: false),
-                                        controller: _model
-                                            .timerFollowButtonActionsController,
-                                        onChanged:
-                                            (value, displayTime, shouldUpdate) {
-                                          _model.timerFollowButtonActionsMilliseconds =
-                                              value;
-                                          _model.timerFollowButtonActionsValue =
-                                              displayTime;
-                                          if (shouldUpdate) safeSetState(() {});
-                                        },
-                                        onEnded: () async {
-                                          var notificationsRecordReference =
-                                              NotificationsRecord.createDoc(
-                                                  columnUsersRecord!.reference);
-                                          await notificationsRecordReference
-                                              .set(
-                                                  createNotificationsRecordData(
-                                            notificationType: 'Follow',
-                                            userRef: currentUserReference,
-                                            timeCreated: getCurrentTimestamp,
-                                          ));
-                                          _model.notification = NotificationsRecord
-                                              .getDocumentFromData(
-                                                  createNotificationsRecordData(
-                                                    notificationType: 'Follow',
-                                                    userRef:
-                                                        currentUserReference,
-                                                    timeCreated:
-                                                        getCurrentTimestamp,
-                                                  ),
-                                                  notificationsRecordReference);
-
-                                          await columnUsersRecord.reference
-                                              .update({
-                                            ...mapToFirestore(
-                                              {
-                                                'unreadNotifications':
-                                                    FieldValue.arrayUnion([
-                                                  _model.notification?.reference
-                                                ]),
-                                              },
-                                            ),
-                                          });
-                                          triggerPushNotification(
-                                            notificationTitle: 'GymFeed',
-                                            notificationText:
-                                                '${valueOrDefault(currentUserDocument?.username, '')} started following you.',
-                                            notificationImageUrl:
-                                                currentUserPhoto,
-                                            notificationSound: 'default',
-                                            userRefs: [
-                                              columnUsersRecord.reference
-                                            ],
-                                            initialPageName: 'ProfileOther',
-                                            parameterData: {
-                                              'username': valueOrDefault(
-                                                  currentUserDocument?.username,
-                                                  ''),
-                                            },
-                                          );
-
-                                          safeSetState(() {});
-                                        },
-                                        textAlign: TextAlign.start,
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              fontFamily: 'Poppins',
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primary,
-                                              fontSize: 0.0,
-                                              letterSpacing: 0.0,
-                                            ),
                                       ),
                                     ],
                                   ),
@@ -1455,6 +1316,11 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                         ParamType
                                                             .DocumentReference,
                                                       ),
+                                                      'followersTabIndex':
+                                                          serializeParam(
+                                                        0,
+                                                        ParamType.int,
+                                                      ),
                                                     }.withoutNulls,
                                                   );
                                                 },
@@ -1462,59 +1328,15 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                   mainAxisSize:
                                                       MainAxisSize.max,
                                                   children: [
-                                                    StreamBuilder<
-                                                        List<FollowersRecord>>(
-                                                      stream:
-                                                          queryFollowersRecord(
-                                                        parent:
-                                                            columnUsersRecord
-                                                                ?.reference,
-                                                        singleRecord: true,
+                                                    Text(
+                                                      formatNumber(
+                                                        _followerCount,
+                                                        formatType:
+                                                            FormatType.compact,
                                                       ),
-                                                      builder:
-                                                          (context, snapshot) {
-                                                        // Customize what your widget looks like when it's loading.
-                                                        if (!snapshot.hasData) {
-                                                          return Center(
-                                                            child: SizedBox(
-                                                              width: 12.0,
-                                                              height: 12.0,
-                                                              child:
-                                                                  CircularProgressIndicator(
-                                                                valueColor:
-                                                                    AlwaysStoppedAnimation<
-                                                                        Color>(
-                                                                  Colors.white,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          );
-                                                        }
-                                                        List<FollowersRecord>
-                                                            numberFollowersRecordList =
-                                                            snapshot.data!;
-                                                        final numberFollowersRecord =
-                                                            numberFollowersRecordList
-                                                                    .isNotEmpty
-                                                                ? numberFollowersRecordList
-                                                                    .first
-                                                                : null;
-
-                                                        return Text(
-                                                          valueOrDefault<
-                                                              String>(
-                                                            formatNumber(
-                                                              numberFollowersRecord
-                                                                  ?.userRefs
-                                                                  .length,
-                                                              formatType:
-                                                                  FormatType
-                                                                      .compact,
-                                                            ),
-                                                            '0',
-                                                          ),
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
+                                                      style:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
                                                               .bodyMedium
                                                               .override(
                                                                 fontFamily:
@@ -1531,8 +1353,6 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                                 letterSpacing:
                                                                     0.0,
                                                               ),
-                                                        );
-                                                      },
                                                     ),
                                                     Padding(
                                                       padding:
@@ -1603,6 +1423,11 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                         ParamType
                                                             .DocumentReference,
                                                       ),
+                                                      'followersTabIndex':
+                                                          serializeParam(
+                                                        1,
+                                                        ParamType.int,
+                                                      ),
                                                     }.withoutNulls,
                                                   );
                                                 },
@@ -1613,9 +1438,7 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                     Text(
                                                       valueOrDefault<String>(
                                                         formatNumber(
-                                                          columnUsersRecord
-                                                              ?.following
-                                                              .length,
+                                                          _followingCount,
                                                           formatType: FormatType
                                                               .compact,
                                                         ),
@@ -1755,14 +1578,7 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                   KeepAliveWidgetWrapper(
                                     builder: (context) =>
                                         StreamBuilder<List<UsersRecord>>(
-                                      stream: queryUsersRecord(
-                                        queryBuilder: (usersRecord) =>
-                                            usersRecord.where(
-                                          'username',
-                                          isEqualTo: widget.username,
-                                        ),
-                                        singleRecord: true,
-                                      ),
+                                      stream: _profileStream,
                                       builder: (context, snapshot) {
                                         // Customize what your widget looks like when it's loading.
                                         if (!snapshot.hasData) {
@@ -1816,24 +1632,10 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                   ),
                                                   child: StreamBuilder<
                                                       List<PostsRecord>>(
-                                                    stream: queryPostsRecord(
-                                                      queryBuilder: (postsRecord) =>
-                                                          postsRecord
-                                                              .where(
-                                                                'post_user',
-                                                                isEqualTo:
-                                                                    columnUsersRecord
-                                                                        ?.reference,
-                                                              )
-                                                              .where(
-                                                                'deleted',
-                                                                isEqualTo:
-                                                                    false,
-                                                              )
-                                                              .orderBy(
-                                                                  'time_posted',
-                                                                  descending:
-                                                                      true),
+                                                    stream:
+                                                        queryPostsByUserStream(
+                                                      _profileUserId(
+                                                          columnUsersRecord),
                                                     ),
                                                     builder:
                                                         (context, snapshot) {
@@ -1854,9 +1656,18 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                           ),
                                                         );
                                                       }
-                                                      List<PostsRecord>
-                                                          profilePhotosPostsRecordList =
-                                                          snapshot.data!;
+                                                      final profileUserId =
+                                                          _profileUserId(
+                                                              columnUsersRecord);
+                                                      final profilePhotosPostsRecordList =
+                                                          snapshot.data!
+                                                              .where((post) =>
+                                                                  post.postUser
+                                                                      ?.id ==
+                                                                  profileUserId)
+                                                              .toList(
+                                                                  growable:
+                                                                      false);
 
                                                       return GridView.builder(
                                                         padding:
@@ -1864,9 +1675,10 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                         gridDelegate:
                                                             SliverGridDelegateWithFixedCrossAxisCount(
                                                           crossAxisCount: 3,
-                                                          crossAxisSpacing: 1.0,
-                                                          mainAxisSpacing: 1.0,
-                                                          childAspectRatio: 1.0,
+                                                          crossAxisSpacing: 2.0,
+                                                          mainAxisSpacing: 2.0,
+                                                          childAspectRatio:
+                                                              0.86,
                                                         ),
                                                         primary: false,
                                                         shrinkWrap: true,
@@ -1923,50 +1735,76 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                                   minHeight:
                                                                       400.0,
                                                                 ),
+                                                                clipBehavior: Clip
+                                                                    .antiAlias,
                                                                 decoration:
                                                                     BoxDecoration(
                                                                   color: Color(
                                                                       0xFF111111),
-                                                                  image:
-                                                                      DecorationImage(
-                                                                    fit: BoxFit
-                                                                        .cover,
-                                                                    image: Image
-                                                                        .network(
-                                                                      functions.bunnyCDNImagePath(
-                                                                          profilePhotosPostsRecord
-                                                                              .postPhoto),
-                                                                    ).image,
-                                                                  ),
                                                                 ),
-                                                                child:
-                                                                    Visibility(
-                                                                  visible: profilePhotosPostsRecord
-                                                                              .postVideo !=
-                                                                          '',
-                                                                  child:
-                                                                      FlutterFlowVideoPlayer(
-                                                                    path: functions
-                                                                        .bunnyCDNVideoPath(
-                                                                            profilePhotosPostsRecord.postVideo),
-                                                                    videoType:
-                                                                        VideoType
-                                                                            .network,
-                                                                    width:
-                                                                        100.0,
-                                                                    height:
-                                                                        100.0,
-                                                                    autoPlay:
-                                                                        false,
-                                                                    looping:
-                                                                        true,
-                                                                    showControls:
-                                                                        false,
-                                                                    allowFullScreen:
-                                                                        false,
-                                                                    allowPlaybackSpeedMenu:
-                                                                        false,
-                                                                  ),
+                                                                child: Stack(
+                                                                  fit: StackFit
+                                                                      .expand,
+                                                                  children: [
+                                                                    CachedNetworkImage(
+                                                                      imageUrl: functions.bunnyCDNImagePath(profilePhotosPostsRecord
+                                                                              .postVideo
+                                                                              .isNotEmpty
+                                                                          ? (profilePhotosPostsRecord.videoThumbnail.isNotEmpty
+                                                                              ? profilePhotosPostsRecord.videoThumbnail
+                                                                              : profilePhotosPostsRecord.postPhoto)
+                                                                          : profilePhotosPostsRecord.postPhoto),
+                                                                      fit: BoxFit
+                                                                          .cover,
+                                                                      placeholder: (_,
+                                                                              __) =>
+                                                                          Container(
+                                                                              color: Color(0xFF111111)),
+                                                                      errorWidget: (_,
+                                                                              __,
+                                                                              ___) =>
+                                                                          Container(
+                                                                              color: Color(0xFF111111)),
+                                                                    ),
+                                                                    if (profilePhotosPostsRecord
+                                                                        .postVideo
+                                                                        .isNotEmpty)
+                                                                      Align(
+                                                                        alignment: AlignmentDirectional(
+                                                                            profilePhotosPostsRecord.foodPost
+                                                                                ? -0.9
+                                                                                : 0.9,
+                                                                            -0.9),
+                                                                        child:
+                                                                            Padding(
+                                                                          padding: const EdgeInsetsDirectional
+                                                                              .fromSTEB(
+                                                                              0.0,
+                                                                              6.0,
+                                                                              6.0,
+                                                                              0.0),
+                                                                          child:
+                                                                              Icon(
+                                                                            Icons.play_circle_fill_rounded,
+                                                                            color:
+                                                                                Colors.white,
+                                                                            size:
+                                                                                20.0,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    if (profilePhotosPostsRecord
+                                                                        .foodPost)
+                                                                      const Positioned(
+                                                                        right:
+                                                                            6.0,
+                                                                        top:
+                                                                            6.0,
+                                                                        child: FoodPostBadge(
+                                                                            size:
+                                                                                26.0),
+                                                                      ),
+                                                                  ],
                                                                 ),
                                                               ),
                                                             ),
@@ -1986,14 +1824,7 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                   KeepAliveWidgetWrapper(
                                     builder: (context) =>
                                         StreamBuilder<List<UsersRecord>>(
-                                      stream: queryUsersRecord(
-                                        queryBuilder: (usersRecord) =>
-                                            usersRecord.where(
-                                          'username',
-                                          isEqualTo: widget.username,
-                                        ),
-                                        singleRecord: true,
-                                      ),
+                                      stream: _profileStream,
                                       builder: (context, snapshot) {
                                         // Customize what your widget looks like when it's loading.
                                         if (!snapshot.hasData) {
@@ -2034,23 +1865,10 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                         0.0, 0.0, 0.0, 150.0),
                                                 child: StreamBuilder<
                                                     List<PostsRecord>>(
-                                                  stream: queryPostsRecord(
-                                                    queryBuilder: (postsRecord) =>
-                                                        postsRecord
-                                                            .where(
-                                                              'tagged_users',
-                                                              arrayContains:
-                                                                  columnUsersRecord
-                                                                      ?.reference,
-                                                            )
-                                                            .where(
-                                                              'deleted',
-                                                              isEqualTo: false,
-                                                            )
-                                                            .orderBy(
-                                                                'time_posted',
-                                                                descending:
-                                                                    true),
+                                                  stream:
+                                                      queryTaggedPostsByUserStream(
+                                                    _profileUserId(
+                                                        columnUsersRecord),
                                                   ),
                                                   builder: (context, snapshot) {
                                                     // Customize what your widget looks like when it's loading.
@@ -2079,9 +1897,9 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                       gridDelegate:
                                                           SliverGridDelegateWithFixedCrossAxisCount(
                                                         crossAxisCount: 3,
-                                                        crossAxisSpacing: 1.0,
-                                                        mainAxisSpacing: 1.0,
-                                                        childAspectRatio: 1.0,
+                                                        crossAxisSpacing: 2.0,
+                                                        mainAxisSpacing: 2.0,
+                                                        childAspectRatio: 0.86,
                                                       ),
                                                       primary: false,
                                                       shrinkWrap: true,
@@ -2132,47 +1950,70 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                             child: Container(
                                                               width: 100.0,
                                                               height: 100.0,
+                                                              clipBehavior: Clip
+                                                                  .antiAlias,
                                                               decoration:
                                                                   BoxDecoration(
                                                                 color: Color(
                                                                     0xFF111111),
-                                                                image:
-                                                                    DecorationImage(
-                                                                  fit: BoxFit
-                                                                      .cover,
-                                                                  image: Image
-                                                                      .network(
-                                                                    functions.bunnyCDNImagePath(
-                                                                        taggedPhotosPostsRecord
-                                                                            .postPhoto),
-                                                                  ).image,
-                                                                ),
                                                               ),
-                                                              child: Visibility(
-                                                                visible: taggedPhotosPostsRecord
-                                                                            .postVideo !=
-                                                                        '',
-                                                                child:
-                                                                    FlutterFlowVideoPlayer(
-                                                                  path: functions
-                                                                      .bunnyCDNVideoPath(
-                                                                          taggedPhotosPostsRecord
-                                                                              .postVideo),
-                                                                  videoType:
-                                                                      VideoType
-                                                                          .network,
-                                                                  width: 100.0,
-                                                                  height: 100.0,
-                                                                  autoPlay:
-                                                                      false,
-                                                                  looping: true,
-                                                                  showControls:
-                                                                      false,
-                                                                  allowFullScreen:
-                                                                      false,
-                                                                  allowPlaybackSpeedMenu:
-                                                                      false,
-                                                                ),
+                                                              child: Stack(
+                                                                fit: StackFit
+                                                                    .expand,
+                                                                children: [
+                                                                  CachedNetworkImage(
+                                                                    imageUrl: functions.bunnyCDNImagePath(taggedPhotosPostsRecord
+                                                                            .postVideo
+                                                                            .isNotEmpty
+                                                                        ? (taggedPhotosPostsRecord.videoThumbnail.isNotEmpty
+                                                                            ? taggedPhotosPostsRecord
+                                                                                .videoThumbnail
+                                                                            : taggedPhotosPostsRecord
+                                                                                .postPhoto)
+                                                                        : taggedPhotosPostsRecord
+                                                                            .postPhoto),
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    placeholder: (_,
+                                                                            __) =>
+                                                                        Container(
+                                                                            color:
+                                                                                Color(0xFF111111)),
+                                                                    errorWidget: (_,
+                                                                            __,
+                                                                            ___) =>
+                                                                        Container(
+                                                                            color:
+                                                                                Color(0xFF111111)),
+                                                                  ),
+                                                                  if (taggedPhotosPostsRecord
+                                                                      .postVideo
+                                                                      .isNotEmpty)
+                                                                    Align(
+                                                                      alignment:
+                                                                          AlignmentDirectional(
+                                                                              0.9,
+                                                                              -0.9),
+                                                                      child:
+                                                                          Padding(
+                                                                        padding: const EdgeInsetsDirectional
+                                                                            .fromSTEB(
+                                                                            0.0,
+                                                                            6.0,
+                                                                            6.0,
+                                                                            0.0),
+                                                                        child:
+                                                                            Icon(
+                                                                          Icons
+                                                                              .play_circle_fill_rounded,
+                                                                          color:
+                                                                              Colors.white,
+                                                                          size:
+                                                                              20.0,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                ],
                                                               ),
                                                             ),
                                                           ),
@@ -2208,16 +2049,7 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                           16.0, 0.0, 16.0, 0.0),
                                                   child: StreamBuilder<
                                                       List<UsersRecord>>(
-                                                    stream: queryUsersRecord(
-                                                      queryBuilder:
-                                                          (usersRecord) =>
-                                                              usersRecord.where(
-                                                        'username',
-                                                        isEqualTo:
-                                                            widget.username,
-                                                      ),
-                                                      singleRecord: true,
-                                                    ),
+                                                    stream: _profileStream,
                                                     builder:
                                                         (context, snapshot) {
                                                       // Customize what your widget looks like when it's loading.
@@ -2263,18 +2095,9 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                                 List<
                                                                     UserTrainingsRecord>>(
                                                               stream:
-                                                                  queryUserTrainingsRecord(
-                                                                queryBuilder: (userTrainingsRecord) =>
-                                                                    userTrainingsRecord
-                                                                        .where(
-                                                                          'userTraining',
-                                                                          isEqualTo:
-                                                                              columnUsersRecord?.reference,
-                                                                        )
-                                                                        .orderBy(
-                                                                            'TrainingDate')
-                                                                        .orderBy(
-                                                                            'TrainingTime'),
+                                                                  queryTrainingsByUserStream(
+                                                                _profileUserId(
+                                                                    columnUsersRecord),
                                                               ),
                                                               builder: (context,
                                                                   snapshot) {
@@ -2299,10 +2122,19 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                                     ),
                                                                   );
                                                                 }
-                                                                List<UserTrainingsRecord>
-                                                                    trainingfeedUserTrainingsRecordList =
-                                                                    snapshot
-                                                                        .data!;
+                                                                final profileUserId =
+                                                                    _profileUserId(
+                                                                        columnUsersRecord);
+                                                                final trainingfeedUserTrainingsRecordList = snapshot
+                                                                    .data!
+                                                                    .where((training) =>
+                                                                        training
+                                                                            .userTraining
+                                                                            ?.id ==
+                                                                        profileUserId)
+                                                                    .toList(
+                                                                        growable:
+                                                                            false);
 
                                                                 return ListView
                                                                     .builder(
@@ -2370,9 +2202,9 @@ class _ProfileOtherWidgetState extends State<ProfileOtherWidget>
                                                                               color: Color(0xFF111111),
                                                                               image: DecorationImage(
                                                                                 fit: BoxFit.cover,
-                                                                                image: Image.network(
+                                                                                image: CachedNetworkImageProvider(
                                                                                   functions.bunnyCDNImagePath(trainingfeedUserTrainingsRecord.trainingBackgroundImage),
-                                                                                ).image,
+                                                                                ),
                                                                               ),
                                                                               boxShadow: [
                                                                                 BoxShadow(

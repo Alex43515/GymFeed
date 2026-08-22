@@ -1,5 +1,4 @@
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/form_field_controller.dart';
 import '/index.dart';
 import 'work_out_level_widget.dart' show WorkOutLevelWidget;
 import 'package:flutter/material.dart';
@@ -7,16 +6,12 @@ import 'package:flutter/material.dart';
 class WorkOutLevelModel extends FlutterFlowModel<WorkOutLevelWidget> {
   ///  State fields for stateful widgets in this page.
 
-  final formKey = GlobalKey<FormState>();
-  // State field(s) for RadioButton widget.
-  FormFieldController<String>? radioButtonValueController;
+  // Currently selected workout level ('' = none yet).
+  String selected = '';
 
   @override
   void initState(BuildContext context) {}
 
   @override
   void dispose() {}
-
-  /// Additional helper methods.
-  String? get radioButtonValue => radioButtonValueController?.value;
 }

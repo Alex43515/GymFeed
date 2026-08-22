@@ -1,11 +1,9 @@
-import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'unblock_list_model.dart';
-export 'unblock_list_model.dart';
+
+import '/backend/supabase/database/profile.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 
 class UnblockListWidget extends StatefulWidget {
   const UnblockListWidget({super.key});
@@ -18,369 +16,192 @@ class UnblockListWidget extends StatefulWidget {
 }
 
 class _UnblockListWidgetState extends State<UnblockListWidget> {
-  late UnblockListModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
+  late Future<List<Profile>> _future;
+  final Set<String> _busy = {};
 
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => UnblockListModel());
+    _future = ProfileRepository().blockedAccounts();
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+  Future<void> _unblock(Profile profile) async {
+    if (_busy.contains(profile.id)) return;
+    setState(() => _busy.add(profile.id));
+    try {
+      await ProfileRepository().unblock(profile.id);
+      if (!mounted) return;
+      setState(() {
+        _busy.remove(profile.id);
+        _future = ProfileRepository().blockedAccounts();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _busy.remove(profile.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not unblock account: $error')),
+      );
+    }
   }
 
   @override
-  void dispose() {
-    _model.dispose();
-
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        body: SafeArea(
-          top: true,
-          child: SingleChildScrollView(
-            primary: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 15.0, 0.0, 0.0),
-                  child: SingleChildScrollView(
-                    primary: false,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF080808),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF080808),
+          elevation: 0,
+          leading: IconButton(
+            onPressed: () => context.safePop(),
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          ),
+          title: const Text('Blocked accounts',
+              style: TextStyle(fontWeight: FontWeight.w800)),
+          centerTitle: true,
+        ),
+        body: FutureBuilder<List<Profile>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF16E57A)),
+              );
+            }
+            if (snapshot.hasError) {
+              return _EmptyState(
+                icon: Icons.wifi_off_rounded,
+                title: 'Could not load blocked accounts',
+                message: 'Check your connection and try again.',
+                action: () => setState(
+                    () => _future = ProfileRepository().blockedAccounts()),
+              );
+            }
+            final accounts = snapshot.data ?? const <Profile>[];
+            if (accounts.isEmpty) {
+              return const _EmptyState(
+                icon: Icons.shield_outlined,
+                title: 'No blocked accounts',
+                message: 'Accounts you block will appear here.',
+              );
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
+              itemCount: accounts.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final profile = accounts[index];
+                final busy = _busy.contains(profile.id);
+                return Container(
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141414),
+                    border: Border.all(color: const Color(0xFF292929)),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    children: [
+                      ClipOval(
+                        child: profile.photoUrl.isEmpty
+                            ? _avatarFallback()
+                            : CachedNetworkImage(
+                                imageUrl: profile.photoUrl,
+                                width: 50,
+                                height: 50,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => _avatarFallback(),
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  10.0, 0.0, 0.0, 0.0),
-                              child: InkWell(
-                                splashColor: Colors.transparent,
-                                focusColor: Colors.transparent,
-                                hoverColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                onTap: () async {
-                                  context.safePop();
-                                },
-                                child: Icon(
-                                  Icons.arrow_back_ios_rounded,
-                                  color: FlutterFlowTheme.of(context).tertiary,
-                                  size: 15.0,
-                                ),
-                              ),
-                            ),
                             Text(
-                              FFLocalizations.of(context).getText(
-                                'rj87swaw' /* Blocked accounts */,
-                              ),
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 15.0,
-                                    letterSpacing: 0.0,
-                                  ),
+                              profile.displayName.isNotEmpty
+                                  ? profile.displayName
+                                  : profile.username,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700),
                             ),
-                            Opacity(
-                              opacity: 0.0,
-                              child: Icon(
-                                Icons.chevron_left,
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                                size: 30.0,
-                              ),
-                            ),
+                            if (profile.username.isNotEmpty)
+                              Text('@${profile.username}',
+                                  style: const TextStyle(
+                                      color: Color(0xFF8B8B8B), fontSize: 12)),
                           ],
                         ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 20.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              Expanded(
-                                child: AuthUserStreamWidget(
-                                  builder: (context) => Builder(
-                                    builder: (context) {
-                                      final blockedUserId = (currentUserDocument
-                                                  ?.userBlocked
-                                                  .toList() ??
-                                              [])
-                                          .toList();
-
-                                      return ListView.builder(
-                                        padding: EdgeInsets.zero,
-                                        shrinkWrap: true,
-                                        scrollDirection: Axis.vertical,
-                                        itemCount: blockedUserId.length,
-                                        itemBuilder:
-                                            (context, blockedUserIdIndex) {
-                                          final blockedUserIdItem =
-                                              blockedUserId[blockedUserIdIndex];
-                                          return Padding(
-                                            padding:
-                                                EdgeInsetsDirectional.fromSTEB(
-                                                    0.0, 10.0, 0.0, 0.0),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.max,
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Padding(
-                                                  padding: EdgeInsetsDirectional
-                                                      .fromSTEB(
-                                                          20.0, 0.0, 0.0, 0.0),
-                                                  child: StreamBuilder<
-                                                      UsersRecord>(
-                                                    stream:
-                                                        UsersRecord.getDocument(
-                                                            blockedUserIdItem),
-                                                    builder:
-                                                        (context, snapshot) {
-                                                      // Customize what your widget looks like when it's loading.
-                                                      if (!snapshot.hasData) {
-                                                        return Center(
-                                                          child: SizedBox(
-                                                            width: 12.0,
-                                                            height: 12.0,
-                                                            child:
-                                                                CircularProgressIndicator(
-                                                              valueColor:
-                                                                  AlwaysStoppedAnimation<
-                                                                      Color>(
-                                                                Colors.white,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        );
-                                                      }
-
-                                                      final rowUsersRecord =
-                                                          snapshot.data!;
-
-                                                      return Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.max,
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceEvenly,
-                                                        children: [
-                                                          Container(
-                                                            width: 50.0,
-                                                            height: 50.0,
-                                                            clipBehavior:
-                                                                Clip.antiAlias,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              shape: BoxShape
-                                                                  .circle,
-                                                            ),
-                                                            child:
-                                                                Image.network(
-                                                              valueOrDefault<
-                                                                  String>(
-                                                                rowUsersRecord
-                                                                    .photoUrl,
-                                                                'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                                              ),
-                                                              fit: BoxFit.cover,
-                                                            ),
-                                                          ),
-                                                          Padding(
-                                                            padding:
-                                                                EdgeInsetsDirectional
-                                                                    .fromSTEB(
-                                                                        10.0,
-                                                                        0.0,
-                                                                        0.0,
-                                                                        0.0),
-                                                            child: Column(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .max,
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
-                                                                Padding(
-                                                                  padding: EdgeInsetsDirectional
-                                                                      .fromSTEB(
-                                                                          10.0,
-                                                                          0.0,
-                                                                          0.0,
-                                                                          0.0),
-                                                                  child: Text(
-                                                                    rowUsersRecord
-                                                                        .displayName,
-                                                                    style: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .override(
-                                                                          fontFamily:
-                                                                              'Poppins',
-                                                                          color:
-                                                                              FlutterFlowTheme.of(context).tertiary,
-                                                                          fontSize:
-                                                                              15.0,
-                                                                          letterSpacing:
-                                                                              0.0,
-                                                                        ),
-                                                                  ),
-                                                                ),
-                                                                Padding(
-                                                                  padding: EdgeInsetsDirectional
-                                                                      .fromSTEB(
-                                                                          10.0,
-                                                                          0.0,
-                                                                          0.0,
-                                                                          0.0),
-                                                                  child: Text(
-                                                                    rowUsersRecord
-                                                                        .username,
-                                                                    style: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .override(
-                                                                          fontFamily:
-                                                                              'Poppins',
-                                                                          color:
-                                                                              FlutterFlowTheme.of(context).accent3,
-                                                                          fontSize:
-                                                                              12.0,
-                                                                          letterSpacing:
-                                                                              0.0,
-                                                                        ),
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          Padding(
-                                                            padding:
-                                                                EdgeInsetsDirectional
-                                                                    .fromSTEB(
-                                                                        30.0,
-                                                                        0.0,
-                                                                        0.0,
-                                                                        0.0),
-                                                            child: Column(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .max,
-                                                              children: [
-                                                                FFButtonWidget(
-                                                                  onPressed:
-                                                                      () async {
-                                                                    await currentUserReference!
-                                                                        .update({
-                                                                      ...mapToFirestore(
-                                                                        {
-                                                                          'user_blocked':
-                                                                              FieldValue.arrayRemove([
-                                                                            rowUsersRecord.reference
-                                                                          ]),
-                                                                        },
-                                                                      ),
-                                                                    });
-                                                                  },
-                                                                  text: FFLocalizations.of(
-                                                                          context)
-                                                                      .getText(
-                                                                    'nler6e50' /* Unblock */,
-                                                                  ),
-                                                                  options:
-                                                                      FFButtonOptions(
-                                                                    width:
-                                                                        101.0,
-                                                                    height:
-                                                                        25.0,
-                                                                    padding: EdgeInsetsDirectional
-                                                                        .fromSTEB(
-                                                                            24.0,
-                                                                            0.0,
-                                                                            24.0,
-                                                                            0.0),
-                                                                    iconPadding:
-                                                                        EdgeInsetsDirectional.fromSTEB(
-                                                                            0.0,
-                                                                            0.0,
-                                                                            0.0,
-                                                                            0.0),
-                                                                    color: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .accent3,
-                                                                    textStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleSmall
-                                                                        .override(
-                                                                          fontFamily:
-                                                                              'Poppins',
-                                                                          color:
-                                                                              FlutterFlowTheme.of(context).tertiary,
-                                                                          fontSize:
-                                                                              15.0,
-                                                                          letterSpacing:
-                                                                              0.0,
-                                                                        ),
-                                                                    elevation:
-                                                                        3.0,
-                                                                    borderSide:
-                                                                        BorderSide(
-                                                                      color: Colors
-                                                                          .transparent,
-                                                                      width:
-                                                                          1.0,
-                                                                    ),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            8.0),
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                      ),
+                      OutlinedButton(
+                        onPressed: busy ? null : () => _unblock(profile),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF3B3B3B)),
+                          shape: const StadiumBorder(),
                         ),
-                      ],
-                    ),
+                        child: Text(busy ? 'Wait…' : 'Unblock'),
+                      ),
+                    ],
                   ),
+                );
+              },
+            );
+          },
+        ),
+      );
+
+  Widget _avatarFallback() => Container(
+        width: 50,
+        height: 50,
+        color: const Color(0xFF103824),
+        child: const Icon(Icons.person, color: Color(0xFF16E57A)),
+      );
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final VoidCallback? action;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: const Color(0xFF16E57A), size: 58),
+              const SizedBox(height: 18),
+              Text(title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text(message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF8B8B8B))),
+              if (action != null) ...[
+                const SizedBox(height: 18),
+                FilledButton(
+                  onPressed: action,
+                  style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF16E57A),
+                      foregroundColor: Colors.black),
+                  child: const Text('Try again'),
                 ),
               ],
-            ),
+            ],
           ),
         ),
-      ),
-    );
-  }
+      );
 }

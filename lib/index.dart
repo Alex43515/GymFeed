@@ -48,6 +48,19 @@ export '/ai_workout/assistant_g_p_t_pro/assistant_g_p_t_pro_widget.dart'
 export '/ai_workout/gpt_vision/gpt_vision_widget.dart' show GptVisionWidget;
 export '/ai_workout/gpt_vision_pro/gpt_vision_pro_widget.dart'
     show GptVisionProWidget;
+export '/ai_workout/coach_home/coach_home_widget.dart' show CoachHomeWidget;
+export '/ai_workout/coach_events/coach_events_widget.dart'
+    show CoachEventsWidget;
+export '/ai_workout/coach_tools/coach_tools_widget.dart'
+    show
+        CoachFoodScannerWidget,
+        CoachEquipmentScannerWidget,
+        CoachTrainerWidget,
+        CoachBodyScanWidget;
+export '/ai_workout/nutrition_diary/nutrition_diary_widget.dart'
+    show NutritionDiaryWidget;
+export '/ai_workout/starter_plan/starter_plan_ready_widget.dart'
+    show StarterPlanReadyWidget;
 export '/workout/schedule_training/schedule_training_widget.dart'
     show ScheduleTrainingWidget;
 export '/workout/edit_training/edit_training_widget.dart'
@@ -74,6 +87,8 @@ export '/singup/forgot_password/forgot_password_widget.dart'
     show ForgotPasswordWidget;
 export '/singup/email_verification/email_verification_widget.dart'
     show EmailVerificationWidget;
+export '/singup/social_auth_callback/social_auth_callback_widget.dart'
+    show SocialAuthCallbackWidget;
 export '/singup/all_most_done/all_most_done_widget.dart' show AllMostDoneWidget;
 export '/singup/profile_picture/profile_picture_widget.dart'
     show ProfilePictureWidget;

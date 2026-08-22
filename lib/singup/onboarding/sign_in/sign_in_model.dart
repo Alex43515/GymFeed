@@ -7,6 +7,11 @@ class SignInModel extends FlutterFlowModel<SignInWidget> {
   ///  State fields for stateful widgets in this page.
 
   final formKey = GlobalKey<FormState>();
+  // "Remember me" checkbox state.
+  bool rememberValue = false;
+  // Set true after a failed sign-in so the fields + button render their error
+  // styling (red text/border, greyed button); cleared when the user edits.
+  bool loginError = false;
   // State field(s) for EmailAddress widget.
   FocusNode? emailAddressFocusNode;
   TextEditingController? emailAddressTextController;

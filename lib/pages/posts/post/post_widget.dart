@@ -1,6 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/backend/push_notifications/push_notifications_util.dart';
+import '/backend/supabase/repositories/post_repository.dart';
+import '/backend/supabase/repositories/bookmark_repository.dart';
 import '/components/personal_post_options/personal_post_options_widget.dart';
 import '/components/send_post/send_post_widget.dart';
 import '/components/tagged_users/tagged_users_widget.dart';
@@ -8,16 +9,15 @@ import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_toggle_icon.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_video_player.dart';
 import '/pages/posts/post_options/post_options_widget.dart';
-import '/custom_code/widgets/index.dart' as custom_widgets;
+import '/custom_code/widgets/feed_video_player.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:share_plus/share_plus.dart';
 import 'post_model.dart';
 export 'post_model.dart';
 
@@ -26,10 +26,12 @@ class PostWidget extends StatefulWidget {
     super.key,
     this.post,
     this.detailsPage,
+    this.onPostChanged,
   });
 
   final PostsRecord? post;
   final bool? detailsPage;
+  final Future<void> Function()? onPostChanged;
 
   @override
   State<PostWidget> createState() => _PostWidgetState();
@@ -37,6 +39,14 @@ class PostWidget extends StatefulWidget {
 
 class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
   late PostModel _model;
+  late bool _liked;
+  late int _likeCount;
+  late Future<UsersRecord> _authorFuture;
+  UsersRecord? _initialAuthor;
+  bool _savingLike = false;
+  late bool _allowLikes;
+  late bool _allowComments;
+  bool _deleted = false;
 
   final animationsMap = <String, AnimationInfo>{};
 
@@ -50,6 +60,9 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _model = createModel(context, () => PostModel());
+    _readLikeState();
+    _readPermissionState();
+    _prepareAuthor();
 
     animationsMap.addAll({
       'iconOnActionTriggerAnimation': AnimationInfo(
@@ -105,7 +118,124 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
       this,
     );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      safeSetState(() {});
+      _syncLikeState();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant PostWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post?.reference.id != widget.post?.reference.id) {
+      _readLikeState();
+      _readPermissionState();
+      _syncLikeState();
+    } else if (oldWidget.post?.allowLikes != widget.post?.allowLikes ||
+        oldWidget.post?.allowComments != widget.post?.allowComments ||
+        oldWidget.post?.deleted != widget.post?.deleted) {
+      _readPermissionState();
+    }
+    if (oldWidget.post?.postUser?.id != widget.post?.postUser?.id) {
+      _prepareAuthor();
+    }
+  }
+
+  void _prepareAuthor() {
+    final post = widget.post!;
+    _initialAuthor = post.feedAuthor;
+    _authorFuture = UsersRecord.getDocumentOnce(post.postUser!);
+  }
+
+  void _readLikeState() {
+    _liked = widget.post?.likes.contains(currentUserReference) ?? false;
+    _likeCount = widget.post?.likes.length ?? 0;
+  }
+
+  void _readPermissionState() {
+    _allowLikes = !widget.post!.hasAllowLikes() || widget.post!.allowLikes;
+    _allowComments =
+        !widget.post!.hasAllowComments() || widget.post!.allowComments;
+    _deleted = widget.post?.deleted ?? false;
+  }
+
+  Future<void> _applyOwnerAction(PersonalPostOptionsResult? result) async {
+    if (result == null || !mounted) return;
+    if (result.editRequested) {
+      await context.pushNamed(
+        EditPostWidget.routeName,
+        queryParameters: {
+          'post': serializeParam(widget.post, ParamType.Document),
+        }.withoutNulls,
+        extra: <String, dynamic>{'post': widget.post},
+      );
+      await widget.onPostChanged?.call();
+      return;
+    }
+    setState(() {
+      if (result.allowLikes != null) _allowLikes = result.allowLikes!;
+      if (result.allowComments != null) {
+        _allowComments = result.allowComments!;
+      }
+      if (result.deleted) _deleted = true;
+    });
+    await widget.onPostChanged?.call();
+    if (result.deleted && mounted && widget.detailsPage == false) {
+      context.pop();
+    }
+  }
+
+  Future<void> _syncLikeState() async {
+    final postId = widget.post?.reference.id;
+    if (postId == null || postId.isEmpty) return;
+    try {
+      final results = await Future.wait<dynamic>([
+        PostRepository().isLiked(postId),
+        PostRepository().getById(postId),
+      ]);
+      if (!mounted || widget.post?.reference.id != postId) return;
+      final row = results[1] as Map<String, dynamic>?;
+      setState(() {
+        _liked = results[0] == true;
+        _likeCount = (row?['like_count'] as num?)?.toInt() ?? _likeCount;
+      });
+    } catch (_) {
+      // Feed data remains visible when a refresh cannot be completed.
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    if (_savingLike || !_allowLikes) return;
+    final postId = widget.post?.reference.id;
+    if (postId == null || postId.isEmpty) return;
+    final previousLiked = _liked;
+    final previousCount = _likeCount;
+    final shouldLike = !_liked;
+    setState(() {
+      _savingLike = true;
+      _liked = shouldLike;
+      _likeCount = (_likeCount + (shouldLike ? 1 : -1)).clamp(0, 1 << 31);
+    });
+    try {
+      if (shouldLike) {
+        await PostRepository().likePost(postId);
+      } else {
+        await PostRepository().unlikePost(postId);
+      }
+      await HapticFeedback.selectionClick();
+      await _syncLikeState();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _liked = previousLiked;
+        _likeCount = previousCount;
+      });
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Could not update this like. Try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingLike = false);
+    }
   }
 
   @override
@@ -115,12 +245,31 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  void _openAuthorProfile(UsersRecord author) {
+    if (author.reference == currentUserReference) {
+      context.pushNamed(ProfileWidget.routeName);
+      return;
+    }
+    // ProfileOther resolves the Supabase block relationship before it renders.
+    // Keeping that check in one place avoids the obsolete Firestore
+    // legacy per-document block list, which is always empty in the Supabase
+    // adapter.
+    context.pushNamed(
+      ProfileOtherWidget.routeName,
+      queryParameters: {
+        'username': serializeParam(author.username, ParamType.String),
+      }.withoutNulls,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_deleted) return const SizedBox.shrink();
     return Padding(
       padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 25.0),
       child: FutureBuilder<UsersRecord>(
-        future: UsersRecord.getDocumentOnce(widget.post!.postUser!),
+        initialData: _initialAuthor,
+        future: _authorFuture,
         builder: (context, snapshot) {
           // Customize what your widget looks like when it's loading.
           if (!snapshot.hasData) {
@@ -155,25 +304,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                       hoverColor: Colors.transparent,
                       highlightColor: Colors.transparent,
                       onTap: () async {
-                        if (columnUsersRecord.reference ==
-                            currentUserReference) {
-                          context.pushNamed(ProfileWidget.routeName);
-                        } else {
-                          if (columnUsersRecord.userBlocked
-                              .contains(currentUserReference)) {
-                            context.pushNamed(BlockedPageWidget.routeName);
-                          } else {
-                            context.pushNamed(
-                              ProfileOtherWidget.routeName,
-                              queryParameters: {
-                                'username': serializeParam(
-                                  columnUsersRecord.username,
-                                  ParamType.String,
-                                ),
-                              }.withoutNulls,
-                            );
-                          }
-                        }
+                        _openAuthorProfile(columnUsersRecord);
                       },
                       child: Row(
                         mainAxisSize: MainAxisSize.max,
@@ -184,26 +315,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                             hoverColor: Colors.transparent,
                             highlightColor: Colors.transparent,
                             onTap: () async {
-                              if (columnUsersRecord.reference ==
-                                  currentUserReference) {
-                                context.pushNamed(ProfileWidget.routeName);
-                              } else {
-                                if (columnUsersRecord.userBlocked
-                                    .contains(currentUserReference)) {
-                                  context
-                                      .pushNamed(BlockedPageWidget.routeName);
-                                } else {
-                                  context.pushNamed(
-                                    ProfileOtherWidget.routeName,
-                                    queryParameters: {
-                                      'username': serializeParam(
-                                        columnUsersRecord.username,
-                                        ParamType.String,
-                                      ),
-                                    }.withoutNulls,
-                                  );
-                                }
-                              }
+                              _openAuthorProfile(columnUsersRecord);
                             },
                             child: Container(
                               width: 35.0,
@@ -242,27 +354,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
                                   onTap: () async {
-                                    if (columnUsersRecord.reference ==
-                                        currentUserReference) {
-                                      context
-                                          .pushNamed(ProfileWidget.routeName);
-                                    } else {
-                                      if (columnUsersRecord.userBlocked
-                                          .contains(currentUserReference)) {
-                                        context.pushNamed(
-                                            BlockedPageWidget.routeName);
-                                      } else {
-                                        context.pushNamed(
-                                          ProfileOtherWidget.routeName,
-                                          queryParameters: {
-                                            'username': serializeParam(
-                                              columnUsersRecord.username,
-                                              ParamType.String,
-                                            ),
-                                          }.withoutNulls,
-                                        );
-                                      }
-                                    }
+                                    _openAuthorProfile(columnUsersRecord);
                                   },
                                   child: Text(
                                     valueOrDefault<String>(
@@ -315,7 +407,8 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                       highlightColor: Colors.transparent,
                       onTap: () async {
                         if (widget.post?.postUser == currentUserReference) {
-                          await showModalBottomSheet(
+                          final result = await showModalBottomSheet<
+                              PersonalPostOptionsResult>(
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
                             barrierColor: Color(0x00000000),
@@ -328,7 +421,8 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                 ),
                               );
                             },
-                          ).then((value) => safeSetState(() {}));
+                          );
+                          await _applyOwnerAction(result);
                         } else {
                           await showModalBottomSheet(
                             isScrollControlled: true,
@@ -392,93 +486,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                     );
                                   }
                                 },
-                                onDoubleTap: () async {
-                                  if (widget.post!.allowLikes) {
-                                    if (widget.post!.likes
-                                        .contains(currentUserReference)) {
-                                      await widget.post!.reference.update({
-                                        ...mapToFirestore(
-                                          {
-                                            'likes': FieldValue.arrayRemove(
-                                                [columnUsersRecord.reference]),
-                                          },
-                                        ),
-                                      });
-                                    } else {
-                                      if (animationsMap[
-                                              'iconOnActionTriggerAnimation'] !=
-                                          null) {
-                                        animationsMap[
-                                                'iconOnActionTriggerAnimation']!
-                                            .controller
-                                            .forward(from: 0.0);
-                                      }
-
-                                      await widget.post!.reference.update({
-                                        ...mapToFirestore(
-                                          {
-                                            'likes': FieldValue.arrayUnion(
-                                                [currentUserReference]),
-                                          },
-                                        ),
-                                      });
-                                      HapticFeedback.lightImpact();
-                                      if (widget.post?.postUser !=
-                                          currentUserReference) {
-                                        var notificationsRecordReference =
-                                            NotificationsRecord.createDoc(
-                                                columnUsersRecord.reference);
-                                        await notificationsRecordReference
-                                            .set(createNotificationsRecordData(
-                                          notificationType: 'Post_Like',
-                                          userRef: currentUserReference,
-                                          postRef: widget.post?.reference,
-                                          timeCreated: getCurrentTimestamp,
-                                        ));
-                                        _model.notification = NotificationsRecord
-                                            .getDocumentFromData(
-                                                createNotificationsRecordData(
-                                                  notificationType: 'Post_Like',
-                                                  userRef: currentUserReference,
-                                                  postRef:
-                                                      widget.post?.reference,
-                                                  timeCreated:
-                                                      getCurrentTimestamp,
-                                                ),
-                                                notificationsRecordReference);
-
-                                        await columnUsersRecord.reference
-                                            .update({
-                                          ...mapToFirestore(
-                                            {
-                                              'unreadNotifications':
-                                                  FieldValue.arrayUnion([
-                                                _model.notification?.reference
-                                              ]),
-                                            },
-                                          ),
-                                        });
-                                        triggerPushNotification(
-                                          notificationTitle: 'GymFeed',
-                                          notificationText:
-                                              '${valueOrDefault(currentUserDocument?.username, '')} liked your photo.',
-                                          notificationImageUrl:
-                                              widget.post?.postPhoto,
-                                          notificationSound: 'default',
-                                          userRefs: [
-                                            columnUsersRecord.reference
-                                          ],
-                                          initialPageName: 'PostDetails',
-                                          parameterData: {
-                                            'post': widget.post?.reference,
-                                          },
-                                        );
-                                      }
-                                    }
-                                  }
-
-                                  safeSetState(() {});
-                                },
+                                onDoubleTap: _toggleLike,
                                 child: Container(
                                   width: double.infinity,
                                   height: 350.0,
@@ -495,12 +503,20 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                       child: ClipRRect(
                                         borderRadius:
                                             BorderRadius.circular(20.0),
-                                        child: Image.network(
-                                          functions.bunnyCDNImagePath(
+                                        child: CachedNetworkImage(
+                                          imageUrl: functions.bunnyCDNImagePath(
                                               widget.post!.postPhoto),
                                           width: double.infinity,
                                           height: 350.0,
-                                          fit: BoxFit.contain,
+                                          fit: BoxFit.cover,
+                                          fadeInDuration:
+                                              const Duration(milliseconds: 150),
+                                          placeholder: (_, __) => Container(
+                                            color: FlutterFlowTheme.of(context)
+                                                .secondaryBackground,
+                                          ),
+                                          errorWidget: (_, __, ___) =>
+                                              const SizedBox.shrink(),
                                         ),
                                       ),
                                     ),
@@ -511,18 +527,33 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                   widget.post?.postVideo != '')
                                 Align(
                                   alignment: AlignmentDirectional(0.0, 0.0),
-                                  child: FlutterFlowVideoPlayer(
-                                    path: functions.bunnyCDNVideoPath(
-                                        widget.post!.postVideo),
-                                    videoType: VideoType.network,
+                                  child: SizedBox(
                                     width:
                                         MediaQuery.sizeOf(context).width * 1.0,
                                     height: 350.0,
-                                    autoPlay: false,
-                                    looping: true,
-                                    showControls: true,
-                                    allowFullScreen: true,
-                                    allowPlaybackSpeedMenu: false,
+                                    child: FeedVideoPlayer(
+                                      videoUrl: functions.bunnyCDNVideoPath(
+                                          widget.post!.postVideo),
+                                      thumbnailUrl:
+                                          widget.post!.videoThumbnail.isNotEmpty
+                                              ? functions.bunnyCDNImagePath(
+                                                  widget.post!.videoThumbnail)
+                                              : null,
+                                      borderRadius: 20.0,
+                                      onTap: () {
+                                        if (widget.detailsPage != false) {
+                                          context.pushNamed(
+                                            PostDetailsWidget.routeName,
+                                            queryParameters: {
+                                              'post': serializeParam(
+                                                widget.post?.reference,
+                                                ParamType.DocumentReference,
+                                              ),
+                                            }.withoutNulls,
+                                          );
+                                        }
+                                      },
+                                    ),
                                   ),
                                 ),
                             ],
@@ -668,7 +699,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                       Row(
                         mainAxisSize: MainAxisSize.max,
                         children: [
-                          if (widget.post?.allowLikes ?? true)
+                          if (_allowLikes)
                             Padding(
                               padding: EdgeInsetsDirectional.fromSTEB(
                                   0.0, 0.0, 5.0, 0.0),
@@ -692,81 +723,9 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                     );
                                   }
 
-                                  final toggleIconPostsRecord = snapshot.data!;
-
                                   return ToggleIcon(
-                                    onPressed: () async {
-                                      final likesElement = currentUserReference;
-                                      final likesUpdate = toggleIconPostsRecord
-                                              .likes
-                                              .contains(likesElement)
-                                          ? FieldValue.arrayRemove(
-                                              [likesElement])
-                                          : FieldValue.arrayUnion(
-                                              [likesElement]);
-                                      await toggleIconPostsRecord.reference
-                                          .update({
-                                        ...mapToFirestore(
-                                          {
-                                            'likes': likesUpdate,
-                                          },
-                                        ),
-                                      });
-
-                                      var notificationsRecordReference =
-                                          NotificationsRecord.createDoc(
-                                              columnUsersRecord.reference);
-                                      await notificationsRecordReference
-                                          .set(createNotificationsRecordData(
-                                        notificationType: 'Post_Like',
-                                        userRef: currentUserReference,
-                                        postRef: widget.post?.reference,
-                                        timeCreated: getCurrentTimestamp,
-                                      ));
-                                      _model.notification1Copy =
-                                          NotificationsRecord
-                                              .getDocumentFromData(
-                                                  createNotificationsRecordData(
-                                                    notificationType:
-                                                        'Post_Like',
-                                                    userRef:
-                                                        currentUserReference,
-                                                    postRef:
-                                                        widget.post?.reference,
-                                                    timeCreated:
-                                                        getCurrentTimestamp,
-                                                  ),
-                                                  notificationsRecordReference);
-
-                                      await columnUsersRecord.reference.update({
-                                        ...mapToFirestore(
-                                          {
-                                            'unreadNotifications':
-                                                FieldValue.arrayUnion([
-                                              _model
-                                                  .notification1Copy?.reference
-                                            ]),
-                                          },
-                                        ),
-                                      });
-                                      triggerPushNotification(
-                                        notificationTitle: 'GymFeed',
-                                        notificationText:
-                                            '${valueOrDefault(currentUserDocument?.username, '')} liked your photo.',
-                                        notificationImageUrl:
-                                            widget.post?.postPhoto,
-                                        notificationSound: 'default',
-                                        userRefs: [columnUsersRecord.reference],
-                                        initialPageName: 'PostDetails',
-                                        parameterData: {
-                                          'post': widget.post?.reference,
-                                        },
-                                      );
-
-                                      safeSetState(() {});
-                                    },
-                                    value: toggleIconPostsRecord.likes
-                                        .contains(currentUserReference),
+                                    onPressed: _toggleLike,
+                                    value: _liked,
                                     onIcon: Icon(
                                       FFIcons.k02012,
                                       color:
@@ -790,7 +749,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                 },
                               ),
                             ),
-                          if (widget.post?.allowComments ?? true)
+                          if (_allowComments)
                             Padding(
                               padding: EdgeInsetsDirectional.fromSTEB(
                                   0.0, 0.0, 12.0, 0.0),
@@ -849,44 +808,6 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                   : 38.0,
                             ),
                           ),
-                          Builder(
-                            builder: (context) => Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  12.0, 0.0, 0.0, 0.0),
-                              child: InkWell(
-                                splashColor: Colors.transparent,
-                                focusColor: Colors.transparent,
-                                hoverColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                onTap: () async {
-                                  _model.currentPageLink =
-                                      await generateCurrentPageLink(
-                                    context,
-                                    title: widget.post?.postCaption,
-                                    imageUrl: widget.post?.postPhoto,
-                                    description:
-                                        'Check out this GymFeed post !',
-                                    isShortLink: false,
-                                  );
-
-                                  _model.linkGenerator = _model.currentPageLink;
-                                  safeSetState(() {});
-                                  await Share.share(
-                                    _model.linkGenerator!,
-                                    sharePositionOrigin:
-                                        getWidgetBoundingBox(context),
-                                  );
-                                },
-                                child: Icon(
-                                  Icons.share,
-                                  color: FlutterFlowTheme.of(context).tertiary,
-                                  size: MediaQuery.sizeOf(context).width < 768.0
-                                      ? 26.0
-                                      : 38.0,
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                       StreamBuilder<List<BookmarksRecord>>(
@@ -926,15 +847,9 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
                                   onTap: () async {
-                                    await stackBookmarksRecord.reference
-                                        .update({
-                                      ...mapToFirestore(
-                                        {
-                                          'postRefs': FieldValue.arrayUnion(
-                                              [widget.post?.reference]),
-                                        },
-                                      ),
-                                    });
+                                    await BookmarkRepository().add(
+                                        widget.post!.reference.id,
+                                        BookmarkKind.post);
                                     HapticFeedback.selectionClick();
                                   },
                                   child: Icon(
@@ -948,23 +863,16 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                   ),
                                 ),
                               if (stackBookmarksRecord.postRefs
-                                      .contains(widget.post?.reference) ??
-                                  true)
+                                  .contains(widget.post?.reference))
                                 InkWell(
                                   splashColor: Colors.transparent,
                                   focusColor: Colors.transparent,
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
                                   onTap: () async {
-                                    await stackBookmarksRecord.reference
-                                        .update({
-                                      ...mapToFirestore(
-                                        {
-                                          'postRefs': FieldValue.arrayRemove(
-                                              [widget.post?.reference]),
-                                        },
-                                      ),
-                                    });
+                                    await BookmarkRepository().remove(
+                                        widget.post!.reference.id,
+                                        BookmarkKind.post);
                                   },
                                   child: Icon(
                                     FFIcons.kbookmark1,
@@ -991,91 +899,27 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                     mainAxisSize: MainAxisSize.max,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (widget.post?.allowLikes ?? true)
+                      if (_allowLikes)
                         Padding(
                           padding: EdgeInsetsDirectional.fromSTEB(
                               0.0, 0.0, 0.0, 8.0),
                           child: Row(
                             mainAxisSize: MainAxisSize.max,
                             children: [
-                              if (widget.post!.likes.length > 1)
-                                Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 5.0),
-                                    child: FutureBuilder<UsersRecord>(
-                                      future: UsersRecord.getDocumentOnce(
-                                          functions.returnUserFromLikes(
-                                              widget.post!.likes.toList())),
-                                      builder: (context, snapshot) {
-                                        // Customize what your widget looks like when it's loading.
-                                        if (!snapshot.hasData) {
-                                          return Center(
-                                            child: SizedBox(
-                                              width: 12.0,
-                                              height: 12.0,
-                                              child: CircularProgressIndicator(
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                        Color>(
-                                                  Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        }
-
-                                        final likedByUsersRecord =
-                                            snapshot.data!;
-
-                                        return custom_widgets.LikedBy(
-                                          width: double.infinity,
-                                          height: 17.0,
-                                          name: valueOrDefault<String>(
-                                            likedByUsersRecord.username,
-                                            'user',
-                                          ),
-                                          number: valueOrDefault<String>(
-                                            formatNumber(
-                                              functions.totalLikes(
-                                                  valueOrDefault<int>(
-                                                widget.post?.likes.length,
-                                                1,
-                                              )),
-                                              formatType: FormatType.compact,
-                                            ),
-                                            '0',
-                                          ),
-                                        );
-                                      },
+                              Text(
+                                '${formatNumber(_likeCount, formatType: FormatType.compact)}${_likeCount == 1 ? ' like' : ' likes'}',
+                                style: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .override(
+                                      fontFamily: 'Poppins',
+                                      fontSize:
+                                          MediaQuery.sizeOf(context).width <
+                                                  768.0
+                                              ? 15.0
+                                              : 20.0,
+                                      letterSpacing: 0.0,
                                     ),
-                                  ),
-                                ),
-                              if (widget.post!.likes.length < 2)
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(
-                                      0.0, 0.0, 0.0, 5.0),
-                                  child: Text(
-                                    '${valueOrDefault<String>(
-                                      formatNumber(
-                                        widget.post?.likes.length,
-                                        formatType: FormatType.compact,
-                                      ),
-                                      '0',
-                                    )}${widget.post?.likes.length == 1 ? ' like' : ' likes'}',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'Poppins',
-                                          fontSize:
-                                              MediaQuery.sizeOf(context).width <
-                                                      768.0
-                                                  ? 15.0
-                                                  : 20.0,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1148,8 +992,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                           ],
                         ),
                       ),
-                      if ((widget.post?.numComments != 0) &&
-                          widget.post!.allowComments)
+                      if ((widget.post?.numComments != 0) && _allowComments)
                         Row(
                           mainAxisSize: MainAxisSize.max,
                           children: [
@@ -1174,9 +1017,6 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                       ),
                                     );
                                   }
-                                  List<CommentsRecord> textCommentsRecordList =
-                                      snapshot.data!;
-
                                   return InkWell(
                                     splashColor: Colors.transparent,
                                     focusColor: Colors.transparent,
@@ -1195,7 +1035,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                     },
                                     child: Text(
                                       'View all ${formatNumber(
-                                        textCommentsRecordList.length,
+                                        snapshot.data!.length,
                                         formatType: FormatType.compact,
                                       )} comments',
                                       style: FlutterFlowTheme.of(context)
@@ -1237,9 +1077,6 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                       ),
                                     );
                                   }
-                                  List<CommentsRecord> textCommentsRecordList =
-                                      snapshot.data!;
-
                                   return InkWell(
                                     splashColor: Colors.transparent,
                                     focusColor: Colors.transparent,
@@ -1280,16 +1117,15 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                               ),
                           ],
                         ),
-                      if (widget.post?.allowComments ?? true)
+                      if (_allowComments)
                         Padding(
                           padding: EdgeInsetsDirectional.fromSTEB(
                               0.0, 8.0, 0.0, 0.0),
                           child: StreamBuilder<List<CommentsRecord>>(
                             stream: queryCommentsRecord(
                               parent: widget.post?.reference,
-                              queryBuilder: (commentsRecord) => commentsRecord
-                                  .orderBy('time_posted', descending: true),
                               limit: 2,
+                              descending: true,
                             ),
                             builder: (context, snapshot) {
                               // Customize what your widget looks like when it's loading.
@@ -1462,7 +1298,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                             },
                           ),
                         ),
-                      if (widget.post?.allowComments ?? true)
+                      if (_allowComments)
                         Padding(
                           padding: EdgeInsetsDirectional.fromSTEB(
                               0.0, 8.0, 0.0, 0.0),
@@ -1472,7 +1308,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                             hoverColor: Colors.transparent,
                             highlightColor: Colors.transparent,
                             onTap: () async {
-                              if (widget.post!.allowComments) {
+                              if (_allowComments) {
                                 context.pushNamed(
                                   CommentsWidget.routeName,
                                   queryParameters: {
@@ -1515,9 +1351,7 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                       padding: EdgeInsetsDirectional.fromSTEB(
                                           10.0, 0.0, 0.0, 0.0),
                                       child: Text(
-                                        FFLocalizations.of(context).getText(
-                                          'srf8xl01' /* Add a comment... */,
-                                        ),
+                                        'Comment here',
                                         style: FlutterFlowTheme.of(context)
                                             .bodyMedium
                                             .override(

@@ -1,11 +1,7 @@
-import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import 'dart:ui';
-import '/flutter_flow/custom_functions.dart' as functions;
+import '/custom_code/widgets/signup_ui.dart';
 import '/index.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'how_old_are_you_model.dart';
 export 'how_old_are_you_model.dart';
@@ -25,454 +21,270 @@ class _HowOldAreYouWidgetState extends State<HowOldAreYouWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Selectable birth years (oldest .. this year).
+  final List<int> _years =
+      List<int>.generate(DateTime.now().year - 1930 + 1, (i) => 1930 + i);
+
+  late FixedExtentScrollController _dayCtrl;
+  late FixedExtentScrollController _monthCtrl;
+  late FixedExtentScrollController _yearCtrl;
+
+  int _dayIndex = 0; // -> day 1
+  int _monthIndex = 0; // -> January
+  late int _yearIndex; // default 2000
+  bool _picking =
+      false; // false = calendar-icon view (014), true = wheels (015)
+  bool _picked = false; // whether the user has opened the picker
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' //
+  ];
+
   @override
   void initState() {
     super.initState();
     _model = createModel(context, () => HowOldAreYouModel());
+
+    _yearIndex = _years.indexOf(2000);
+    if (_yearIndex < 0) _yearIndex = _years.length ~/ 2;
+    _dayCtrl = FixedExtentScrollController(initialItem: _dayIndex);
+    _monthCtrl = FixedExtentScrollController(initialItem: _monthIndex);
+    _yearCtrl = FixedExtentScrollController(initialItem: _yearIndex);
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
 
   @override
   void dispose() {
+    _dayCtrl.dispose();
+    _monthCtrl.dispose();
+    _yearCtrl.dispose();
     _model.dispose();
-
     super.dispose();
+  }
+
+  int get _selectedDay => _dayIndex + 1;
+  int get _selectedMonth => _monthIndex + 1;
+  int get _selectedYear => _years[_yearIndex];
+
+  DateTime get _selectedDate {
+    final maxDay = DateTime(_selectedYear, _selectedMonth + 1, 0).day;
+    final d = _selectedDay > maxDay ? maxDay : _selectedDay;
+    return DateTime(_selectedYear, _selectedMonth, d);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        body: SafeArea(
-          top: true,
-          child: Align(
-            alignment: AlignmentDirectional(0.0, -1.0),
-            child: Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 0.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Padding(
-                    padding:
-                        EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 0.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              10.0, 0.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: [
-                              InkWell(
-                                splashColor: Colors.transparent,
-                                focusColor: Colors.transparent,
-                                hoverColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                onTap: () async {
-                                  context.safePop();
-                                },
-                                child: Icon(
-                                  Icons.arrow_back_ios_rounded,
-                                  color: FlutterFlowTheme.of(context).tertiary,
-                                  size: 15.0,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 10.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                FFLocalizations.of(context).getText(
-                                  'bo39l9gg' /* How old are you? */,
-                                ),
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      fontSize: functions
-                                          .resizeFontBasedOnScreenSize(
-                                              MediaQuery.sizeOf(context).width,
-                                              30)
-                                          .toDouble(),
-                                      letterSpacing: 0.0,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 10.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                FFLocalizations.of(context).getText(
-                                  'xxjbgo2e' /* Complete your details to proce... */,
-                                ),
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      color:
-                                          FlutterFlowTheme.of(context).accent1,
-                                      fontSize: functions
-                                          .resizeFontBasedOnScreenSize(
-                                              MediaQuery.sizeOf(context).width,
-                                              15)
-                                          .toDouble(),
-                                      letterSpacing: 0.0,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: MediaQuery.sizeOf(context).width * 0.9,
-                          decoration: BoxDecoration(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 80.0, 0.0, 0.0),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Form(
-                                      key: _model.formKey,
-                                      autovalidateMode:
-                                          AutovalidateMode.disabled,
-                                      child: FlutterFlowIconButton(
-                                        borderColor: Color(0xFF0A0A0A),
-                                        borderRadius: 20.0,
-                                        borderWidth: 1.0,
-                                        buttonSize: 60.0,
-                                        fillColor: Color(0xFF8EFF76),
-                                        icon: Icon(
-                                          Icons.date_range,
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          size: 40.0,
-                                        ),
-                                        onPressed: () {
-                                          print('IconButton pressed ...');
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 40.0, 0.0, 0.0),
-                                child: InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: () async {
-                                    await showModalBottomSheet<bool>(
-                                        context: context,
-                                        builder: (context) {
-                                          final _datePickedCupertinoTheme =
-                                              CupertinoTheme.of(context);
-                                          return ScrollConfiguration(
-                                            behavior:
-                                                const MaterialScrollBehavior()
-                                                    .copyWith(
-                                              dragDevices: {
-                                                PointerDeviceKind.mouse,
-                                                PointerDeviceKind.touch,
-                                                PointerDeviceKind.stylus,
-                                                PointerDeviceKind.unknown
-                                              },
-                                            ),
-                                            child: Container(
-                                              height: MediaQuery.of(context)
-                                                      .size
-                                                      .height /
-                                                  3,
-                                              width: MediaQuery.of(context)
-                                                  .size
-                                                  .width,
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .tertiary,
-                                              child: CupertinoTheme(
-                                                data: _datePickedCupertinoTheme
-                                                    .copyWith(
-                                                  textTheme:
-                                                      _datePickedCupertinoTheme
-                                                          .textTheme
-                                                          .copyWith(
-                                                    dateTimePickerTextStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .headlineMedium
-                                                            .override(
-                                                              fontFamily:
-                                                                  'Poppins',
-                                                              color: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .secondary,
-                                                              letterSpacing:
-                                                                  0.0,
-                                                            ),
-                                                  ),
-                                                ),
-                                                child: CupertinoDatePicker(
-                                                  mode: CupertinoDatePickerMode
-                                                      .date,
-                                                  minimumDate: DateTime(1900),
-                                                  initialDateTime:
-                                                      getCurrentTimestamp,
-                                                  maximumDate:
-                                                      (getCurrentTimestamp ??
-                                                          DateTime(2050)),
-                                                  backgroundColor:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .tertiary,
-                                                  use24hFormat: false,
-                                                  onDateTimeChanged:
-                                                      (newDateTime) =>
-                                                          safeSetState(() {
-                                                    _model.datePicked =
-                                                        newDateTime;
-                                                  }),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        });
-                                  },
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.max,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Align(
-                                        alignment:
-                                            AlignmentDirectional(0.0, 0.0),
-                                        child: Container(
-                                          width:
-                                              MediaQuery.sizeOf(context).width *
-                                                  0.9,
-                                          height: 50.0,
-                                          decoration: BoxDecoration(
-                                            color: FlutterFlowTheme.of(context)
-                                                .tertiary,
-                                            borderRadius:
-                                                BorderRadius.circular(20.0),
-                                          ),
-                                          alignment:
-                                              AlignmentDirectional(0.0, 0.0),
-                                          child: Text(
-                                            dateTimeFormat(
-                                              "yMMMd",
-                                              _model.datePicked,
-                                              locale:
-                                                  FFLocalizations.of(context)
-                                                      .languageCode,
-                                            ),
-                                            style: FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .override(
-                                                  fontFamily: 'Poppins',
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .secondary,
-                                                  fontSize: functions
-                                                      .resizeFontBasedOnScreenSize(
-                                                          MediaQuery.sizeOf(
-                                                                  context)
-                                                              .width,
-                                                          20)
-                                                      .toDouble(),
-                                                  letterSpacing: 0.0,
-                                                ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding:
-                        EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 50.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 0.0, 0.0, 20.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.circle,
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                                size: 10.0,
-                              ),
-                              Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    5.0, 0.0, 0.0, 0.0),
-                                child: Icon(
-                                  Icons.circle,
-                                  color: Color(0xA5FFFFFF),
-                                  size: 10.0,
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    5.0, 0.0, 0.0, 0.0),
-                                child: Icon(
-                                  Icons.circle,
-                                  color: FlutterFlowTheme.of(context).tertiary,
-                                  size: 10.0,
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    5.0, 0.0, 0.0, 0.0),
-                                child: Icon(
-                                  Icons.circle,
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryText,
-                                  size: 10.0,
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    5.0, 0.0, 0.0, 0.0),
-                                child: Icon(
-                                  Icons.circle,
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryText,
-                                  size: 10.0,
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    5.0, 0.0, 0.0, 0.0),
-                                child: Icon(
-                                  Icons.circle,
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryText,
-                                  size: 10.0,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Align(
-                              alignment: AlignmentDirectional(0.0, 0.0),
-                              child: FFButtonWidget(
-                                onPressed: () async {
-                                  if (_model.datePicked != null) {
-                                    FFAppState().age2 = _model.datePicked;
-                                    safeSetState(() {});
+    final theme = FlutterFlowTheme.of(context);
 
-                                    context.pushNamed(WeightWidget.routeName);
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Select an option to move forward',
-                                          style: TextStyle(
-                                            color: FlutterFlowTheme.of(context)
-                                                .secondary,
-                                          ),
-                                        ),
-                                        duration: Duration(milliseconds: 4000),
-                                        backgroundColor:
-                                            FlutterFlowTheme.of(context)
-                                                .primary,
-                                      ),
-                                    );
-                                  }
-                                },
-                                text: FFLocalizations.of(context).getText(
-                                  '8of7jaxs' /* Next */,
-                                ),
-                                options: FFButtonOptions(
-                                  width: MediaQuery.sizeOf(context).width * 0.9,
-                                  height: 55.0,
-                                  padding: EdgeInsetsDirectional.fromSTEB(
-                                      0.0, 0.0, 0.0, 0.0),
-                                  iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                      0.0, 0.0, 0.0, 0.0),
-                                  color: FlutterFlowTheme.of(context).accent3,
-                                  textStyle: FlutterFlowTheme.of(context)
-                                      .titleSmall
-                                      .override(
-                                        fontFamily: 'Poppins',
-                                        color: Color(0xFF0A0A0A),
-                                        fontSize: functions
-                                            .resizeFontBasedOnScreenSize(
-                                                MediaQuery.sizeOf(context)
-                                                    .width,
-                                                20)
-                                            .toDouble(),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                  elevation: 3.0,
-                                  borderSide: BorderSide(
-                                    color: Colors.transparent,
-                                    width: 1.0,
-                                  ),
-                                  borderRadius: BorderRadius.circular(20.0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+    return Scaffold(
+      key: scaffoldKey,
+      backgroundColor: theme.secondary,
+      body: SafeArea(
+        top: true,
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(28.0, 24.0, 28.0, 28.0),
+          child: Column(
+            children: [
+              const SizedBox(height: 40.0),
+              Text(
+                'How old are you?',
+                textAlign: TextAlign.center,
+                style: theme.displaySmall.override(
+                  fontFamily: 'Poppins',
+                  color: theme.tertiary,
+                  fontSize: 30.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
+              const SizedBox(height: 8.0),
+              Text(
+                'Complete your details to continue',
+                textAlign: TextAlign.center,
+                style: theme.bodyMedium.override(
+                  fontFamily: 'Poppins',
+                  color: theme.secondaryText,
+                  fontSize: 16.0,
+                  letterSpacing: 0.0,
+                ),
+              ),
+              Expanded(
+                child: _picking ? _buildWheels(theme) : _buildCalendar(theme),
+              ),
+              signupPageDots(context: context, active: 2),
+              const SizedBox(height: 24.0),
+              signupPrimaryButton(
+                context: context,
+                text: 'Next',
+                enabled: _picked,
+                onPressed: () async {
+                  if (!_picked) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Please choose your date of birth.',
+                          style: TextStyle(color: theme.secondary),
+                        ),
+                        backgroundColor: theme.primary,
+                        duration: const Duration(milliseconds: 3000),
+                      ),
+                    );
+                    return;
+                  }
+                  _model.datePicked = _selectedDate;
+                  FFAppState().age2 = _selectedDate;
+                  FFAppState().update(() {});
+                  context.pushNamed(WeightWidget.routeName);
+                },
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  // ── 014: green calendar badge + DD / MM / YYYY field ──────────────────────
+  Widget _buildCalendar(FlutterFlowTheme theme) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 150.0,
+          height: 150.0,
+          decoration:
+              BoxDecoration(color: theme.primary, shape: BoxShape.circle),
+          child: Center(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(Icons.calendar_today_rounded,
+                    color: theme.secondary, size: 78.0),
+                Padding(
+                  padding:
+                      const EdgeInsetsDirectional.fromSTEB(0.0, 16.0, 0.0, 0.0),
+                  child: Text(
+                    _picked ? '$_selectedDay' : '26',
+                    style: theme.titleLarge.override(
+                      fontFamily: 'Poppins',
+                      color: theme.secondary,
+                      fontSize: 24.0,
+                      letterSpacing: 0.0,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 40.0),
+        InkWell(
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          onTap: () => safeSetState(() {
+            _picking = true;
+            _picked = true;
+          }),
+          child: Container(
+            width: double.infinity,
+            height: 62.0,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Text(
+              _picked
+                  ? '${_two(_selectedDay)} / ${_two(_selectedMonth)} / $_selectedYear'
+                  : 'DD / MM / YYYY',
+              style: theme.bodyMedium.override(
+                fontFamily: 'Poppins',
+                color: _picked ? theme.secondary : theme.secondaryText,
+                fontSize: 17.0,
+                letterSpacing: 1.0,
+                fontWeight: _picked ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── 015: three scroll wheels (day / month / year) ─────────────────────────
+  Widget _buildWheels(FlutterFlowTheme theme) {
+    return Center(
+      child: SizedBox(
+        height: 290.0,
+        child: Row(
+          children: [
+            _wheel(
+              controller: _dayCtrl,
+              count: 31,
+              selectedIndex: _dayIndex,
+              label: (i) => '${i + 1}',
+              onChanged: (i) => safeSetState(() => _dayIndex = i),
+            ),
+            _wheel(
+              controller: _monthCtrl,
+              count: 12,
+              selectedIndex: _monthIndex,
+              label: (i) => _months[i],
+              onChanged: (i) => safeSetState(() => _monthIndex = i),
+            ),
+            _wheel(
+              controller: _yearCtrl,
+              count: _years.length,
+              selectedIndex: _yearIndex,
+              label: (i) => '${_years[i]}',
+              onChanged: (i) => safeSetState(() => _yearIndex = i),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wheel({
+    required FixedExtentScrollController controller,
+    required int count,
+    required int selectedIndex,
+    required String Function(int) label,
+    required ValueChanged<int> onChanged,
+  }) {
+    final theme = FlutterFlowTheme.of(context);
+    return Expanded(
+      child: ListWheelScrollView.useDelegate(
+        controller: controller,
+        itemExtent: 58.0,
+        diameterRatio: 1.6,
+        perspective: 0.004,
+        physics: const FixedExtentScrollPhysics(),
+        onSelectedItemChanged: onChanged,
+        childDelegate: ListWheelChildBuilderDelegate(
+          childCount: count,
+          builder: (context, i) {
+            final selected = i == selectedIndex;
+            return Center(
+              child: Text(
+                label(i),
+                style: theme.displaySmall.override(
+                  fontFamily: 'Poppins',
+                  color: selected ? theme.tertiary : theme.accent1,
+                  fontSize: selected ? 30.0 : 24.0,
+                  letterSpacing: 0.0,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  String _two(int v) => v < 10 ? '0$v' : '$v';
 }

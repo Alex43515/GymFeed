@@ -846,10 +846,10 @@ class _ReportCopyWidgetState extends State<ReportCopyWidget>
                                               CrossAxisAlignment.start,
                                           children: [
                                             if (valueOrDefault(
-                                                        currentUserDocument
-                                                            ?.leanmass,
-                                                        '') !=
-                                                    '')
+                                                    currentUserDocument
+                                                        ?.leanmass,
+                                                    '') !=
+                                                '')
                                               Align(
                                                 alignment: AlignmentDirectional(
                                                     0.0, 0.0),
@@ -983,10 +983,10 @@ class _ReportCopyWidgetState extends State<ReportCopyWidget>
                                                   ),
                                                 ),
                                                 if (valueOrDefault(
-                                                            currentUserDocument
-                                                                ?.efat,
-                                                            '') !=
-                                                        '')
+                                                        currentUserDocument
+                                                            ?.efat,
+                                                        '') !=
+                                                    '')
                                                   Padding(
                                                     padding:
                                                         EdgeInsetsDirectional
@@ -1089,10 +1089,9 @@ class _ReportCopyWidgetState extends State<ReportCopyWidget>
                                                 ),
                                               ),
                                               if (valueOrDefault(
-                                                          currentUserDocument
-                                                              ?.bfat,
-                                                          '') !=
-                                                      '')
+                                                      currentUserDocument?.bfat,
+                                                      '') !=
+                                                  '')
                                                 Padding(
                                                   padding: EdgeInsetsDirectional
                                                       .fromSTEB(
@@ -1229,10 +1228,10 @@ class _ReportCopyWidgetState extends State<ReportCopyWidget>
                                                   ),
                                                 ),
                                                 if (valueOrDefault(
-                                                            currentUserDocument
-                                                                ?.ufat,
-                                                            '') !=
-                                                        '')
+                                                        currentUserDocument
+                                                            ?.ufat,
+                                                        '') !=
+                                                    '')
                                                   Padding(
                                                     padding:
                                                         EdgeInsetsDirectional
@@ -1337,10 +1336,10 @@ class _ReportCopyWidgetState extends State<ReportCopyWidget>
                                                 ),
                                               ),
                                               if (valueOrDefault(
-                                                          currentUserDocument
-                                                              ?.leanmass,
-                                                          '') !=
-                                                      '')
+                                                      currentUserDocument
+                                                          ?.leanmass,
+                                                      '') !=
+                                                  '')
                                                 Padding(
                                                   padding: EdgeInsetsDirectional
                                                       .fromSTEB(
@@ -1517,9 +1516,9 @@ class _ReportCopyWidgetState extends State<ReportCopyWidget>
                                             ),
                                           ),
                                           if (valueOrDefault(
-                                                      currentUserDocument?.efat,
-                                                      '') !=
-                                                  '')
+                                                  currentUserDocument?.efat,
+                                                  '') !=
+                                              '')
                                             Padding(
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(0.0, 5.0, 0.0, 0.0),
@@ -2478,9 +2477,9 @@ Other: Algae-based omega-3 su... */
                                             ),
                                           ),
                                           if (valueOrDefault(
-                                                      currentUserDocument?.bfat,
-                                                      '') !=
-                                                  '')
+                                                  currentUserDocument?.bfat,
+                                                  '') !=
+                                              '')
                                             Padding(
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(0.0, 5.0, 0.0, 0.0),
@@ -3496,9 +3495,9 @@ Fish: Salmon, mackerel, trout... */
                                             ),
                                           ),
                                           if (valueOrDefault(
-                                                      currentUserDocument?.ufat,
-                                                      '') !=
-                                                  '')
+                                                  currentUserDocument?.ufat,
+                                                  '') !=
+                                              '')
                                             Padding(
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(0.0, 5.0, 0.0, 0.0),
@@ -4682,10 +4681,9 @@ Focus on Whole Foods */
                                             ),
                                           ),
                                           if (valueOrDefault(
-                                                      currentUserDocument
-                                                          ?.leanmass,
-                                                      '') !=
-                                                  '')
+                                                  currentUserDocument?.leanmass,
+                                                  '') !=
+                                              '')
                                             Padding(
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(0.0, 5.0, 0.0, 0.0),

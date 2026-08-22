@@ -6,6 +6,7 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class UserTrainingsRecord extends FirestoreRecord {
   UserTrainingsRecord._(
@@ -114,10 +115,41 @@ class UserTrainingsRecord extends FirestoreRecord {
       FirebaseFirestore.instance.collection('userTrainings');
 
   static Stream<UserTrainingsRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => UserTrainingsRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<UserTrainingsRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => UserTrainingsRecord.fromSnapshot(s));
+  static Future<UserTrainingsRecord> getDocumentOnce(
+      DocumentReference ref) async {
+    final row = await supaById('user_trainings', ref.id) ?? const {};
+    return UserTrainingsRecord.fromSupabase({...row, 'id': ref.id});
+  }
+
+  /// Build from a Supabase `user_trainings` row.
+  static UserTrainingsRecord fromSupabase(Map<String, dynamic> row) {
+    final id = (row['id'] ?? '').toString();
+    final likeCount = castToType<int>(row['like_count']) ?? 0;
+    final lat = row['location_lat'];
+    final lng = row['location_lng'];
+    return UserTrainingsRecord.getDocumentFromData(
+        <String, dynamic>{
+          'SessionDuration': row['session_duration'],
+          'userTraining': supaUserRef(row['user_id']),
+          'TrainingTitle': row['title'],
+          'TrainingTime': row['training_time_raw'],
+          'TrainingDate': row['training_date_raw'],
+          'TrainingCategory': row['category'],
+          'IdTrainings': row['legacy_id'],
+          'TrainingVideo': row['legacy_video_url'],
+          'TrainingDescription': row['description'],
+          'TrainingBackgroundImage': row['background_image'],
+          'difficultyLevel': row['difficulty_level'],
+          'duration': row['duration'],
+          'likes': likePlaceholders(likeCount),
+          if (lat != null && lng != null)
+            'trainingLocation':
+                LatLng((lat as num).toDouble(), (lng as num).toDouble()),
+        }..removeWhere((_, v) => v == null),
+        supaRef('userTrainings', id));
+  }
 
   static UserTrainingsRecord fromSnapshot(DocumentSnapshot snapshot) =>
       UserTrainingsRecord._(

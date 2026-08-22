@@ -1,0 +1,22 @@
+{
+  "name": "gymfeed-marketing-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test",
+    "check": "node scripts/check-imports.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "2.16.0",
+    "@supabase/supabase-js": "2.112.3",
+    "fastify": "5.11.3",
+    "openai": "7.4.0",
+    "sharp": "0.35.3",
+    "zod": "4.4.3"
+  }
+}

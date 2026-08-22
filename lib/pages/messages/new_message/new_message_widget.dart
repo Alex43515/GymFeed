@@ -1,17 +1,14 @@
-import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_timer.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/index.dart';
-import 'package:stop_watch_timer/stop_watch_timer.dart';
-import 'package:easy_debounce/easy_debounce.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
-import 'package:provider/provider.dart';
-import 'package:text_search/text_search.dart';
-import 'new_message_model.dart';
-export 'new_message_model.dart';
+
+import '/backend/supabase/database/profile.dart';
+import '/backend/supabase/repositories/chat_repository.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
+import '/backend/supabase/supabase_records.dart';
+import '/flutter_flow/flutter_flow_util.dart';
+import '/pages/messages/individual_message/individual_message_widget.dart';
+import '../messaging_shared.dart';
 
 class NewMessageWidget extends StatefulWidget {
   const NewMessageWidget({super.key});
@@ -24,820 +21,227 @@ class NewMessageWidget extends StatefulWidget {
 }
 
 class _NewMessageWidgetState extends State<NewMessageWidget> {
-  late NewMessageModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
+  final _profiles = ProfileRepository();
+  final _chats = ChatRepository();
+  final _searchController = TextEditingController();
+  late Future<List<Profile>> _people;
+  Timer? _debounce;
+  String? _openingUserId;
 
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => NewMessageModel());
+    _people = _profiles.suggested();
+    _searchController.addListener(_scheduleSearch);
+  }
 
-    // On page load action.
-    SchedulerBinding.instance.addPostFrameCallback((_) async {
-      FFAppState().imageSearchDummyToggle = true;
-      FFAppState().update(() {});
+  void _scheduleSearch() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      final query = _searchController.text.trim();
+      if (!mounted) return;
+      setState(() {
+        _people =
+            query.isEmpty ? _profiles.suggested() : _profiles.search(query);
+      });
     });
+  }
 
-    _model.searchInnputTextController ??= TextEditingController();
-    _model.searchInnputFocusNode ??= FocusNode();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+  Future<void> _open(Profile profile) async {
+    if (_openingUserId != null) return;
+    setState(() => _openingUserId = profile.id);
+    try {
+      final chatId = await _chats.getOrCreateDirectChat(profile.id);
+      if (!mounted) return;
+      context.goNamed(
+        IndividualMessageWidget.routeName,
+        queryParameters: {
+          'chat': serializeParam(
+            supaRef('chats', chatId),
+            ParamType.DocumentReference,
+          ),
+        }.withoutNulls,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _openingUserId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start this chat: $error')),
+      );
+    }
   }
 
   @override
   void dispose() {
-    _model.dispose();
-
+    _debounce?.cancel();
+    _searchController
+      ..removeListener(_scheduleSearch)
+      ..dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    context.watch<FFAppState>();
-
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
+    final media = MediaQuery.of(context);
+    final searching = _searchController.text.trim().isNotEmpty;
+    return MediaQuery(
+      data: media.copyWith(
+          textScaler: media.textScaler.clamp(maxScaleFactor: 1.3)),
       child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        appBar: AppBar(
-          backgroundColor: FlutterFlowTheme.of(context).secondary,
-          automaticallyImplyLeading: false,
-          leading: InkWell(
-            splashColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            onTap: () async {
-              context.pop();
-            },
-            child: Icon(
-              Icons.arrow_back_ios_rounded,
-              color: FlutterFlowTheme.of(context).tertiary,
-              size: 15.0,
-            ),
-          ),
-          title: Column(
-            mainAxisSize: MainAxisSize.max,
+        backgroundColor: messageBackground,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: StreamBuilder<List<UsersRecord>>(
-                      stream: queryUsersRecord(),
-                      builder: (context, snapshot) {
-                        // Customize what your widget looks like when it's loading.
-                        if (!snapshot.hasData) {
-                          return Center(
-                            child: SizedBox(
-                              width: 12.0,
-                              height: 12.0,
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
+              SizedBox(
+                height: 72,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => context.safePop(),
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white, size: 27),
+                      ),
+                    ),
+                    Text('New message',
+                        style: messageText(size: 16, weight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFF1B1B1B)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 17, 16, 14),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: false,
+                  cursorColor: messageGreen,
+                  style: messageText(),
+                  decoration: InputDecoration(
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 15, right: 8),
+                      child: Center(
+                        widthFactor: 1,
+                        child: Text('To:',
+                            style: messageText(size: 12, color: messageMuted)),
+                      ),
+                    ),
+                    hintText: 'Search people',
+                    hintStyle: messageText(color: const Color(0xFF5E6269)),
+                    filled: true,
+                    fillColor: messageSurface,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: messageBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: messageGreen),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Text(searching ? 'Results' : 'Suggested',
+                    style: messageText(size: 12, color: messageMuted)),
+              ),
+              Expanded(
+                child: FutureBuilder<List<Profile>>(
+                  future: _people,
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData &&
+                        snapshot.connectionState == ConnectionState.waiting) {
+                      return const MessageLoading();
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: TextButton.icon(
+                          onPressed: () => setState(() {
+                            _people = _searchController.text.trim().isEmpty
+                                ? _profiles.suggested()
+                                : _profiles.search(_searchController.text);
+                          }),
+                          icon: const Icon(Icons.refresh, color: messageGreen),
+                          label: Text('Try again',
+                              style: messageText(color: messageMuted)),
+                        ),
+                      );
+                    }
+                    final people = snapshot.data ?? const <Profile>[];
+                    if (people.isEmpty) {
+                      return Center(
+                        child: Text(
+                          searching
+                              ? 'No people found'
+                              : 'No suggested people yet',
+                          style: messageText(color: messageMuted),
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 28),
+                      itemCount: people.length,
+                      itemBuilder: (_, index) {
+                        final person = people[index];
+                        final opening = _openingUserId == person.id;
+                        return InkWell(
+                          onTap: opening ? null : () => _open(person),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 11),
+                            child: Row(
+                              children: [
+                                MessageAvatar(
+                                  displayName: person.displayName,
+                                  username: person.username,
+                                  photoUrl: person.photoUrl,
+                                  size: 46,
                                 ),
-                              ),
-                            ),
-                          );
-                        }
-                        List<UsersRecord> searchInnputUsersRecordList = snapshot
-                            .data!
-                            .where((u) => u.uid != currentUserUid)
-                            .toList();
-
-                        return Container(
-                          width: 50.0,
-                          child: TextFormField(
-                            controller: _model.searchInnputTextController,
-                            focusNode: _model.searchInnputFocusNode,
-                            onChanged: (_) => EasyDebounce.debounce(
-                              '_model.searchInnputTextController',
-                              Duration(milliseconds: 1000),
-                              () async {
-                                safeSetState(() {
-                                  _model.simpleSearchResults = TextSearch(
-                                    searchInnputUsersRecordList
-                                        .where((e) => (currentUserDocument
-                                                    ?.following
-                                                    .toList() ??
-                                                [])
-                                            .contains(e.reference))
-                                        .toList()
-                                        .map(
-                                          (record) => TextSearchItem.fromTerms(
-                                              record, [
-                                            record.displayName,
-                                            record.username
-                                          ]),
-                                        )
-                                        .toList(),
-                                  )
-                                      .search(valueOrDefault<String>(
-                                        _model.searchInnputTextController.text,
-                                        'a',
-                                      ))
-                                      .map((r) => r.object)
-                                      .take(15)
-                                      .toList();
-                                  ;
-                                });
-                              },
-                            ),
-                            autofocus: false,
-                            textCapitalization: TextCapitalization.sentences,
-                            textInputAction: TextInputAction.search,
-                            obscureText: false,
-                            decoration: InputDecoration(
-                              hintText: FFLocalizations.of(context).getText(
-                                've7ks3hc' /* Search */,
-                              ),
-                              hintStyle: FlutterFlowTheme.of(context)
-                                  .bodySmall
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 16.0,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.normal,
-                                    lineHeight: 1.5,
-                                  ),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: FlutterFlowTheme.of(context).tertiary,
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(16.0),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0x00000000),
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(16.0),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0x00000000),
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(16.0),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0x00000000),
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(16.0),
-                              ),
-                              filled: true,
-                              fillColor: FlutterFlowTheme.of(context).secondary,
-                              contentPadding: EdgeInsetsDirectional.fromSTEB(
-                                  24.0, 0.0, 24.0, 0.0),
-                              prefixIcon: Icon(
-                                FFIcons.ksearch,
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                                size: 16.0,
-                              ),
-                              suffixIcon: _model.searchInnputTextController!
-                                      .text.isNotEmpty
-                                  ? InkWell(
-                                      onTap: () async {
-                                        _model.searchInnputTextController
-                                            ?.clear();
-                                        safeSetState(() {
-                                          _model
-                                              .simpleSearchResults = TextSearch(
-                                            searchInnputUsersRecordList
-                                                .where((e) =>
-                                                    (currentUserDocument
-                                                                ?.following
-                                                                .toList() ??
-                                                            [])
-                                                        .contains(e.reference))
-                                                .toList()
-                                                .map(
-                                                  (record) =>
-                                                      TextSearchItem.fromTerms(
-                                                          record, [
-                                                    record.displayName,
-                                                    record.username
-                                                  ]),
-                                                )
-                                                .toList(),
-                                          )
-                                              .search(valueOrDefault<String>(
-                                                _model
-                                                    .searchInnputTextController
-                                                    .text,
-                                                'a',
-                                              ))
-                                              .map((r) => r.object)
-                                              .take(15)
-                                              .toList();
-                                          ;
-                                        });
-                                        safeSetState(() {});
-                                      },
-                                      child: Icon(
-                                        Icons.clear,
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryText,
-                                        size: 18.0,
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        messageDisplayName(person.displayName,
+                                            person.username),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: messageText(
+                                            size: 14, weight: FontWeight.w700),
                                       ),
-                                    )
-                                  : null,
-                            ),
-                            style: FlutterFlowTheme.of(context)
-                                .bodyMedium
-                                .override(
-                                  fontFamily: 'Poppins',
-                                  color: FlutterFlowTheme.of(context).tertiary,
-                                  fontSize: 16.0,
-                                  letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
+                                      if (person.username.isNotEmpty)
+                                        Text('@${person.username}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: messageText(
+                                                size: 11, color: messageMuted)),
+                                    ],
+                                  ),
                                 ),
-                            cursorColor:
-                                FlutterFlowTheme.of(context).primaryText,
-                            validator: _model
-                                .searchInnputTextControllerValidator
-                                .asValidator(context),
+                                if (opening)
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: messageGreen,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         );
                       },
-                    ),
-                  ),
-                  FlutterFlowTimer(
-                    initialTime: _model.timerInitialTimeMs,
-                    getDisplayTime: (value) => StopWatchTimer.getDisplayTime(
-                      value,
-                      hours: false,
-                      minute: false,
-                      milliSecond: false,
-                    ),
-                    controller: _model.timerController,
-                    onChanged: (value, displayTime, shouldUpdate) {
-                      _model.timerMilliseconds = value;
-                      _model.timerValue = displayTime;
-                      if (shouldUpdate) safeSetState(() {});
-                    },
-                    onEnded: () async {
-                      await FFAppState().tempUserRecord!.update({
-                        ...mapToFirestore(
-                          {
-                            'chats':
-                                FieldValue.arrayUnion([currentUserReference]),
-                          },
-                        ),
-                      });
-                    },
-                    textAlign: TextAlign.start,
-                    style: FlutterFlowTheme.of(context).bodyMedium.override(
-                          fontFamily: 'Poppins',
-                          color: FlutterFlowTheme.of(context).primary,
-                          fontSize: 1.0,
-                          letterSpacing: 0.0,
-                        ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [],
-          centerTitle: false,
-          toolbarHeight: 100.0,
-          elevation: 0.0,
-        ),
-        body: SafeArea(
-          top: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  height: double.infinity,
-                  decoration: BoxDecoration(
-                    color: FlutterFlowTheme.of(context).secondaryBackground,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      if (_model.searchInnputTextController.text != '')
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                15.0, 0.0, 15.0, 0.0),
-                            child: AuthUserStreamWidget(
-                              builder: (context) => Builder(
-                                builder: (context) {
-                                  final searchUsers = _model.simpleSearchResults
-                                      .where((e) => !(currentUserDocument?.chats
-                                                  .toList() ??
-                                              [])
-                                          .contains(e.reference))
-                                      .toList();
-
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: List.generate(searchUsers.length,
-                                        (searchUsersIndex) {
-                                      final searchUsersItem =
-                                          searchUsers[searchUsersIndex];
-                                      return Padding(
-                                        padding: EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 12.0, 0.0, 0.0),
-                                        child: InkWell(
-                                          splashColor: Colors.transparent,
-                                          focusColor: Colors.transparent,
-                                          hoverColor: Colors.transparent,
-                                          highlightColor: Colors.transparent,
-                                          onTap: () async {
-                                            FFAppState().tempUserList = [];
-                                            FFAppState().addToTempUserList(
-                                                currentUserReference!);
-                                            FFAppState().update(() {});
-                                            FFAppState().addToTempUserList(
-                                                searchUsersItem.reference);
-                                            FFAppState().tempUserRecord =
-                                                searchUsersItem.reference;
-                                            FFAppState().update(() {});
-
-                                            var chatsRecordReference =
-                                                ChatsRecord.collection.doc();
-                                            await chatsRecordReference.set({
-                                              ...createChatsRecordData(
-                                                userA: currentUserReference,
-                                                userB:
-                                                    searchUsersItem.reference,
-                                                lastMessage:
-                                                    'Hey! Let\'s chat!',
-                                                lastMessageTime:
-                                                    getCurrentTimestamp,
-                                                lastMessageSentBy:
-                                                    currentUserReference,
-                                              ),
-                                              ...mapToFirestore(
-                                                {
-                                                  'last_message_seen_by': [
-                                                    currentUserReference
-                                                  ],
-                                                  'users':
-                                                      FFAppState().tempUserList,
-                                                },
-                                              ),
-                                            });
-                                            _model.chat = ChatsRecord
-                                                .getDocumentFromData({
-                                              ...createChatsRecordData(
-                                                userA: currentUserReference,
-                                                userB:
-                                                    searchUsersItem.reference,
-                                                lastMessage:
-                                                    'Hey! Let\'s chat!',
-                                                lastMessageTime:
-                                                    getCurrentTimestamp,
-                                                lastMessageSentBy:
-                                                    currentUserReference,
-                                              ),
-                                              ...mapToFirestore(
-                                                {
-                                                  'last_message_seen_by': [
-                                                    currentUserReference
-                                                  ],
-                                                  'users':
-                                                      FFAppState().tempUserList,
-                                                },
-                                              ),
-                                            }, chatsRecordReference);
-                                            _model.timerController
-                                                .onStartTimer();
-
-                                            await currentUserReference!.update({
-                                              ...mapToFirestore(
-                                                {
-                                                  'chats':
-                                                      FieldValue.arrayUnion([
-                                                    searchUsersItem.reference
-                                                  ]),
-                                                },
-                                              ),
-                                            });
-
-                                            context.pushNamed(
-                                              IndividualMessageWidget.routeName,
-                                              queryParameters: {
-                                                'chat': serializeParam(
-                                                  _model.chat?.reference,
-                                                  ParamType.DocumentReference,
-                                                ),
-                                              }.withoutNulls,
-                                            );
-
-                                            safeSetState(() {});
-                                          },
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.max,
-                                            children: [
-                                              Container(
-                                                width: 55.0,
-                                                height: 55.0,
-                                                clipBehavior: Clip.antiAlias,
-                                                decoration: BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Image.network(
-                                                  valueOrDefault<String>(
-                                                    searchUsersItem.photoUrl,
-                                                    'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                                  ),
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                              Expanded(
-                                                child: Padding(
-                                                  padding: EdgeInsetsDirectional
-                                                      .fromSTEB(
-                                                          12.0, 0.0, 0.0, 0.0),
-                                                  child: Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.max,
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        valueOrDefault<String>(
-                                                          searchUsersItem
-                                                              .displayName,
-                                                          'user',
-                                                        ),
-                                                        maxLines: 1,
-                                                        style: FlutterFlowTheme
-                                                                .of(context)
-                                                            .bodyMedium
-                                                            .override(
-                                                              fontFamily:
-                                                                  'Poppins',
-                                                              fontSize: 14.0,
-                                                              letterSpacing:
-                                                                  0.0,
-                                                            ),
-                                                      ),
-                                                      Padding(
-                                                        padding:
-                                                            EdgeInsetsDirectional
-                                                                .fromSTEB(
-                                                                    0.0,
-                                                                    2.0,
-                                                                    0.0,
-                                                                    0.0),
-                                                        child: Text(
-                                                          valueOrDefault<
-                                                              String>(
-                                                            searchUsersItem
-                                                                .username,
-                                                            'username',
-                                                          ),
-                                                          maxLines: 1,
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .bodySmall
-                                                              .override(
-                                                                fontFamily:
-                                                                    'Poppins',
-                                                                letterSpacing:
-                                                                    0.0,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .normal,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                              Icon(
-                                                Icons.send,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primary,
-                                                size: 20.0,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      if (_model.searchInnputTextController.text == '')
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                15.0, 0.0, 15.0, 0.0),
-                            child: AuthUserStreamWidget(
-                              builder: (context) =>
-                                  StreamBuilder<List<RecentSearchesRecord>>(
-                                stream: queryRecentSearchesRecord(
-                                  parent: currentUserReference,
-                                  queryBuilder: (recentSearchesRecord) =>
-                                      recentSearchesRecord
-                                          .whereIn(
-                                              'userRef',
-                                              (currentUserDocument?.following
-                                                      .toList() ??
-                                                  []))
-                                          .orderBy('time_searched',
-                                              descending: true),
-                                ),
-                                builder: (context, snapshot) {
-                                  // Customize what your widget looks like when it's loading.
-                                  if (!snapshot.hasData) {
-                                    return Center(
-                                      child: SizedBox(
-                                        width: 12.0,
-                                        height: 12.0,
-                                        child: CircularProgressIndicator(
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                            Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  List<RecentSearchesRecord>
-                                      recentSearchesRecentSearchesRecordList =
-                                      snapshot.data!;
-
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: List.generate(
-                                        recentSearchesRecentSearchesRecordList
-                                            .length, (recentSearchesIndex) {
-                                      final recentSearchesRecentSearchesRecord =
-                                          recentSearchesRecentSearchesRecordList[
-                                              recentSearchesIndex];
-                                      return Visibility(
-                                        visible: !(currentUserDocument?.chats
-                                                    .toList() ??
-                                                [])
-                                            .contains(
-                                                recentSearchesRecentSearchesRecord
-                                                    .userRef),
-                                        child: Padding(
-                                          padding:
-                                              EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 12.0, 0.0, 0.0),
-                                          child: StreamBuilder<UsersRecord>(
-                                            stream: UsersRecord.getDocument(
-                                                recentSearchesRecentSearchesRecord
-                                                    .userRef!),
-                                            builder: (context, snapshot) {
-                                              // Customize what your widget looks like when it's loading.
-                                              if (!snapshot.hasData) {
-                                                return Center(
-                                                  child: SizedBox(
-                                                    width: 12.0,
-                                                    height: 12.0,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      valueColor:
-                                                          AlwaysStoppedAnimation<
-                                                              Color>(
-                                                        Colors.white,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-
-                                              final profileDetailsUsersRecord =
-                                                  snapshot.data!;
-
-                                              return InkWell(
-                                                splashColor: Colors.transparent,
-                                                focusColor: Colors.transparent,
-                                                hoverColor: Colors.transparent,
-                                                highlightColor:
-                                                    Colors.transparent,
-                                                onTap: () async {
-                                                  FFAppState().tempUserList =
-                                                      [];
-                                                  FFAppState().addToTempUserList(
-                                                      currentUserReference!);
-                                                  FFAppState().update(() {});
-                                                  FFAppState().addToTempUserList(
-                                                      profileDetailsUsersRecord
-                                                          .reference);
-                                                  FFAppState().tempUserRecord =
-                                                      profileDetailsUsersRecord
-                                                          .reference;
-                                                  FFAppState().update(() {});
-
-                                                  var chatsRecordReference =
-                                                      ChatsRecord.collection
-                                                          .doc();
-                                                  await chatsRecordReference
-                                                      .set({
-                                                    ...createChatsRecordData(
-                                                      userA:
-                                                          currentUserReference,
-                                                      userB:
-                                                          profileDetailsUsersRecord
-                                                              .reference,
-                                                      lastMessage:
-                                                          'Hey! Let\'s chat!',
-                                                      lastMessageTime:
-                                                          getCurrentTimestamp,
-                                                      lastMessageSentBy:
-                                                          currentUserReference,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'last_message_seen_by':
-                                                            [
-                                                          currentUserReference
-                                                        ],
-                                                        'users': FFAppState()
-                                                            .tempUserList,
-                                                      },
-                                                    ),
-                                                  });
-                                                  _model.chat1 = ChatsRecord
-                                                      .getDocumentFromData({
-                                                    ...createChatsRecordData(
-                                                      userA:
-                                                          currentUserReference,
-                                                      userB:
-                                                          profileDetailsUsersRecord
-                                                              .reference,
-                                                      lastMessage:
-                                                          'Hey! Let\'s chat!',
-                                                      lastMessageTime:
-                                                          getCurrentTimestamp,
-                                                      lastMessageSentBy:
-                                                          currentUserReference,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'last_message_seen_by':
-                                                            [
-                                                          currentUserReference
-                                                        ],
-                                                        'users': FFAppState()
-                                                            .tempUserList,
-                                                      },
-                                                    ),
-                                                  }, chatsRecordReference);
-
-                                                  await currentUserReference!
-                                                      .update({
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'chats': FieldValue
-                                                            .arrayUnion([
-                                                          profileDetailsUsersRecord
-                                                              .reference
-                                                        ]),
-                                                      },
-                                                    ),
-                                                  });
-                                                  _model.timerController
-                                                      .onStartTimer();
-
-                                                  context.pushNamed(
-                                                    IndividualMessageWidget
-                                                        .routeName,
-                                                    queryParameters: {
-                                                      'chat': serializeParam(
-                                                        _model.chat1?.reference,
-                                                        ParamType
-                                                            .DocumentReference,
-                                                      ),
-                                                    }.withoutNulls,
-                                                  );
-
-                                                  safeSetState(() {});
-                                                },
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.max,
-                                                  children: [
-                                                    Container(
-                                                      width: 55.0,
-                                                      height: 55.0,
-                                                      clipBehavior:
-                                                          Clip.antiAlias,
-                                                      decoration: BoxDecoration(
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: Image.network(
-                                                        valueOrDefault<String>(
-                                                          profileDetailsUsersRecord
-                                                              .photoUrl,
-                                                          'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                                        ),
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      child: Padding(
-                                                        padding:
-                                                            EdgeInsetsDirectional
-                                                                .fromSTEB(
-                                                                    12.0,
-                                                                    0.0,
-                                                                    0.0,
-                                                                    0.0),
-                                                        child: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.max,
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .start,
-                                                          children: [
-                                                            Text(
-                                                              profileDetailsUsersRecord
-                                                                  .displayName,
-                                                              maxLines: 1,
-                                                              style: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .bodyMedium
-                                                                  .override(
-                                                                    fontFamily:
-                                                                        'Poppins',
-                                                                    fontSize:
-                                                                        14.0,
-                                                                    letterSpacing:
-                                                                        0.0,
-                                                                  ),
-                                                            ),
-                                                            Padding(
-                                                              padding:
-                                                                  EdgeInsetsDirectional
-                                                                      .fromSTEB(
-                                                                          0.0,
-                                                                          2.0,
-                                                                          0.0,
-                                                                          0.0),
-                                                              child: Text(
-                                                                profileDetailsUsersRecord
-                                                                    .username,
-                                                                maxLines: 1,
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodySmall
-                                                                    .override(
-                                                                      fontFamily:
-                                                                          'Poppins',
-                                                                      letterSpacing:
-                                                                          0.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .normal,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Icon(
-                                                      Icons.arrow_right_alt,
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                      size: 20.0,
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
             ],

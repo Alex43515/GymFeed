@@ -1,7 +1,6 @@
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'all_most_done_model.dart';
@@ -39,205 +38,90 @@ class _AllMostDoneWidgetState extends State<AllMostDoneWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        body: SafeArea(
-          top: true,
-          child: Stack(
+    final theme = FlutterFlowTheme.of(context);
+
+    return Scaffold(
+      key: scaffoldKey,
+      backgroundColor: theme.secondary,
+      body: SafeArea(
+        top: true,
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(28.0, 40.0, 28.0, 28.0),
+          child: Column(
             children: [
-              Container(
-                width: MediaQuery.sizeOf(context).width * 1.0,
-                height: MediaQuery.sizeOf(context).height * 1.0,
-                decoration: BoxDecoration(
-                  color: Color(0xFF0A0A0A),
+              const SizedBox(height: 40.0),
+              Text(
+                'Nice one!',
+                textAlign: TextAlign.center,
+                style: theme.displaySmall.override(
+                  fontFamily: 'Poppins',
+                  color: theme.tertiary,
+                  fontSize: 32.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w700,
                 ),
-                child: Align(
-                  alignment: AlignmentDirectional(0.0, -1.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                FFLocalizations.of(context).getText(
-                                  'kzc2m147' /* Nice one! */,
-                                ),
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      color:
-                                          FlutterFlowTheme.of(context).tertiary,
-                                      fontSize: functions
-                                          .resizeFontBasedOnScreenSize(
-                                              MediaQuery.sizeOf(context).width,
-                                              30)
-                                          .toDouble(),
-                                      letterSpacing: 0.0,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                FFLocalizations.of(context).getText(
-                                  'seo2zdw0' /* Few more steps! */,
-                                ),
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      color:
-                                          FlutterFlowTheme.of(context).tertiary,
-                                      fontSize: functions
-                                          .resizeFontBasedOnScreenSize(
-                                              MediaQuery.sizeOf(context).width,
-                                              30)
-                                          .toDouble(),
-                                      letterSpacing: 0.0,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Text(
-                                FFLocalizations.of(context).getText(
-                                  'b9ct6gbw' /* Continue with creating your ne... */,
-                                ),
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      color:
-                                          FlutterFlowTheme.of(context).accent1,
-                                      fontSize: functions
-                                          .resizeFontBasedOnScreenSize(
-                                              MediaQuery.sizeOf(context).width,
-                                              17)
-                                          .toDouble(),
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                              ),
-                              Text(
-                                FFLocalizations.of(context).getText(
-                                  '52lvokpi' /* The next questions will be ask... */,
-                                ),
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      color:
-                                          FlutterFlowTheme.of(context).accent1,
-                                      fontSize: functions
-                                          .resizeFontBasedOnScreenSize(
-                                              MediaQuery.sizeOf(context).width,
-                                              17)
-                                          .toDouble(),
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                0.0, 80.0, 0.0, 0.0),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.max,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8.0),
-                                  child: Image.asset(
-                                    'assets/images/Asset_6.png',
-                                    width: 200.0,
-                                    height: 200.0,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Align(
-                                alignment: AlignmentDirectional(0.0, 0.0),
-                                child: FFButtonWidget(
-                                  onPressed: () async {
-                                    context.pushNamed(
-                                        ProfilePictureWidget.routeName);
-                                  },
-                                  text: FFLocalizations.of(context).getText(
-                                    'ewwwvy2d' /* Continue */,
-                                  ),
-                                  options: FFButtonOptions(
-                                    width:
-                                        MediaQuery.sizeOf(context).width * 0.9,
-                                    height: 55.0,
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 0.0),
-                                    iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 0.0),
-                                    color: FlutterFlowTheme.of(context).primary,
-                                    textStyle: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .override(
-                                          fontFamily: 'Outfit',
-                                          color: Color(0xFF0A0A0A),
-                                          fontSize: functions
-                                              .resizeFontBasedOnScreenSize(
-                                                  MediaQuery.sizeOf(context)
-                                                      .width,
-                                                  20)
-                                              .toDouble(),
-                                          letterSpacing: 0.0,
-                                          fontWeight: FontWeight.normal,
-                                        ),
-                                    elevation: 3.0,
-                                    borderSide: BorderSide(
-                                      color: Colors.transparent,
-                                      width: 1.0,
-                                    ),
-                                    borderRadius: BorderRadius.circular(20.0),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
+              ),
+              Text(
+                'Few more steps!',
+                textAlign: TextAlign.center,
+                style: theme.displaySmall.override(
+                  fontFamily: 'Poppins',
+                  color: theme.tertiary,
+                  fontSize: 32.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10.0),
+              Text(
+                'Continue with creating your new profile',
+                textAlign: TextAlign.center,
+                style: theme.bodyMedium.override(
+                  fontFamily: 'Poppins',
+                  color: theme.secondaryText,
+                  fontSize: 16.0,
+                  letterSpacing: 0.0,
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: Container(
+                    width: 180.0,
+                    height: 180.0,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: theme.primary, width: 7.0),
+                    ),
+                    child: Icon(
+                      Icons.check_rounded,
+                      color: theme.primary,
+                      size: 96.0,
+                    ),
                   ),
+                ),
+              ),
+              FFButtonWidget(
+                onPressed: () async {
+                  context.pushNamed(ProfilePictureWidget.routeName);
+                },
+                text: 'Continue',
+                options: FFButtonOptions(
+                  width: double.infinity,
+                  height: 56.0,
+                  padding: EdgeInsets.zero,
+                  iconPadding: EdgeInsets.zero,
+                  color: theme.primary,
+                  textStyle: theme.titleSmall.override(
+                    fontFamily: 'Poppins',
+                    color: theme.secondary,
+                    fontSize: 17.0,
+                    letterSpacing: 0.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  elevation: 0.0,
+                  borderSide:
+                      const BorderSide(color: Colors.transparent, width: 1.0),
+                  borderRadius: BorderRadius.circular(28.0),
                 ),
               ),
             ],

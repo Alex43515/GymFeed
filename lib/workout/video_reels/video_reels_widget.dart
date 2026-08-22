@@ -1,30 +1,21 @@
-import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
-import '/components/mark_reel/mark_reel_widget.dart';
-import '/flutter_flow/flutter_flow_media_display.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_toggle_icon.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_video_player.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import '/workout/reels_description/reels_description_widget.dart';
-import '/flutter_flow/custom_functions.dart' as functions;
-import '/index.dart';
-import 'package:smooth_page_indicator/smooth_page_indicator.dart'
-    as smooth_page_indicator;
-import 'package:aligned_dialog/aligned_dialog.dart';
 import 'package:flutter/material.dart';
+
+import '/backend/supabase/repositories/profile_repository.dart';
+import '/backend/supabase/repositories/training_repository.dart';
+import '/components/nav_bar/nav_bar_widget.dart';
+import '/components/send_post/send_post_widget.dart';
+import '/custom_code/widgets/feed_video_player.dart';
+import '/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/custom_functions.dart' as functions;
 import 'video_reels_model.dart';
 export 'video_reels_model.dart';
 
+/// Workout-only vertical video feed. Generic and food posts stay on Home.
 class VideoReelsWidget extends StatefulWidget {
-  const VideoReelsWidget({
-    super.key,
-    this.initialStoryIndex,
-  });
+  const VideoReelsWidget({super.key, this.initialStoryIndex});
 
   final int? initialStoryIndex;
-
   static String routeName = 'videoReels';
   static String routePath = 'videoReels';
 
@@ -34,795 +25,386 @@ class VideoReelsWidget extends StatefulWidget {
 
 class _VideoReelsWidgetState extends State<VideoReelsWidget> {
   late VideoReelsModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
+  final _pageController = PageController();
+  final _repository = TrainingRepository();
+  final _liked = <String, bool>{};
+  final _likeCounts = <String, int>{};
+  late Future<List<Training>> _future;
 
   @override
   void initState() {
     super.initState();
     _model = createModel(context, () => VideoReelsModel());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    _future = _repository.videoFeed(limit: 60);
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     _model.dispose();
-
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        body: SafeArea(
-          top: true,
-          child: Container(
-            width: MediaQuery.sizeOf(context).width * 1.0,
-            height: MediaQuery.sizeOf(context).height * 1.0,
-            child: Stack(
-              alignment: AlignmentDirectional(0.0, 1.0),
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Expanded(
-                      child: StreamBuilder<List<UserTrainingsRecord>>(
-                        stream: queryUserTrainingsRecord(
-                          queryBuilder: (userTrainingsRecord) =>
-                              userTrainingsRecord
-                                  .where(
-                                    'TrainingVideo',
-                                    isNotEqualTo: '${''}',
-                                  )
-                                  .orderBy('TrainingVideo', descending: true),
-                        ),
-                        builder: (context, snapshot) {
-                          // Customize what your widget looks like when it's loading.
-                          if (!snapshot.hasData) {
-                            return Center(
-                              child: SizedBox(
-                                width: 12.0,
-                                height: 12.0,
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                          List<UserTrainingsRecord>
-                              pageViewUserTrainingsRecordList = snapshot.data!;
+  Future<void> _refresh() async {
+    setState(() => _future = _repository.videoFeed(limit: 60));
+    await _future;
+  }
 
-                          return Container(
-                            width: MediaQuery.sizeOf(context).width * 1.0,
-                            height: double.infinity,
-                            child: Stack(
-                              children: [
-                                PageView.builder(
-                                  controller: _model.pageViewController ??=
-                                      PageController(
-                                          initialPage: max(
-                                              0,
-                                              min(
-                                                  valueOrDefault<int>(
-                                                    widget.initialStoryIndex,
-                                                    0,
-                                                  ),
-                                                  pageViewUserTrainingsRecordList
-                                                          .length -
-                                                      1))),
-                                  scrollDirection: Axis.vertical,
-                                  itemCount:
-                                      pageViewUserTrainingsRecordList.length,
-                                  itemBuilder: (context, pageViewIndex) {
-                                    final pageViewUserTrainingsRecord =
-                                        pageViewUserTrainingsRecordList[
-                                            pageViewIndex];
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.max,
-                                      children: [
-                                        Container(
-                                          width:
-                                              MediaQuery.sizeOf(context).width *
-                                                  1.0,
-                                          height: MediaQuery.sizeOf(context)
-                                                  .height *
-                                              1.0,
-                                          decoration: BoxDecoration(
-                                            color: FlutterFlowTheme.of(context)
-                                                .secondary,
-                                          ),
-                                          child: Container(
-                                            width: MediaQuery.sizeOf(context)
-                                                    .width *
-                                                1.0,
-                                            height: MediaQuery.sizeOf(context)
-                                                    .height *
-                                                1.0,
-                                            child: Stack(
-                                              children: [
-                                                FlutterFlowMediaDisplay(
-                                                  path: functions.bunnyCDNVideoPath(
-                                                      pageViewUserTrainingsRecord
-                                                          .trainingVideo),
-                                                  imageBuilder: (path) =>
-                                                      ClipRRect(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                    child: Image.network(
-                                                      path,
-                                                      width: MediaQuery.sizeOf(
-                                                                  context)
-                                                              .width *
-                                                          1.0,
-                                                      height: MediaQuery.sizeOf(
-                                                                  context)
-                                                              .height *
-                                                          1.0,
-                                                      fit: BoxFit.cover,
-                                                    ),
-                                                  ),
-                                                  videoPlayerBuilder: (path) =>
-                                                      FlutterFlowVideoPlayer(
-                                                    path: path,
-                                                    width: MediaQuery.sizeOf(
-                                                                context)
-                                                            .width *
-                                                        1.0,
-                                                    height: MediaQuery.sizeOf(
-                                                                context)
-                                                            .height *
-                                                        0.9,
-                                                    autoPlay: true,
-                                                    looping: true,
-                                                    showControls: true,
-                                                    allowFullScreen: true,
-                                                    allowPlaybackSpeedMenu:
-                                                        false,
-                                                  ),
-                                                ),
-                                                Align(
-                                                  alignment:
-                                                      AlignmentDirectional(
-                                                          0.0, 0.0),
-                                                  child: Padding(
-                                                    padding:
-                                                        EdgeInsetsDirectional
-                                                            .fromSTEB(0.0, 0.0,
-                                                                0.0, 30.0),
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.max,
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        Align(
-                                                          alignment:
-                                                              AlignmentDirectional(
-                                                                  0.0, 0.0),
-                                                          child: Container(
-                                                            width:
-                                                                double.infinity,
-                                                            height: 200.0,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              gradient:
-                                                                  LinearGradient(
-                                                                colors: [
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondary,
-                                                                  Color(
-                                                                      0x001A1F24)
-                                                                ],
-                                                                stops: [
-                                                                  0.0,
-                                                                  1.0
-                                                                ],
-                                                                begin:
-                                                                    AlignmentDirectional(
-                                                                        0.0,
-                                                                        -1.0),
-                                                                end:
-                                                                    AlignmentDirectional(
-                                                                        0, 1.0),
-                                                              ),
-                                                            ),
-                                                            child: Column(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .max,
-                                                              mainAxisAlignment:
-                                                                  MainAxisAlignment
-                                                                      .center,
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .center,
-                                                              children: [
-                                                                Row(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .max,
-                                                                  mainAxisAlignment:
-                                                                      MainAxisAlignment
-                                                                          .spaceAround,
-                                                                  children: [
-                                                                    Opacity(
-                                                                      opacity:
-                                                                          0.0,
-                                                                      child:
-                                                                          Icon(
-                                                                        Icons
-                                                                            .arrow_back,
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        size:
-                                                                            24.0,
-                                                                      ),
-                                                                    ),
-                                                                    Opacity(
-                                                                      opacity:
-                                                                          0.0,
-                                                                      child:
-                                                                          Icon(
-                                                                        Icons
-                                                                            .arrow_back,
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        size:
-                                                                            24.0,
-                                                                      ),
-                                                                    ),
-                                                                    Padding(
-                                                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                                                          0.0,
-                                                                          0.0,
-                                                                          15.0,
-                                                                          0.0),
-                                                                      child:
-                                                                          InkWell(
-                                                                        splashColor:
-                                                                            Colors.transparent,
-                                                                        focusColor:
-                                                                            Colors.transparent,
-                                                                        hoverColor:
-                                                                            Colors.transparent,
-                                                                        highlightColor:
-                                                                            Colors.transparent,
-                                                                        onTap:
-                                                                            () async {
-                                                                          context
-                                                                              .safePop();
-                                                                        },
-                                                                        child:
-                                                                            Icon(
-                                                                          Icons
-                                                                              .close,
-                                                                          color:
-                                                                              FlutterFlowTheme.of(context).tertiary,
-                                                                          size:
-                                                                              20.0,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                                Padding(
-                                                                  padding: EdgeInsetsDirectional
-                                                                      .fromSTEB(
-                                                                          16.0,
-                                                                          12.0,
-                                                                          16.0,
-                                                                          36.0),
-                                                                  child: StreamBuilder<
-                                                                      UsersRecord>(
-                                                                    stream: UsersRecord.getDocument(
-                                                                        pageViewUserTrainingsRecord
-                                                                            .userTraining!),
-                                                                    builder:
-                                                                        (context,
-                                                                            snapshot) {
-                                                                      // Customize what your widget looks like when it's loading.
-                                                                      if (!snapshot
-                                                                          .hasData) {
-                                                                        return Center(
-                                                                          child:
-                                                                              SizedBox(
-                                                                            width:
-                                                                                12.0,
-                                                                            height:
-                                                                                12.0,
-                                                                            child:
-                                                                                CircularProgressIndicator(
-                                                                              valueColor: AlwaysStoppedAnimation<Color>(
-                                                                                Colors.white,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        );
-                                                                      }
+  Future<void> _toggleLike(Training training) async {
+    final before = _liked[training.id] ?? training.likedByMe;
+    final count = _likeCounts[training.id] ?? training.likeCount;
+    setState(() {
+      _liked[training.id] = !before;
+      _likeCounts[training.id] = (count + (before ? -1 : 1)).clamp(0, 1 << 30);
+    });
+    try {
+      if (before) {
+        await _repository.unlike(training.id);
+      } else {
+        await _repository.like(training.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _liked[training.id] = before;
+        _likeCounts[training.id] = count;
+      });
+    }
+  }
 
-                                                                      final userInfoUsersRecord =
-                                                                          snapshot
-                                                                              .data!;
+  void _share(Training training) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SendPostWidget(
+        workout: {
+          'id': training.id,
+          'title': training.title,
+          'description': training.description ?? '',
+          'category': training.category,
+          'video_url': training.videoUrl,
+          'cover_url': training.coverUrl,
+        },
+      ),
+    );
+  }
 
-                                                                      return Row(
-                                                                        mainAxisSize:
-                                                                            MainAxisSize.max,
-                                                                        mainAxisAlignment:
-                                                                            MainAxisAlignment.center,
-                                                                        children: [
-                                                                          InkWell(
-                                                                            splashColor:
-                                                                                Colors.transparent,
-                                                                            focusColor:
-                                                                                Colors.transparent,
-                                                                            hoverColor:
-                                                                                Colors.transparent,
-                                                                            highlightColor:
-                                                                                Colors.transparent,
-                                                                            onTap:
-                                                                                () async {
-                                                                              if (userInfoUsersRecord.reference == currentUserReference) {
-                                                                                context.pushNamed(ProfileWidget.routeName);
-                                                                              } else {
-                                                                                context.pushNamed(
-                                                                                  ProfileOtherWidget.routeName,
-                                                                                  queryParameters: {
-                                                                                    'username': serializeParam(
-                                                                                      userInfoUsersRecord.username,
-                                                                                      ParamType.String,
-                                                                                    ),
-                                                                                  }.withoutNulls,
-                                                                                );
-                                                                              }
-                                                                            },
-                                                                            child:
-                                                                                Container(
-                                                                              width: 40.0,
-                                                                              height: 40.0,
-                                                                              clipBehavior: Clip.antiAlias,
-                                                                              decoration: BoxDecoration(
-                                                                                shape: BoxShape.circle,
-                                                                              ),
-                                                                              child: Image.network(
-                                                                                userInfoUsersRecord.photoUrl,
-                                                                                fit: BoxFit.fitHeight,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                          Expanded(
-                                                                            child:
-                                                                                InkWell(
-                                                                              splashColor: Colors.transparent,
-                                                                              focusColor: Colors.transparent,
-                                                                              hoverColor: Colors.transparent,
-                                                                              highlightColor: Colors.transparent,
-                                                                              onTap: () async {
-                                                                                if (userInfoUsersRecord.reference == currentUserReference) {
-                                                                                  context.pushNamed(ProfileWidget.routeName);
-                                                                                } else {
-                                                                                  context.pushNamed(
-                                                                                    ProfileOtherWidget.routeName,
-                                                                                    queryParameters: {
-                                                                                      'username': serializeParam(
-                                                                                        userInfoUsersRecord.username,
-                                                                                        ParamType.String,
-                                                                                      ),
-                                                                                    }.withoutNulls,
-                                                                                  );
-                                                                                }
-                                                                              },
-                                                                              child: Column(
-                                                                                mainAxisSize: MainAxisSize.max,
-                                                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                children: [
-                                                                                  Padding(
-                                                                                    padding: EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 0.0, 0.0),
-                                                                                    child: Text(
-                                                                                      userInfoUsersRecord.username,
-                                                                                      style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                            fontFamily: 'Poppins',
-                                                                                            color: FlutterFlowTheme.of(context).tertiary,
-                                                                                            fontSize: MediaQuery.sizeOf(context).width < 768.0 ? 14.0 : 24.0,
-                                                                                            letterSpacing: 0.0,
-                                                                                          ),
-                                                                                    ),
-                                                                                  ),
-                                                                                  Padding(
-                                                                                    padding: EdgeInsetsDirectional.fromSTEB(12.0, 4.0, 0.0, 0.0),
-                                                                                    child: Text(
-                                                                                      pageViewUserTrainingsRecord.trainingTitle,
-                                                                                      style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                            fontFamily: 'Poppins',
-                                                                                            color: FlutterFlowTheme.of(context).tertiary,
-                                                                                            fontSize: MediaQuery.sizeOf(context).width < 768.0 ? 12.0 : 22.0,
-                                                                                            letterSpacing: 0.0,
-                                                                                          ),
-                                                                                    ),
-                                                                                  ),
-                                                                                ],
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                          Padding(
-                                                                            padding: EdgeInsetsDirectional.fromSTEB(
-                                                                                0.0,
-                                                                                0.0,
-                                                                                20.0,
-                                                                                0.0),
-                                                                            child:
-                                                                                FFButtonWidget(
-                                                                              onPressed: () async {
-                                                                                context.pushNamed(
-                                                                                  TrainingpostDetailsWidget.routeName,
-                                                                                  queryParameters: {
-                                                                                    'userRecord': serializeParam(
-                                                                                      userInfoUsersRecord,
-                                                                                      ParamType.Document,
-                                                                                    ),
-                                                                                    'trainingReference': serializeParam(
-                                                                                      pageViewUserTrainingsRecord.reference,
-                                                                                      ParamType.DocumentReference,
-                                                                                    ),
-                                                                                  }.withoutNulls,
-                                                                                  extra: <String, dynamic>{
-                                                                                    'userRecord': userInfoUsersRecord,
-                                                                                  },
-                                                                                );
-                                                                              },
-                                                                              text: FFLocalizations.of(context).getText(
-                                                                                '7y0kypyo' /* Training */,
-                                                                              ),
-                                                                              options: FFButtonOptions(
-                                                                                height: 25.0,
-                                                                                padding: EdgeInsetsDirectional.fromSTEB(24.0, 0.0, 24.0, 0.0),
-                                                                                iconPadding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-                                                                                color: FlutterFlowTheme.of(context).secondary,
-                                                                                textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                                                                                      fontFamily: 'Poppins',
-                                                                                      color: FlutterFlowTheme.of(context).primary,
-                                                                                      fontSize: 12.0,
-                                                                                      letterSpacing: 0.0,
-                                                                                    ),
-                                                                                elevation: 3.0,
-                                                                                borderSide: BorderSide(
-                                                                                  color: Color(0xFF0FF76D),
-                                                                                  width: 2.0,
-                                                                                ),
-                                                                                borderRadius: BorderRadius.circular(20.0),
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                          Column(
-                                                                            mainAxisSize:
-                                                                                MainAxisSize.max,
-                                                                            children: [
-                                                                              Builder(
-                                                                                builder: (context) => InkWell(
-                                                                                  splashColor: Colors.transparent,
-                                                                                  focusColor: Colors.transparent,
-                                                                                  hoverColor: Colors.transparent,
-                                                                                  highlightColor: Colors.transparent,
-                                                                                  onTap: () async {
-                                                                                    await showAlignedDialog(
-                                                                                      context: context,
-                                                                                      isGlobal: false,
-                                                                                      avoidOverflow: true,
-                                                                                      targetAnchor: AlignmentDirectional(-1.0, 1.0).resolve(Directionality.of(context)),
-                                                                                      followerAnchor: AlignmentDirectional(-1.0, 1.0).resolve(Directionality.of(context)),
-                                                                                      builder: (dialogContext) {
-                                                                                        return Material(
-                                                                                          color: Colors.transparent,
-                                                                                          child: GestureDetector(
-                                                                                            onTap: () {
-                                                                                              FocusScope.of(dialogContext).unfocus();
-                                                                                              FocusManager.instance.primaryFocus?.unfocus();
-                                                                                            },
-                                                                                            child: MarkReelWidget(
-                                                                                              userDetails: userInfoUsersRecord,
-                                                                                              postReference: pageViewUserTrainingsRecord.reference,
-                                                                                            ),
-                                                                                          ),
-                                                                                        );
-                                                                                      },
-                                                                                    );
-                                                                                  },
-                                                                                  child: Icon(
-                                                                                    Icons.keyboard_control_sharp,
-                                                                                    color: FlutterFlowTheme.of(context).secondaryText,
-                                                                                    size: 24.0,
-                                                                                  ),
-                                                                                ),
-                                                                              ),
-                                                                            ],
-                                                                          ),
-                                                                        ],
-                                                                      );
-                                                                    },
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        Container(
-                                                          width:
-                                                              double.infinity,
-                                                          height: 50.0,
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            gradient:
-                                                                LinearGradient(
-                                                              colors: [
-                                                                Color(
-                                                                    0x001A1F24),
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .secondary
-                                                              ],
-                                                              stops: [0.0, 1.0],
-                                                              begin:
-                                                                  AlignmentDirectional(
-                                                                      0.0,
-                                                                      -1.0),
-                                                              end:
-                                                                  AlignmentDirectional(
-                                                                      0, 1.0),
-                                                            ),
-                                                          ),
-                                                          child: Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .end,
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              StreamBuilder<
-                                                                  UsersRecord>(
-                                                                stream: UsersRecord
-                                                                    .getDocument(
-                                                                        pageViewUserTrainingsRecord
-                                                                            .userTraining!),
-                                                                builder: (context,
-                                                                    snapshot) {
-                                                                  // Customize what your widget looks like when it's loading.
-                                                                  if (!snapshot
-                                                                      .hasData) {
-                                                                    return Center(
-                                                                      child:
-                                                                          SizedBox(
-                                                                        width:
-                                                                            12.0,
-                                                                        height:
-                                                                            12.0,
-                                                                        child:
-                                                                            CircularProgressIndicator(
-                                                                          valueColor:
-                                                                              AlwaysStoppedAnimation<Color>(
-                                                                            Colors.white,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                    );
-                                                                  }
-
-                                                                  final rowUsersRecord =
-                                                                      snapshot
-                                                                          .data!;
-
-                                                                  return Row(
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .max,
-                                                                    mainAxisAlignment:
-                                                                        MainAxisAlignment
-                                                                            .spaceAround,
-                                                                    children: [
-                                                                      Padding(
-                                                                        padding:
-                                                                            EdgeInsets.all(16.0),
-                                                                        child:
-                                                                            InkWell(
-                                                                          splashColor:
-                                                                              Colors.transparent,
-                                                                          focusColor:
-                                                                              Colors.transparent,
-                                                                          hoverColor:
-                                                                              Colors.transparent,
-                                                                          highlightColor:
-                                                                              Colors.transparent,
-                                                                          onTap:
-                                                                              () async {
-                                                                            await showModalBottomSheet(
-                                                                              isScrollControlled: true,
-                                                                              backgroundColor: Colors.transparent,
-                                                                              enableDrag: false,
-                                                                              context: context,
-                                                                              builder: (context) {
-                                                                                return GestureDetector(
-                                                                                  onTap: () {
-                                                                                    FocusScope.of(context).unfocus();
-                                                                                    FocusManager.instance.primaryFocus?.unfocus();
-                                                                                  },
-                                                                                  child: Padding(
-                                                                                    padding: MediaQuery.viewInsetsOf(context),
-                                                                                    child: Container(
-                                                                                      height: MediaQuery.sizeOf(context).height * 0.8,
-                                                                                      child: ReelsDescriptionWidget(
-                                                                                        userDetails: pageViewUserTrainingsRecord.reference,
-                                                                                      ),
-                                                                                    ),
-                                                                                  ),
-                                                                                );
-                                                                              },
-                                                                            ).then((value) =>
-                                                                                safeSetState(() {}));
-                                                                          },
-                                                                          child:
-                                                                              Text(
-                                                                            pageViewUserTrainingsRecord.trainingDescription.maybeHandleOverflow(
-                                                                              maxChars: 30,
-                                                                              replacement: '…',
-                                                                            ),
-                                                                            textAlign:
-                                                                                TextAlign.start,
-                                                                            maxLines:
-                                                                                1,
-                                                                            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                  fontFamily: 'Poppins',
-                                                                                  color: FlutterFlowTheme.of(context).tertiary,
-                                                                                  fontSize: MediaQuery.sizeOf(context).width < 768.0 ? 14.0 : 24.0,
-                                                                                  letterSpacing: 0.0,
-                                                                                ),
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                      ToggleIcon(
-                                                                        onPressed:
-                                                                            () async {
-                                                                          final reelsSavedElement =
-                                                                              pageViewUserTrainingsRecord.reference;
-                                                                          final reelsSavedUpdate = rowUsersRecord.reelsSaved.contains(reelsSavedElement)
-                                                                              ? FieldValue.arrayRemove([
-                                                                                  reelsSavedElement
-                                                                                ])
-                                                                              : FieldValue.arrayUnion([
-                                                                                  reelsSavedElement
-                                                                                ]);
-                                                                          await rowUsersRecord
-                                                                              .reference
-                                                                              .update({
-                                                                            ...mapToFirestore(
-                                                                              {
-                                                                                'reelsSaved': reelsSavedUpdate,
-                                                                              },
-                                                                            ),
-                                                                          });
-                                                                        },
-                                                                        value: rowUsersRecord
-                                                                            .reelsSaved
-                                                                            .contains(pageViewUserTrainingsRecord.reference),
-                                                                        onIcon:
-                                                                            Icon(
-                                                                          Icons
-                                                                              .bookmark,
-                                                                          color:
-                                                                              Color(0xFF8EFF76),
-                                                                          size: MediaQuery.sizeOf(context).width < 768.0
-                                                                              ? 20.0
-                                                                              : 30.0,
-                                                                        ),
-                                                                        offIcon:
-                                                                            Icon(
-                                                                          Icons
-                                                                              .bookmark_border,
-                                                                          color:
-                                                                              FlutterFlowTheme.of(context).secondaryText,
-                                                                          size: MediaQuery.sizeOf(context).width < 768.0
-                                                                              ? 20.0
-                                                                              : 30.0,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  );
-                                                                },
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                                Align(
-                                  alignment: AlignmentDirectional(0.95, 0.7),
-                                  child: Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 10.0),
-                                    child: smooth_page_indicator
-                                        .SmoothPageIndicator(
-                                      controller: _model.pageViewController ??=
-                                          PageController(
-                                              initialPage: max(
-                                                  0,
-                                                  min(
-                                                      valueOrDefault<int>(
-                                                        widget
-                                                            .initialStoryIndex,
-                                                        0,
-                                                      ),
-                                                      pageViewUserTrainingsRecordList
-                                                              .length -
-                                                          1))),
-                                      count: pageViewUserTrainingsRecordList
-                                          .length,
-                                      axisDirection: Axis.vertical,
-                                      onDotClicked: (i) async {
-                                        await _model.pageViewController!
-                                            .animateToPage(
-                                          i,
-                                          duration: Duration(milliseconds: 500),
-                                          curve: Curves.ease,
-                                        );
-                                        safeSetState(() {});
-                                      },
-                                      effect: smooth_page_indicator
-                                          .ExpandingDotsEffect(
-                                        expansionFactor: 2.0,
-                                        spacing: 8.0,
-                                        radius: 16.0,
-                                        dotWidth: 8.0,
-                                        dotHeight: 4.0,
-                                        dotColor: Color(0x65DBE2E7),
-                                        activeDotColor:
-                                            FlutterFlowTheme.of(context)
-                                                .primary,
-                                        paintStyle: PaintingStyle.fill,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+  void _options(Training training) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: const BoxDecoration(
+          color: Color(0xFF151515),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF555555),
+                borderRadius: BorderRadius.circular(99),
+              ),
             ),
-          ),
+            const SizedBox(height: 14),
+            ListTile(
+              leading: const Icon(Icons.flag_outlined, color: Colors.white),
+              title: const Text('Report',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Reported. Thanks for letting us know.')));
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.block_rounded, color: Color(0xFFFF6464)),
+              title: const Text('Block account',
+                  style: TextStyle(
+                      color: Color(0xFFFF6464),
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600)),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                try {
+                  await ProfileRepository().block(training.userId);
+                  if (mounted) await _refresh();
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Could not block this account.')));
+                }
+              },
+            ),
+          ],
         ),
       ),
     );
   }
+
+  String _compact(int value) {
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
+    return '$value';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      bottomNavigationBar: const NavBarWidget(selectPageIndex: 4),
+      body: SafeArea(
+        bottom: false,
+        child: FutureBuilder<List<Training>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF1FE276)),
+              );
+            }
+            if (snapshot.hasError) {
+              return _empty(
+                icon: Icons.wifi_off_rounded,
+                title: 'FitClips could not load',
+                message: 'Check your connection and tap to try again.',
+              );
+            }
+            final clips = snapshot.data ?? const <Training>[];
+            if (clips.isEmpty) {
+              return _empty(
+                icon: Icons.video_library_outlined,
+                title: 'No workout clips yet',
+                message:
+                    'Workout videos appear here after a training is scheduled.',
+              );
+            }
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              color: const Color(0xFF1FE276),
+              child: PageView.builder(
+                key: const ValueKey('fitclips-workout-video-feed'),
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                itemCount: clips.length,
+                itemBuilder: (_, index) => _clipPage(clips[index]),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _empty({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) =>
+      InkWell(
+        onTap: _refresh,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: const Color(0xFF1FE276), size: 52),
+                const SizedBox(height: 16),
+                Text(title,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 7),
+                Text(message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Color(0xFF929292),
+                        fontFamily: 'Poppins',
+                        fontSize: 13)),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Widget _clipPage(Training training) {
+    final videoUrl = functions.bunnyCDNVideoPath(training.videoUrl.trim());
+    final coverUrl = training.coverUrl.trim();
+    final liked = _liked[training.id] ?? training.likedByMe;
+    final count = _likeCounts[training.id] ?? training.likeCount;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FeedVideoPlayer(
+          key: ValueKey('fitclip-video-${training.id}'),
+          videoUrl: videoUrl,
+          thumbnailUrl: coverUrl.isEmpty ? null : coverUrl,
+          borderRadius: 0,
+        ),
+        const IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.center,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Color(0xCC000000)],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 18,
+          right: 16,
+          top: 8,
+          child: Row(
+            children: [
+              const Text('FitClips',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 5)])),
+              const Spacer(),
+              IconButton(
+                key: ValueKey('fitclip-options-${training.id}'),
+                onPressed: () => _options(training),
+                icon: const Icon(Icons.more_horiz_rounded, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 18,
+          right: 82,
+          bottom: 70,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: const Color(0xFF153925),
+                    backgroundImage: training.authorPhotoUrl.isEmpty
+                        ? null
+                        : NetworkImage(training.authorPhotoUrl),
+                    child: training.authorPhotoUrl.isEmpty
+                        ? const Icon(Icons.person_rounded,
+                            color: Colors.white, size: 21)
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '@${training.authorUsername.isEmpty ? 'gymfeed' : training.authorUsername}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          shadows: [
+                            Shadow(color: Colors.black, blurRadius: 5)
+                          ]),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 9),
+              Text(training.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 5)])),
+              if (training.description?.trim().isNotEmpty == true)
+                Text(training.description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Color(0xFFD4D4D4),
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 5)])),
+            ],
+          ),
+        ),
+        Positioned(
+          right: 12,
+          bottom: 72,
+          child: Column(
+            children: [
+              _action(
+                key: ValueKey('fitclip-like-${training.id}'),
+                icon: liked ? Icons.favorite : Icons.favorite_border,
+                color:
+                    liked ? FlutterFlowTheme.of(context).error : Colors.white,
+                label: _compact(count),
+                onTap: () => _toggleLike(training),
+              ),
+              const SizedBox(height: 18),
+              _action(
+                key: ValueKey('fitclip-share-${training.id}'),
+                icon: Icons.send_outlined,
+                color: Colors.white,
+                label: 'Share',
+                onTap: () => _share(training),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _action({
+    required Key key,
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      InkResponse(
+        key: key,
+        onTap: onTap,
+        radius: 28,
+        child: SizedBox(
+          width: 58,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  color: color,
+                  size: 32,
+                  shadows: const [Shadow(color: Colors.black, blurRadius: 5)]),
+              const SizedBox(height: 3),
+              Text(label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 5)])),
+            ],
+          ),
+        ),
+      );
 }

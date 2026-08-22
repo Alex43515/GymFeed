@@ -6,6 +6,8 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class BookmarksRecord extends FirestoreRecord {
   BookmarksRecord._(
@@ -47,10 +49,44 @@ class BookmarksRecord extends FirestoreRecord {
       parent.collection('bookmarks').doc(id);
 
   static Stream<BookmarksRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => BookmarksRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<BookmarksRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => BookmarksRecord.fromSnapshot(s));
+  static Future<BookmarksRecord> getDocumentOnce(DocumentReference ref) async {
+    return BookmarksRecord.forUser(ref.parent.parent?.id ?? '');
+  }
+
+  /// Build one BookmarksRecord holding all of [userId]'s saved items, grouped
+  /// into post / training / food-post ref lists (from the relational table).
+  static Future<BookmarksRecord> forUser(String userId) async {
+    final postRefs = <DocumentReference>[];
+    final trainingRefs = <DocumentReference>[];
+    final foodRefs = <DocumentReference>[];
+    if (userId.isNotEmpty) {
+      final rows = await supabase
+          .from('bookmarks')
+          .select('kind, post_id, training_id')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+      for (final r in (rows as List)) {
+        final kind = (r['kind'] ?? '').toString();
+        final postId = (r['post_id'] ?? '').toString();
+        final trainingId = (r['training_id'] ?? '').toString();
+        if (kind == 'training' && trainingId.isNotEmpty) {
+          trainingRefs.add(supaRef('userTrainings', trainingId));
+        } else if (kind == 'food_post' && postId.isNotEmpty) {
+          foodRefs.add(supaRef('posts', postId));
+        } else if (postId.isNotEmpty) {
+          postRefs.add(supaRef('posts', postId));
+        }
+      }
+    }
+    final ref = FirebaseFirestore.instance.doc('users/$userId/bookmarks/main');
+    return BookmarksRecord.getDocumentFromData(<String, dynamic>{
+      'postRefs': postRefs,
+      'postTrainingRef': trainingRefs,
+      'foodPostRef': foodRefs,
+    }, ref);
+  }
 
   static BookmarksRecord fromSnapshot(DocumentSnapshot snapshot) =>
       BookmarksRecord._(

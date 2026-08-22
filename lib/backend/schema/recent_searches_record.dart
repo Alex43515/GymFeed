@@ -6,6 +6,7 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class RecentSearchesRecord extends FirestoreRecord {
   RecentSearchesRecord._(
@@ -41,10 +42,28 @@ class RecentSearchesRecord extends FirestoreRecord {
       parent.collection('recent_searches').doc(id);
 
   static Stream<RecentSearchesRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => RecentSearchesRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<RecentSearchesRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => RecentSearchesRecord.fromSnapshot(s));
+  static Future<RecentSearchesRecord> getDocumentOnce(
+      DocumentReference ref) async {
+    // ref is users/<owner>/recent_searches/<searchedUserId>.
+    return RecentSearchesRecord.getDocumentFromData(
+        <String, dynamic>{'userRef': supaUserRef(ref.id)}, ref);
+  }
+
+  /// Build from a Supabase `recent_searches` row (owner_id, searched_user_id).
+  static RecentSearchesRecord fromSupabase(Map<String, dynamic> row) {
+    final ownerId = (row['owner_id'] ?? '').toString();
+    final searchedId = (row['searched_user_id'] ?? '').toString();
+    final ref = FirebaseFirestore.instance
+        .doc('users/$ownerId/recent_searches/$searchedId');
+    return RecentSearchesRecord.getDocumentFromData(
+        <String, dynamic>{
+          'userRef': supaUserRef(searchedId),
+          'time_searched': supaDate(row['searched_at']),
+        }..removeWhere((_, v) => v == null),
+        ref);
+  }
 
   static RecentSearchesRecord fromSnapshot(DocumentSnapshot snapshot) =>
       RecentSearchesRecord._(

@@ -175,8 +175,8 @@ class _ProgressDetailsWidgetState extends State<ProgressDetailsWidget> {
                                                             .height *
                                                         1.0,
                                                 child: CreateExerciseWidget(
-                                                  woktoutRef: widget
-                                                      .trainingReference!,
+                                                  woktoutRef:
+                                                      widget.trainingReference!,
                                                   userDetails: widget
                                                       .userRecord!.reference,
                                                 ),

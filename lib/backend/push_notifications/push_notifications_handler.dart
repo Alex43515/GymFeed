@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'serialization_util.dart';
+import 'push_notification_events.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '../../flutter_flow/flutter_flow_util.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-
 
 final _handledMessageIds = <String?>{};
 
@@ -24,6 +24,8 @@ class PushNotificationsHandler extends StatefulWidget {
 
 class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
   bool _loading = false;
+  StreamSubscription<RemoteMessage>? _openedSubscription;
+  StreamSubscription<Map<String, dynamic>>? _localTapSubscription;
 
   Future handleOpenedPushNotification() async {
     if (isWeb) {
@@ -34,19 +36,32 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
     if (notification != null) {
       await _handlePushNotification(notification);
     }
-    FirebaseMessaging.onMessageOpenedApp.listen(_handlePushNotification);
+    _openedSubscription ??=
+        FirebaseMessaging.onMessageOpenedApp.listen(_handlePushNotification);
+    _localTapSubscription ??= localNotificationTapStream.listen(
+      (data) => _handlePushData(data),
+    );
   }
 
-  Future _handlePushNotification(RemoteMessage message) async {
-    if (_handledMessageIds.contains(message.messageId)) {
+  Future<void> _handlePushNotification(RemoteMessage message) =>
+      _handlePushData(message.data, messageId: message.messageId);
+
+  Future<void> _handlePushData(
+    Map<String, dynamic> data, {
+    String? messageId,
+  }) async {
+    final handlingKey = messageId ?? jsonEncode(data);
+    if (_handledMessageIds.contains(handlingKey)) {
       return;
     }
-    _handledMessageIds.add(message.messageId);
+    _handledMessageIds.add(handlingKey);
 
     safeSetState(() => _loading = true);
     try {
-      final initialPageName = message.data['initialPageName'] as String;
-      final initialParameterData = getInitialParameterData(message.data);
+      final initialPageName =
+          (data['initialPageName'] ?? data['initial_page'] ?? 'Notifications')
+              .toString();
+      final initialParameterData = getInitialParameterData(data);
       final parametersBuilder = parametersBuilderMap[initialPageName];
       if (parametersBuilder != null) {
         final parameterData = await parametersBuilder(initialParameterData);
@@ -77,6 +92,13 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       handleOpenedPushNotification();
     });
+  }
+
+  @override
+  void dispose() {
+    _openedSubscription?.cancel();
+    _localTapSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -308,13 +330,14 @@ final parametersBuilderMap =
 
 Map<String, dynamic> getInitialParameterData(Map<String, dynamic> data) {
   try {
-    final parameterDataStr = data['parameterData'];
-    if (parameterDataStr == null ||
-        parameterDataStr is! String ||
-        parameterDataStr.isEmpty) {
+    final raw = data['parameterData'] ?? data['parameter_data'];
+    if (raw is Map) {
+      return raw.map((key, value) => MapEntry(key.toString(), value));
+    }
+    if (raw == null || raw is! String || raw.isEmpty) {
       return {};
     }
-    return jsonDecode(parameterDataStr) as Map<String, dynamic>;
+    return jsonDecode(raw) as Map<String, dynamic>;
   } catch (e) {
     print('Error parsing parameter data: $e');
     return {};

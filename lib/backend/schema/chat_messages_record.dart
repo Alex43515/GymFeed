@@ -6,6 +6,7 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class ChatMessagesRecord extends FirestoreRecord {
   ChatMessagesRecord._(
@@ -70,10 +71,31 @@ class ChatMessagesRecord extends FirestoreRecord {
       FirebaseFirestore.instance.collection('chat_messages');
 
   static Stream<ChatMessagesRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => ChatMessagesRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<ChatMessagesRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => ChatMessagesRecord.fromSnapshot(s));
+  static Future<ChatMessagesRecord> getDocumentOnce(
+      DocumentReference ref) async {
+    final row = await supaById('chat_messages', ref.id) ?? const {};
+    return ChatMessagesRecord.fromSupabase({...row, 'id': ref.id});
+  }
+
+  /// Build from a Supabase `chat_messages` row.
+  static ChatMessagesRecord fromSupabase(Map<String, dynamic> row) {
+    final id = (row['id'] ?? '').toString();
+    final chatId = (row['chat_id'] ?? '').toString();
+    final postId = (row['post_id'] ?? '').toString();
+    return ChatMessagesRecord.getDocumentFromData(
+        <String, dynamic>{
+          'user': supaUserRef(row['user_id']),
+          'chat': chatId.isEmpty ? null : supaRef('chats', chatId),
+          'text': row['text'],
+          'timestamp': supaDate(row['created_at']),
+          'image': row['image_url'],
+          'video': row['video_url'],
+          'postRef': postId.isEmpty ? null : supaRef('posts', postId),
+        }..removeWhere((_, v) => v == null),
+        supaRef('chat_messages', id));
+  }
 
   static ChatMessagesRecord fromSnapshot(DocumentSnapshot snapshot) =>
       ChatMessagesRecord._(

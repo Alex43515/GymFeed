@@ -1,7 +1,9 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/supabase/repositories/comment_repository.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
 import '/components/send_post/send_post_widget.dart';
+import '/components/profile_story_avatar/profile_story_avatar_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -34,6 +36,7 @@ class CommentsWidget extends StatefulWidget {
 class _CommentsWidgetState extends State<CommentsWidget>
     with TickerProviderStateMixin {
   late CommentsModel _model;
+  final bool _showLegacyCommentStory = false;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -333,62 +336,186 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                         AlignmentDirectional(
                                                             0.0, 0.0),
                                                     children: [
-                                                      StreamBuilder<
-                                                          List<StoriesRecord>>(
-                                                        stream:
-                                                            queryStoriesRecord(
-                                                          queryBuilder:
-                                                              (storiesRecord) =>
-                                                                  storiesRecord
-                                                                      .where(
-                                                                        'user',
-                                                                        isEqualTo:
-                                                                            rowUsersRecord.reference,
-                                                                      )
-                                                                      .where(
-                                                                        'expire_time',
-                                                                        isGreaterThan:
-                                                                            getCurrentTimestamp,
-                                                                      ),
-                                                          singleRecord: true,
-                                                        ),
-                                                        builder: (context,
-                                                            snapshot) {
-                                                          // Customize what your widget looks like when it's loading.
-                                                          if (!snapshot
-                                                              .hasData) {
-                                                            return Center(
-                                                              child: SizedBox(
-                                                                width: 12.0,
-                                                                height: 12.0,
-                                                                child:
-                                                                    CircularProgressIndicator(
-                                                                  valueColor:
-                                                                      AlwaysStoppedAnimation<
-                                                                          Color>(
-                                                                    Colors
-                                                                        .white,
+                                                      ProfileStoryAvatarWidget(
+                                                        userId: rowUsersRecord
+                                                            .reference.id,
+                                                        photoUrl: rowUsersRecord
+                                                            .photoUrl,
+                                                        isCurrentUser: false,
+                                                        size: 40,
+                                                        liveUpdates: false,
+                                                        onNoStoryTap: () {
+                                                          if (rowUsersRecord
+                                                                  .reference ==
+                                                              currentUserReference) {
+                                                            context.pushNamed(
+                                                                ProfileWidget
+                                                                    .routeName);
+                                                          } else {
+                                                            context.pushNamed(
+                                                              ProfileOtherWidget
+                                                                  .routeName,
+                                                              queryParameters: {
+                                                                'username':
+                                                                    serializeParam(
+                                                                  rowUsersRecord
+                                                                      .username,
+                                                                  ParamType
+                                                                      .String,
+                                                                ),
+                                                              }.withoutNulls,
+                                                            );
+                                                          }
+                                                        },
+                                                      ),
+                                                      if (_showLegacyCommentStory)
+                                                        StreamBuilder<
+                                                            List<
+                                                                StoriesRecord>>(
+                                                          stream:
+                                                              queryStoriesRecord(
+                                                            queryBuilder:
+                                                                (storiesRecord) =>
+                                                                    storiesRecord
+                                                                        .where(
+                                                                          'user',
+                                                                          isEqualTo:
+                                                                              rowUsersRecord.reference,
+                                                                        )
+                                                                        .where(
+                                                                          'expire_time',
+                                                                          isGreaterThan:
+                                                                              getCurrentTimestamp,
+                                                                        ),
+                                                            singleRecord: true,
+                                                          ),
+                                                          builder: (context,
+                                                              snapshot) {
+                                                            // Customize what your widget looks like when it's loading.
+                                                            if (!snapshot
+                                                                .hasData) {
+                                                              return Center(
+                                                                child: SizedBox(
+                                                                  width: 12.0,
+                                                                  height: 12.0,
+                                                                  child:
+                                                                      CircularProgressIndicator(
+                                                                    valueColor:
+                                                                        AlwaysStoppedAnimation<
+                                                                            Color>(
+                                                                      Colors
+                                                                          .white,
+                                                                    ),
                                                                   ),
+                                                                ),
+                                                              );
+                                                            }
+                                                            List<StoriesRecord>
+                                                                containerStoriesRecordList =
+                                                                snapshot.data!;
+                                                            // Return an empty Container when the item does not exist.
+                                                            if (snapshot.data!
+                                                                .isEmpty) {
+                                                              return Container();
+                                                            }
+                                                            final containerStoriesRecord =
+                                                                containerStoriesRecordList
+                                                                        .isNotEmpty
+                                                                    ? containerStoriesRecordList
+                                                                        .first
+                                                                    : null;
+
+                                                            return InkWell(
+                                                              splashColor: Colors
+                                                                  .transparent,
+                                                              focusColor: Colors
+                                                                  .transparent,
+                                                              hoverColor: Colors
+                                                                  .transparent,
+                                                              highlightColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              onTap: () async {
+                                                                await showModalBottomSheet(
+                                                                  isScrollControlled:
+                                                                      true,
+                                                                  backgroundColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                  barrierColor:
+                                                                      Color(
+                                                                          0x00000000),
+                                                                  context:
+                                                                      context,
+                                                                  builder:
+                                                                      (context) {
+                                                                    return GestureDetector(
+                                                                      onTap:
+                                                                          () {
+                                                                        FocusScope.of(context)
+                                                                            .unfocus();
+                                                                        FocusManager
+                                                                            .instance
+                                                                            .primaryFocus
+                                                                            ?.unfocus();
+                                                                      },
+                                                                      child:
+                                                                          Padding(
+                                                                        padding:
+                                                                            MediaQuery.viewInsetsOf(context),
+                                                                        child:
+                                                                            StoryWidget(
+                                                                          story:
+                                                                              containerStoriesRecord,
+                                                                        ),
+                                                                      ),
+                                                                    );
+                                                                  },
+                                                                ).then((value) =>
+                                                                    safeSetState(
+                                                                        () {}));
+                                                              },
+                                                              child: Container(
+                                                                width: 40.0,
+                                                                height: 40.0,
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  gradient:
+                                                                      LinearGradient(
+                                                                    colors: [
+                                                                      Color(
+                                                                          0xFF7C1E51),
+                                                                      Color(
+                                                                          0xFFDE0046),
+                                                                      Color(
+                                                                          0xFFF7A34B)
+                                                                    ],
+                                                                    stops: [
+                                                                      0.0,
+                                                                      0.5,
+                                                                      1.0
+                                                                    ],
+                                                                    begin:
+                                                                        AlignmentDirectional(
+                                                                            1.0,
+                                                                            -1.0),
+                                                                    end: AlignmentDirectional(
+                                                                        -1.0,
+                                                                        1.0),
+                                                                  ),
+                                                                  shape: BoxShape
+                                                                      .circle,
                                                                 ),
                                                               ),
                                                             );
-                                                          }
-                                                          List<StoriesRecord>
-                                                              containerStoriesRecordList =
-                                                              snapshot.data!;
-                                                          // Return an empty Container when the item does not exist.
-                                                          if (snapshot
-                                                              .data!.isEmpty) {
-                                                            return Container();
-                                                          }
-                                                          final containerStoriesRecord =
-                                                              containerStoriesRecordList
-                                                                      .isNotEmpty
-                                                                  ? containerStoriesRecordList
-                                                                      .first
-                                                                  : null;
-
-                                                          return InkWell(
+                                                          },
+                                                        ),
+                                                      if (_showLegacyCommentStory)
+                                                        Align(
+                                                          alignment:
+                                                              AlignmentDirectional(
+                                                                  0.0, 0.0),
+                                                          child: InkWell(
                                                             splashColor: Colors
                                                                 .transparent,
                                                             focusColor: Colors
@@ -399,153 +526,65 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                                 Colors
                                                                     .transparent,
                                                             onTap: () async {
-                                                              await showModalBottomSheet(
-                                                                isScrollControlled:
-                                                                    true,
-                                                                backgroundColor:
-                                                                    Colors
-                                                                        .transparent,
-                                                                barrierColor: Color(
-                                                                    0x00000000),
-                                                                context:
-                                                                    context,
-                                                                builder:
-                                                                    (context) {
-                                                                  return GestureDetector(
-                                                                    onTap: () {
-                                                                      FocusScope.of(
-                                                                              context)
-                                                                          .unfocus();
-                                                                      FocusManager
-                                                                          .instance
-                                                                          .primaryFocus
-                                                                          ?.unfocus();
-                                                                    },
-                                                                    child:
-                                                                        Padding(
-                                                                      padding: MediaQuery
-                                                                          .viewInsetsOf(
-                                                                              context),
-                                                                      child:
-                                                                          StoryWidget(
-                                                                        story:
-                                                                            containerStoriesRecord,
-                                                                      ),
+                                                              if (rowUsersRecord
+                                                                      .reference ==
+                                                                  currentUserReference) {
+                                                                context.pushNamed(
+                                                                    ProfileWidget
+                                                                        .routeName);
+                                                              } else {
+                                                                context
+                                                                    .pushNamed(
+                                                                  ProfileOtherWidget
+                                                                      .routeName,
+                                                                  queryParameters:
+                                                                      {
+                                                                    'username':
+                                                                        serializeParam(
+                                                                      rowUsersRecord
+                                                                          .username,
+                                                                      ParamType
+                                                                          .String,
                                                                     ),
-                                                                  );
-                                                                },
-                                                              ).then((value) =>
-                                                                  safeSetState(
-                                                                      () {}));
+                                                                  }.withoutNulls,
+                                                                );
+                                                              }
                                                             },
                                                             child: Container(
-                                                              width: 40.0,
-                                                              height: 40.0,
+                                                              width: 37.0,
+                                                              height: 37.0,
                                                               decoration:
                                                                   BoxDecoration(
-                                                                gradient:
-                                                                    LinearGradient(
-                                                                  colors: [
-                                                                    Color(
-                                                                        0xFF7C1E51),
-                                                                    Color(
-                                                                        0xFFDE0046),
-                                                                    Color(
-                                                                        0xFFF7A34B)
-                                                                  ],
-                                                                  stops: [
-                                                                    0.0,
-                                                                    0.5,
-                                                                    1.0
-                                                                  ],
-                                                                  begin:
-                                                                      AlignmentDirectional(
-                                                                          1.0,
-                                                                          -1.0),
-                                                                  end:
-                                                                      AlignmentDirectional(
-                                                                          -1.0,
-                                                                          1.0),
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .secondaryBackground,
+                                                                image:
+                                                                    DecorationImage(
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  image: Image
+                                                                      .network(
+                                                                    valueOrDefault<
+                                                                        String>(
+                                                                      rowUsersRecord
+                                                                          .photoUrl,
+                                                                      'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
+                                                                    ),
+                                                                  ).image,
                                                                 ),
                                                                 shape: BoxShape
                                                                     .circle,
-                                                              ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      ),
-                                                      Align(
-                                                        alignment:
-                                                            AlignmentDirectional(
-                                                                0.0, 0.0),
-                                                        child: InkWell(
-                                                          splashColor: Colors
-                                                              .transparent,
-                                                          focusColor: Colors
-                                                              .transparent,
-                                                          hoverColor: Colors
-                                                              .transparent,
-                                                          highlightColor: Colors
-                                                              .transparent,
-                                                          onTap: () async {
-                                                            if (rowUsersRecord
-                                                                    .reference ==
-                                                                currentUserReference) {
-                                                              context.pushNamed(
-                                                                  ProfileWidget
-                                                                      .routeName);
-                                                            } else {
-                                                              context.pushNamed(
-                                                                ProfileOtherWidget
-                                                                    .routeName,
-                                                                queryParameters:
-                                                                    {
-                                                                  'username':
-                                                                      serializeParam(
-                                                                    rowUsersRecord
-                                                                        .username,
-                                                                    ParamType
-                                                                        .String,
-                                                                  ),
-                                                                }.withoutNulls,
-                                                              );
-                                                            }
-                                                          },
-                                                          child: Container(
-                                                            width: 37.0,
-                                                            height: 37.0,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              color: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .secondaryBackground,
-                                                              image:
-                                                                  DecorationImage(
-                                                                fit: BoxFit
-                                                                    .cover,
-                                                                image: Image
-                                                                    .network(
-                                                                  valueOrDefault<
-                                                                      String>(
-                                                                    rowUsersRecord
-                                                                        .photoUrl,
-                                                                    'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                                                  ),
-                                                                ).image,
-                                                              ),
-                                                              shape: BoxShape
-                                                                  .circle,
-                                                              border:
-                                                                  Border.all(
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .primary,
-                                                                width: 2.0,
+                                                                border:
+                                                                    Border.all(
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .primary,
+                                                                  width: 2.0,
+                                                                ),
                                                               ),
                                                             ),
                                                           ),
                                                         ),
-                                                      ),
                                                     ],
                                                   ),
                                                 ),
@@ -692,8 +731,6 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                 StreamBuilder<List<CommentsRecord>>(
                                   stream: queryCommentsRecord(
                                     parent: widget.post,
-                                    queryBuilder: (commentsRecord) =>
-                                        commentsRecord.orderBy('time_posted'),
                                   ),
                                   builder: (context, snapshot) {
                                     // Customize what your widget looks like when it's loading.
@@ -771,63 +808,193 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                           AlignmentDirectional(
                                                               0.0, 0.0),
                                                       children: [
-                                                        StreamBuilder<
-                                                            List<
-                                                                StoriesRecord>>(
-                                                          stream:
-                                                              queryStoriesRecord(
-                                                            queryBuilder:
-                                                                (storiesRecord) =>
-                                                                    storiesRecord
-                                                                        .where(
-                                                                          'user',
-                                                                          isEqualTo:
-                                                                              rowUsersRecord.reference,
-                                                                        )
-                                                                        .where(
-                                                                          'expire_time',
-                                                                          isGreaterThan:
-                                                                              getCurrentTimestamp,
-                                                                        ),
-                                                            singleRecord: true,
-                                                          ),
-                                                          builder: (context,
-                                                              snapshot) {
-                                                            // Customize what your widget looks like when it's loading.
-                                                            if (!snapshot
-                                                                .hasData) {
-                                                              return Center(
-                                                                child: SizedBox(
-                                                                  width: 12.0,
-                                                                  height: 12.0,
+                                                        ProfileStoryAvatarWidget(
+                                                          userId: rowUsersRecord
+                                                              .reference.id,
+                                                          photoUrl:
+                                                              rowUsersRecord
+                                                                  .photoUrl,
+                                                          isCurrentUser: false,
+                                                          size: 40,
+                                                          liveUpdates: false,
+                                                          onNoStoryTap: () {
+                                                            if (rowUsersRecord
+                                                                    .reference ==
+                                                                currentUserReference) {
+                                                              context.pushNamed(
+                                                                  ProfileWidget
+                                                                      .routeName);
+                                                            } else {
+                                                              context.pushNamed(
+                                                                ProfileOtherWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'username':
+                                                                      serializeParam(
+                                                                    rowUsersRecord
+                                                                        .username,
+                                                                    ParamType
+                                                                        .String,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                              );
+                                                            }
+                                                          },
+                                                        ),
+                                                        if (_showLegacyCommentStory)
+                                                          StreamBuilder<
+                                                              List<
+                                                                  StoriesRecord>>(
+                                                            stream:
+                                                                queryStoriesRecord(
+                                                              queryBuilder:
+                                                                  (storiesRecord) =>
+                                                                      storiesRecord
+                                                                          .where(
+                                                                            'user',
+                                                                            isEqualTo:
+                                                                                rowUsersRecord.reference,
+                                                                          )
+                                                                          .where(
+                                                                            'expire_time',
+                                                                            isGreaterThan:
+                                                                                getCurrentTimestamp,
+                                                                          ),
+                                                              singleRecord:
+                                                                  true,
+                                                            ),
+                                                            builder: (context,
+                                                                snapshot) {
+                                                              // Customize what your widget looks like when it's loading.
+                                                              if (!snapshot
+                                                                  .hasData) {
+                                                                return Center(
                                                                   child:
-                                                                      CircularProgressIndicator(
-                                                                    valueColor:
-                                                                        AlwaysStoppedAnimation<
-                                                                            Color>(
-                                                                      Colors
-                                                                          .white,
+                                                                      SizedBox(
+                                                                    width: 12.0,
+                                                                    height:
+                                                                        12.0,
+                                                                    child:
+                                                                        CircularProgressIndicator(
+                                                                      valueColor:
+                                                                          AlwaysStoppedAnimation<
+                                                                              Color>(
+                                                                        Colors
+                                                                            .white,
+                                                                      ),
                                                                     ),
+                                                                  ),
+                                                                );
+                                                              }
+                                                              List<StoriesRecord>
+                                                                  containerStoriesRecordList =
+                                                                  snapshot
+                                                                      .data!;
+                                                              // Return an empty Container when the item does not exist.
+                                                              if (snapshot.data!
+                                                                  .isEmpty) {
+                                                                return Container();
+                                                              }
+                                                              final containerStoriesRecord =
+                                                                  containerStoriesRecordList
+                                                                          .isNotEmpty
+                                                                      ? containerStoriesRecordList
+                                                                          .first
+                                                                      : null;
+
+                                                              return InkWell(
+                                                                splashColor: Colors
+                                                                    .transparent,
+                                                                focusColor: Colors
+                                                                    .transparent,
+                                                                hoverColor: Colors
+                                                                    .transparent,
+                                                                highlightColor:
+                                                                    Colors
+                                                                        .transparent,
+                                                                onTap:
+                                                                    () async {
+                                                                  await showModalBottomSheet(
+                                                                    isScrollControlled:
+                                                                        true,
+                                                                    backgroundColor:
+                                                                        Colors
+                                                                            .transparent,
+                                                                    barrierColor:
+                                                                        Color(
+                                                                            0x00000000),
+                                                                    context:
+                                                                        context,
+                                                                    builder:
+                                                                        (context) {
+                                                                      return GestureDetector(
+                                                                        onTap:
+                                                                            () {
+                                                                          FocusScope.of(context)
+                                                                              .unfocus();
+                                                                          FocusManager
+                                                                              .instance
+                                                                              .primaryFocus
+                                                                              ?.unfocus();
+                                                                        },
+                                                                        child:
+                                                                            Padding(
+                                                                          padding:
+                                                                              MediaQuery.viewInsetsOf(context),
+                                                                          child:
+                                                                              StoryWidget(
+                                                                            story:
+                                                                                containerStoriesRecord,
+                                                                          ),
+                                                                        ),
+                                                                      );
+                                                                    },
+                                                                  ).then((value) =>
+                                                                      safeSetState(
+                                                                          () {}));
+                                                                },
+                                                                child:
+                                                                    Container(
+                                                                  width: 40.0,
+                                                                  height: 40.0,
+                                                                  decoration:
+                                                                      BoxDecoration(
+                                                                    gradient:
+                                                                        LinearGradient(
+                                                                      colors: [
+                                                                        Color(
+                                                                            0xFF7C1E51),
+                                                                        Color(
+                                                                            0xFFDE0046),
+                                                                        Color(
+                                                                            0xFFF7A34B)
+                                                                      ],
+                                                                      stops: [
+                                                                        0.0,
+                                                                        0.5,
+                                                                        1.0
+                                                                      ],
+                                                                      begin: AlignmentDirectional(
+                                                                          1.0,
+                                                                          -1.0),
+                                                                      end: AlignmentDirectional(
+                                                                          -1.0,
+                                                                          1.0),
+                                                                    ),
+                                                                    shape: BoxShape
+                                                                        .circle,
                                                                   ),
                                                                 ),
                                                               );
-                                                            }
-                                                            List<StoriesRecord>
-                                                                containerStoriesRecordList =
-                                                                snapshot.data!;
-                                                            // Return an empty Container when the item does not exist.
-                                                            if (snapshot.data!
-                                                                .isEmpty) {
-                                                              return Container();
-                                                            }
-                                                            final containerStoriesRecord =
-                                                                containerStoriesRecordList
-                                                                        .isNotEmpty
-                                                                    ? containerStoriesRecordList
-                                                                        .first
-                                                                    : null;
-
-                                                            return InkWell(
+                                                            },
+                                                          ),
+                                                        if (_showLegacyCommentStory)
+                                                          Align(
+                                                            alignment:
+                                                                AlignmentDirectional(
+                                                                    0.0, 0.0),
+                                                            child: InkWell(
                                                               splashColor: Colors
                                                                   .transparent,
                                                               focusColor: Colors
@@ -838,154 +1005,65 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                                   Colors
                                                                       .transparent,
                                                               onTap: () async {
-                                                                await showModalBottomSheet(
-                                                                  isScrollControlled:
-                                                                      true,
-                                                                  backgroundColor:
-                                                                      Colors
-                                                                          .transparent,
-                                                                  barrierColor:
-                                                                      Color(
-                                                                          0x00000000),
-                                                                  context:
-                                                                      context,
-                                                                  builder:
-                                                                      (context) {
-                                                                    return GestureDetector(
-                                                                      onTap:
-                                                                          () {
-                                                                        FocusScope.of(context)
-                                                                            .unfocus();
-                                                                        FocusManager
-                                                                            .instance
-                                                                            .primaryFocus
-                                                                            ?.unfocus();
-                                                                      },
-                                                                      child:
-                                                                          Padding(
-                                                                        padding:
-                                                                            MediaQuery.viewInsetsOf(context),
-                                                                        child:
-                                                                            StoryWidget(
-                                                                          story:
-                                                                              containerStoriesRecord,
-                                                                        ),
+                                                                if (rowUsersRecord
+                                                                        .reference ==
+                                                                    currentUserReference) {
+                                                                  context.pushNamed(
+                                                                      ProfileWidget
+                                                                          .routeName);
+                                                                } else {
+                                                                  context
+                                                                      .pushNamed(
+                                                                    ProfileOtherWidget
+                                                                        .routeName,
+                                                                    queryParameters:
+                                                                        {
+                                                                      'username':
+                                                                          serializeParam(
+                                                                        rowUsersRecord
+                                                                            .username,
+                                                                        ParamType
+                                                                            .String,
                                                                       ),
-                                                                    );
-                                                                  },
-                                                                ).then((value) =>
-                                                                    safeSetState(
-                                                                        () {}));
+                                                                    }.withoutNulls,
+                                                                  );
+                                                                }
                                                               },
                                                               child: Container(
-                                                                width: 40.0,
-                                                                height: 40.0,
+                                                                width: 37.0,
+                                                                height: 37.0,
                                                                 decoration:
                                                                     BoxDecoration(
-                                                                  gradient:
-                                                                      LinearGradient(
-                                                                    colors: [
-                                                                      Color(
-                                                                          0xFF7C1E51),
-                                                                      Color(
-                                                                          0xFFDE0046),
-                                                                      Color(
-                                                                          0xFFF7A34B)
-                                                                    ],
-                                                                    stops: [
-                                                                      0.0,
-                                                                      0.5,
-                                                                      1.0
-                                                                    ],
-                                                                    begin:
-                                                                        AlignmentDirectional(
-                                                                            1.0,
-                                                                            -1.0),
-                                                                    end: AlignmentDirectional(
-                                                                        -1.0,
-                                                                        1.0),
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryBackground,
+                                                                  image:
+                                                                      DecorationImage(
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    image: Image
+                                                                        .network(
+                                                                      valueOrDefault<
+                                                                          String>(
+                                                                        rowUsersRecord
+                                                                            .photoUrl,
+                                                                        'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
+                                                                      ),
+                                                                    ).image,
                                                                   ),
                                                                   shape: BoxShape
                                                                       .circle,
-                                                                ),
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
-                                                        Align(
-                                                          alignment:
-                                                              AlignmentDirectional(
-                                                                  0.0, 0.0),
-                                                          child: InkWell(
-                                                            splashColor: Colors
-                                                                .transparent,
-                                                            focusColor: Colors
-                                                                .transparent,
-                                                            hoverColor: Colors
-                                                                .transparent,
-                                                            highlightColor:
-                                                                Colors
-                                                                    .transparent,
-                                                            onTap: () async {
-                                                              if (rowUsersRecord
-                                                                      .reference ==
-                                                                  currentUserReference) {
-                                                                context.pushNamed(
-                                                                    ProfileWidget
-                                                                        .routeName);
-                                                              } else {
-                                                                context
-                                                                    .pushNamed(
-                                                                  ProfileOtherWidget
-                                                                      .routeName,
-                                                                  queryParameters:
-                                                                      {
-                                                                    'username':
-                                                                        serializeParam(
-                                                                      rowUsersRecord
-                                                                          .username,
-                                                                      ParamType
-                                                                          .String,
-                                                                    ),
-                                                                  }.withoutNulls,
-                                                                );
-                                                              }
-                                                            },
-                                                            child: Container(
-                                                              width: 37.0,
-                                                              height: 37.0,
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .secondaryBackground,
-                                                                image:
-                                                                    DecorationImage(
-                                                                  fit: BoxFit
-                                                                      .cover,
-                                                                  image: Image
-                                                                      .network(
-                                                                    valueOrDefault<
-                                                                        String>(
-                                                                      rowUsersRecord
-                                                                          .photoUrl,
-                                                                      'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                                                    ),
-                                                                  ).image,
-                                                                ),
-                                                                shape: BoxShape
-                                                                    .circle,
-                                                                border:
-                                                                    Border.all(
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .primary,
-                                                                  width: 2.0,
+                                                                  border: Border
+                                                                      .all(
+                                                                    color: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .primary,
+                                                                    width: 2.0,
+                                                                  ),
                                                                 ),
                                                               ),
                                                             ),
                                                           ),
-                                                        ),
                                                       ],
                                                     ),
                                                   ),
@@ -1256,20 +1334,13 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                                             .transparent,
                                                                     onTap:
                                                                         () async {
-                                                                      await listViewCommentsRecord
+                                                                      // Delete via
+                                                                      // Supabase; a
+                                                                      // trigger drops
+                                                                      // comment_count.
+                                                                      await CommentRepository().delete(listViewCommentsRecord
                                                                           .reference
-                                                                          .delete();
-
-                                                                      await activeColumnPostsRecord
-                                                                          .reference
-                                                                          .update({
-                                                                        ...mapToFirestore(
-                                                                          {
-                                                                            'num_comments':
-                                                                                FieldValue.increment(-(1)),
-                                                                          },
-                                                                        ),
-                                                                      });
+                                                                          .id);
                                                                     },
                                                                     child: Text(
                                                                       FFLocalizations.of(
@@ -1345,8 +1416,8 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                                     'Comment_Like',
                                                                 userRef:
                                                                     currentUserReference,
-                                                                postRef: widget
-                                                                    .post,
+                                                                postRef:
+                                                                    widget.post,
                                                                 timeCreated:
                                                                     getCurrentTimestamp,
                                                                 commentRef:
@@ -1539,8 +1610,7 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                       fontFamily: 'Poppins',
                                                       letterSpacing: 0.0,
                                                     ),
-                                            hintText:
-                                                'Add a comment as ${valueOrDefault(currentUserDocument?.username, '')}...',
+                                            hintText: 'Comment here',
                                             hintStyle: FlutterFlowTheme.of(
                                                     context)
                                                 .bodyMedium
@@ -1643,58 +1713,16 @@ class _CommentsWidgetState extends State<CommentsWidget>
                                                   Colors.transparent,
                                               onTap: () async {
                                                 if (_model.commentTextController
-                                                            .text !=
-                                                        '') {
-                                                  var commentsRecordReference =
-                                                      CommentsRecord.createDoc(
-                                                          widget.post!);
-                                                  await commentsRecordReference
-                                                      .set({
-                                                    ...createCommentsRecordData(
-                                                      postUser:
-                                                          currentUserReference,
-                                                      timePosted:
-                                                          getCurrentTimestamp,
-                                                      comment: _model
-                                                          .commentTextController
-                                                          .text,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'likes': FFAppState()
-                                                            .emptyList,
-                                                      },
-                                                    ),
-                                                  });
-                                                  _model.comment =
-                                                      CommentsRecord
-                                                          .getDocumentFromData({
-                                                    ...createCommentsRecordData(
-                                                      postUser:
-                                                          currentUserReference,
-                                                      timePosted:
-                                                          getCurrentTimestamp,
-                                                      comment: _model
-                                                          .commentTextController
-                                                          .text,
-                                                    ),
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'likes': FFAppState()
-                                                            .emptyList,
-                                                      },
-                                                    ),
-                                                  }, commentsRecordReference);
-
-                                                  await widget.post!.update({
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'num_comments':
-                                                            FieldValue
-                                                                .increment(1),
-                                                      },
-                                                    ),
-                                                  });
+                                                        .text !=
+                                                    '') {
+                                                  // Add the comment to Supabase.
+                                                  // A DB trigger increments the
+                                                  // post's comment_count.
+                                                  await CommentRepository().add(
+                                                    widget.post!.id,
+                                                    _model.commentTextController
+                                                        .text,
+                                                  );
                                                   safeSetState(() {
                                                     _model.commentTextController
                                                         ?.clear();

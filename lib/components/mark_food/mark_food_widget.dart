@@ -47,10 +47,11 @@ class _MarkFoodWidgetState extends State<MarkFoodWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<PostsRecord>>(
-      stream: queryPostsRecord(
-        singleRecord: true,
-      ),
+    final postReference = widget.postReference;
+    if (postReference == null) return const SizedBox.shrink();
+
+    return StreamBuilder<PostsRecord>(
+      stream: PostsRecord.getDocument(postReference),
       builder: (context, snapshot) {
         // Customize what your widget looks like when it's loading.
         if (!snapshot.hasData) {
@@ -66,14 +67,7 @@ class _MarkFoodWidgetState extends State<MarkFoodWidget> {
             ),
           );
         }
-        List<PostsRecord> columnPostsRecordList = snapshot.data!;
-        // Return an empty Container when the item does not exist.
-        if (snapshot.data!.isEmpty) {
-          return Container();
-        }
-        final columnPostsRecord = columnPostsRecordList.isNotEmpty
-            ? columnPostsRecordList.first
-            : null;
+        final columnPostsRecord = snapshot.data!;
 
         return Column(
           mainAxisSize: MainAxisSize.max,
@@ -82,7 +76,7 @@ class _MarkFoodWidgetState extends State<MarkFoodWidget> {
             Padding(
               padding: EdgeInsetsDirectional.fromSTEB(0.0, 50.0, 40.0, 0.0),
               child: StreamBuilder<UsersRecord>(
-                stream: UsersRecord.getDocument(columnPostsRecord!.postUser!),
+                stream: UsersRecord.getDocument(columnPostsRecord.postUser!),
                 builder: (context, snapshot) {
                   // Customize what your widget looks like when it's loading.
                   if (!snapshot.hasData) {
@@ -98,8 +92,6 @@ class _MarkFoodWidgetState extends State<MarkFoodWidget> {
                       ),
                     );
                   }
-
-                  final containerUsersRecord = snapshot.data!;
 
                   return Container(
                     width: 300.0,

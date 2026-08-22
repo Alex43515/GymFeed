@@ -1,11 +1,25 @@
 import '/backend/backend.dart';
+import '/backend/supabase/repositories/post_repository.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'personal_post_options_model.dart';
 export 'personal_post_options_model.dart';
+
+class PersonalPostOptionsResult {
+  const PersonalPostOptionsResult({
+    this.allowLikes,
+    this.allowComments,
+    this.deleted = false,
+    this.editRequested = false,
+  });
+
+  final bool? allowLikes;
+  final bool? allowComments;
+  final bool deleted;
+  final bool editRequested;
+}
 
 class PersonalPostOptionsWidget extends StatefulWidget {
   const PersonalPostOptionsWidget({
@@ -22,6 +36,84 @@ class PersonalPostOptionsWidget extends StatefulWidget {
 
 class _PersonalPostOptionsWidgetState extends State<PersonalPostOptionsWidget> {
   late PersonalPostOptionsModel _model;
+  bool _saving = false;
+
+  Future<void> _updatePermissions({
+    bool? allowLikes,
+    bool? allowComments,
+  }) async {
+    if (_saving) return;
+    final postId = widget.post?.reference.id ?? '';
+    if (postId.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await PostRepository().updateInteractionPermissions(
+        postId,
+        allowLikes: allowLikes,
+        allowComments: allowComments,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(PersonalPostOptionsResult(
+        allowLikes: allowLikes,
+        allowComments: allowComments,
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Could not update this post. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _deletePost() async {
+    if (_saving) return;
+    final postId = widget.post?.reference.id ?? '';
+    if (postId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete post?'),
+            content: const Text('This post will be removed from GymFeed.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Color(0xFFF83639)),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      await PostRepository().deletePost(postId);
+      if (!mounted) return;
+      Navigator.of(context).pop(
+        const PersonalPostOptionsResult(deleted: true),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete this post. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   void setState(VoidCallback callback) {
@@ -93,20 +185,14 @@ class _PersonalPostOptionsWidgetState extends State<PersonalPostOptionsWidget> {
                             hoverColor: Colors.transparent,
                             highlightColor: Colors.transparent,
                             onTap: () async {
-                              context.pushNamed(
-                                EditPostWidget.routeName,
-                                queryParameters: {
-                                  'post': serializeParam(
-                                    widget.post,
-                                    ParamType.Document,
-                                  ),
-                                }.withoutNulls,
-                                extra: <String, dynamic>{
-                                  'post': widget.post,
-                                },
+                              // Return the action to the post first. Pushing a
+                              // route and then popping this sheet used to pop
+                              // the editor that had just been opened.
+                              Navigator.of(context).pop(
+                                const PersonalPostOptionsResult(
+                                  editRequested: true,
+                                ),
                               );
-
-                              Navigator.pop(context);
                             },
                             child: Stack(
                               alignment: AlignmentDirectional(-1.0, 0.0),
@@ -161,13 +247,11 @@ class _PersonalPostOptionsWidgetState extends State<PersonalPostOptionsWidget> {
                                   focusColor: Colors.transparent,
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
-                                  onTap: () async {
-                                    await widget.post!.reference
-                                        .update(createPostsRecordData(
-                                      allowLikes: false,
-                                    ));
-                                    Navigator.pop(context);
-                                  },
+                                  onTap: _saving
+                                      ? null
+                                      : () => _updatePermissions(
+                                            allowLikes: false,
+                                          ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
@@ -203,13 +287,11 @@ class _PersonalPostOptionsWidgetState extends State<PersonalPostOptionsWidget> {
                                   focusColor: Colors.transparent,
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
-                                  onTap: () async {
-                                    await widget.post!.reference
-                                        .update(createPostsRecordData(
-                                      allowLikes: true,
-                                    ));
-                                    Navigator.pop(context);
-                                  },
+                                  onTap: _saving
+                                      ? null
+                                      : () => _updatePermissions(
+                                            allowLikes: true,
+                                          ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
@@ -260,13 +342,11 @@ class _PersonalPostOptionsWidgetState extends State<PersonalPostOptionsWidget> {
                                   focusColor: Colors.transparent,
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
-                                  onTap: () async {
-                                    await widget.post!.reference
-                                        .update(createPostsRecordData(
-                                      allowComments: false,
-                                    ));
-                                    Navigator.pop(context);
-                                  },
+                                  onTap: _saving
+                                      ? null
+                                      : () => _updatePermissions(
+                                            allowComments: false,
+                                          ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
@@ -302,13 +382,11 @@ class _PersonalPostOptionsWidgetState extends State<PersonalPostOptionsWidget> {
                                   focusColor: Colors.transparent,
                                   hoverColor: Colors.transparent,
                                   highlightColor: Colors.transparent,
-                                  onTap: () async {
-                                    await widget.post!.reference
-                                        .update(createPostsRecordData(
-                                      allowComments: true,
-                                    ));
-                                    Navigator.pop(context);
-                                  },
+                                  onTap: _saving
+                                      ? null
+                                      : () => _updatePermissions(
+                                            allowComments: true,
+                                          ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
@@ -355,14 +433,7 @@ class _PersonalPostOptionsWidgetState extends State<PersonalPostOptionsWidget> {
                             focusColor: Colors.transparent,
                             hoverColor: Colors.transparent,
                             highlightColor: Colors.transparent,
-                            onTap: () async {
-                              await widget.post!.reference
-                                  .update(createPostsRecordData(
-                                deleted: true,
-                              ));
-
-                              context.pushNamed(FeedWidget.routeName);
-                            },
+                            onTap: _saving ? null : _deletePost,
                             child: Row(
                               mainAxisSize: MainAxisSize.max,
                               children: [

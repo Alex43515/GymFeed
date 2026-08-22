@@ -160,7 +160,7 @@ class _EditsettingsWidgetState extends State<EditsettingsWidget> {
               onTap: () async {
                 await launchUrl(Uri(
                     scheme: 'mailto',
-                    path: 'support@gymfeed.io',
+                    path: 'official@gymfeed.io',
                     query: {
                       'subject': 'Support ticket',
                     }

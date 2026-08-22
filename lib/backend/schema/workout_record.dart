@@ -6,6 +6,7 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class WorkoutRecord extends FirestoreRecord {
   WorkoutRecord._(
@@ -88,10 +89,32 @@ class WorkoutRecord extends FirestoreRecord {
       FirebaseFirestore.instance.collection('workout');
 
   static Stream<WorkoutRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => WorkoutRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<WorkoutRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => WorkoutRecord.fromSnapshot(s));
+  static Future<WorkoutRecord> getDocumentOnce(DocumentReference ref) async {
+    final row = await supaById('workout_entries', ref.id) ?? const {};
+    return WorkoutRecord.fromSupabase({...row, 'id': ref.id});
+  }
+
+  /// Build from a Supabase `workout_entries` row.
+  static WorkoutRecord fromSupabase(Map<String, dynamic> row) {
+    final id = (row['id'] ?? '').toString();
+    return WorkoutRecord.getDocumentFromData(
+        <String, dynamic>{
+          'exerciseFirstName': row['exercise_name'],
+          'userWorkout': supaUserRef(row['user_id']),
+          'isChecked': row['is_checked'],
+          'date': supaDate(row['date']),
+          'description': row['description'],
+          'day': row['day'],
+          'kg': row['kg'],
+          'sets': row['sets'],
+          'reps': row['reps'],
+          'intensety': row['intensity'],
+          'estTime': row['est_time'],
+        }..removeWhere((_, v) => v == null),
+        supaRef('workout', id));
+  }
 
   static WorkoutRecord fromSnapshot(DocumentSnapshot snapshot) =>
       WorkoutRecord._(

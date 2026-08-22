@@ -520,10 +520,10 @@ class _UsernameWidgetState extends State<UsernameWidget> {
                             child: FFButtonWidget(
                               onPressed: () async {
                                 if ((_model.firstNameTextController.text !=
-                                            '') &&
+                                        '') &&
                                     (_model.bioTextController.text != '') &&
                                     (_model.username1TextController.text !=
-                                            '')) {
+                                        '')) {
                                   await currentUserReference!
                                       .update(createUsersRecordData(
                                     displayName:

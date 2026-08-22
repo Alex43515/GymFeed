@@ -1,0 +1,34 @@
+{
+  "name": "GymFeed 03 - Weekly CMO",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * 0" }] } },
+      "id": "99685fcf-a0f3-4f59-8b72-adc85958a4d1",
+      "name": "Sunday 08:00 ET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://marketing-worker:3000/v1/runs/weekly",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-marketing-token", "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}" }] },
+        "options": { "timeout": 600000 }
+      },
+      "id": "32cb2fc8-adbb-4d7f-bb21-7b60c399be25",
+      "name": "Run weekly learning loop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    }
+  ],
+  "connections": { "Sunday 08:00 ET": { "main": [[{ "node": "Run weekly learning loop", "type": "main", "index": 0 }]] } },
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "America/New_York" },
+  "versionId": "f5c6a214-597e-48fb-88aa-8303549829bd",
+  "meta": {},
+  "pinData": {},
+  "tags": []
+}

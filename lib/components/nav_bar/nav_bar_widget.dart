@@ -1,6 +1,7 @@
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'nav_bar_model.dart';
 export 'nav_bar_model.dart';
@@ -10,11 +11,14 @@ class NavBarWidget extends StatefulWidget {
     super.key,
     int? selectPageIndex,
     bool? hidden,
+    bool? overlay,
   })  : this.selectPageIndex = selectPageIndex ?? 1,
-        this.hidden = hidden ?? false;
+        this.hidden = hidden ?? false,
+        this.overlay = overlay ?? false;
 
   final int selectPageIndex;
   final bool hidden;
+  final bool overlay;
 
   @override
   State<NavBarWidget> createState() => _NavBarWidgetState();
@@ -36,8 +40,6 @@ class _NavBarWidgetState extends State<NavBarWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => NavBarModel());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
 
   @override
@@ -48,16 +50,9 @@ class _NavBarWidgetState extends State<NavBarWidget> {
   }
 
   void _go(String routeName) {
-    context.goNamed(
-      routeName,
-      extra: <String, dynamic>{
-        kTransitionInfoKey: TransitionInfo(
-          hasTransition: true,
-          transitionType: PageTransitionType.fade,
-          duration: const Duration(milliseconds: 0),
-        ),
-      },
-    );
+    // Root tabs carry no route data. A TransitionInfo object in `extra` cannot
+    // be serialized by GoRouter and caused a warning on every tab change.
+    context.goNamed(routeName);
   }
 
   Widget _tab({
@@ -82,6 +77,8 @@ class _NavBarWidgetState extends State<NavBarWidget> {
             const SizedBox(height: 4.0),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: FlutterFlowTheme.of(context).bodyMedium.override(
                     fontFamily: 'Poppins',
                     color: color,
@@ -118,7 +115,7 @@ class _NavBarWidgetState extends State<NavBarWidget> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: theme.primary.withOpacity(0.35),
+                    color: theme.primary.withValues(alpha: 0.35),
                     blurRadius: 12.0,
                     spreadRadius: 1.0,
                   ),
@@ -133,13 +130,15 @@ class _NavBarWidgetState extends State<NavBarWidget> {
             const SizedBox(height: 2.0),
             Text(
               'Coach',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: theme.bodyMedium.override(
-                    fontFamily: 'Poppins',
-                    color: active ? theme.primary : _inactive,
-                    fontSize: 10.0,
-                    letterSpacing: 0.0,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                  ),
+                fontFamily: 'Poppins',
+                color: active ? theme.primary : _inactive,
+                fontSize: 10.0,
+                letterSpacing: 0.0,
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ],
         ),
@@ -149,56 +148,69 @@ class _NavBarWidgetState extends State<NavBarWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: const AlignmentDirectional(0.0, 1.0),
-      child: Container(
-        width: MediaQuery.sizeOf(context).width * 1.0,
-        decoration: const BoxDecoration(
-          color: Color(0xFF0A0A0A),
-          border: Border(
-            top: BorderSide(color: Color(0xFF1A1A1A), width: 1.0),
+    if (kIsWeb && MediaQuery.sizeOf(context).width >= 720) {
+      return const SizedBox.shrink();
+    }
+    final mediaQuery = MediaQuery.of(context);
+    return MediaQuery(
+      // A bottom bar has a fixed height. Keep accessibility scaling, but cap it
+      // here so labels cannot force its icon/label Columns to overflow.
+      data: mediaQuery.copyWith(
+        textScaler: mediaQuery.textScaler.clamp(maxScaleFactor: 1.3),
+      ),
+      child: Align(
+        alignment: const AlignmentDirectional(0.0, 1.0),
+        heightFactor: widget.overlay ? null : 1.0,
+        child: Container(
+          width: MediaQuery.sizeOf(context).width * 1.0,
+          decoration: const BoxDecoration(
+            color: Color(0xFF0A0A0A),
+            border: Border(
+              top: BorderSide(color: Color(0xFF1A1A1A), width: 1.0),
+            ),
           ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 62.0,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(4.0, 0.0, 4.0, 0.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                _tab(
-                  icon: Icons.home_rounded,
-                  label: 'Home',
-                  active: widget.selectPageIndex == 1,
-                  onTap: () => _go(FeedWidget.routeName),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 62.0,
+              child: Padding(
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(4.0, 0.0, 4.0, 0.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _tab(
+                      icon: Icons.home_rounded,
+                      label: 'Home',
+                      active: widget.selectPageIndex == 1,
+                      onTap: () => _go(FeedWidget.routeName),
+                    ),
+                    _tab(
+                      icon: Icons.grid_view_rounded,
+                      label: 'Explore',
+                      active: widget.selectPageIndex == 2,
+                      onTap: () => _go(ExplorePageWidget.routeName),
+                    ),
+                    _centerTab(
+                      active: widget.selectPageIndex == 3,
+                      onTap: () => _go(CoachHomeWidget.routeName),
+                    ),
+                    _tab(
+                      icon: Icons.emergency_rounded,
+                      label: 'FitClips',
+                      active: widget.selectPageIndex == 4,
+                      onTap: () =>
+                          context.pushNamed(VideoReelsWidget.routeName),
+                    ),
+                    _tab(
+                      icon: Icons.person_rounded,
+                      label: 'Profile',
+                      active: widget.selectPageIndex == 5,
+                      onTap: () => _go(ProfileWidget.routeName),
+                    ),
+                  ],
                 ),
-                _tab(
-                  icon: Icons.grid_view_rounded,
-                  label: 'Explore',
-                  active: widget.selectPageIndex == 2,
-                  onTap: () => _go(ExplorePageWidget.routeName),
-                ),
-                _centerTab(
-                  active: widget.selectPageIndex == 3,
-                  onTap: () => _go(TrainingHomeWidget.routeName),
-                ),
-                _tab(
-                  icon: Icons.emergency_rounded,
-                  label: 'FitClips',
-                  active: widget.selectPageIndex == 4,
-                  onTap: () =>
-                      context.pushNamed(VideoReelsWidget.routeName),
-                ),
-                _tab(
-                  icon: Icons.person_rounded,
-                  label: 'Profile',
-                  active: widget.selectPageIndex == 5,
-                  onTap: () => _go(ProfileWidget.routeName),
-                ),
-                ],
               ),
             ),
           ),

@@ -114,8 +114,7 @@ class _GptVisionWidgetState extends State<GptVisionWidget> {
     await currentUserReference!.update({
       ...mapToFirestore({'visionButton': FieldValue.increment(1)}),
     });
-    _model.openaiRes =
-        await OpenAIAPIGroup.createChatCompletionCall.call(
+    _model.openaiRes = await OpenAIAPIGroup.createChatCompletionCall.call(
       query:
           '${_model.alwayspopulatedTextController.text}${_model.textField2TextController.text}',
       imagePath: valueOrDefault(currentUserDocument?.visionURL, ''),
@@ -189,8 +188,7 @@ class _GptVisionWidgetState extends State<GptVisionWidget> {
               // ── Scrollable body ─────────────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -230,8 +228,7 @@ class _GptVisionWidgetState extends State<GptVisionWidget> {
                                       ],
                                     )
                                   : ClipRRect(
-                                      borderRadius:
-                                          BorderRadius.circular(20.0),
+                                      borderRadius: BorderRadius.circular(20.0),
                                       child: Image.network(
                                         url,
                                         width: double.infinity,
@@ -282,8 +279,7 @@ class _GptVisionWidgetState extends State<GptVisionWidget> {
                           width: double.infinity,
                           decoration: BoxDecoration(
                             color: kCreateSurface,
-                            borderRadius:
-                                BorderRadius.circular(kCreateRadius),
+                            borderRadius: BorderRadius.circular(kCreateRadius),
                             border:
                                 Border.all(color: kCreateStroke, width: 1.0),
                           ),

@@ -68,6 +68,7 @@ jobs:
           # These files are maintained outside Flutter's generated build output.
           install -m 0644 website/public_html/.htaccess "$deploy_dir/.htaccess"
           install -m 0644 website/public_html/post.php "$deploy_dir/post.php"
+          install -m 0644 website/public_html/report-mail.php "$deploy_dir/report-mail.php"
           rsync -a website/public_html/.well-known/ "$deploy_dir/.well-known/"
           rsync -a website/public_html/assets/ "$deploy_dir/assets/"
           rsync -a website/public_html/privacy/ "$deploy_dir/privacy/"
@@ -79,6 +80,7 @@ jobs:
           test -s "$deploy_dir/.htaccess"
           test -s "$deploy_dir/.well-known/assetlinks.json"
           test -s "$deploy_dir/post.php"
+          test -s "$deploy_dir/report-mail.php"
 
       - name: Validate Namecheap deployment secrets
         shell: bash

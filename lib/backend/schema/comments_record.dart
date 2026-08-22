@@ -6,6 +6,7 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class CommentsRecord extends FirestoreRecord {
   CommentsRecord._(
@@ -52,11 +53,30 @@ class CommentsRecord extends FirestoreRecord {
   static DocumentReference createDoc(DocumentReference parent, {String? id}) =>
       parent.collection('comments').doc(id);
 
-  static Stream<CommentsRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => CommentsRecord.fromSnapshot(s));
+  // ── Supabase-backed reads ─────────────────────────────────────────────────
 
-  static Future<CommentsRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => CommentsRecord.fromSnapshot(s));
+  static Stream<CommentsRecord> getDocument(DocumentReference ref) =>
+      Stream.fromFuture(getDocumentOnce(ref));
+
+  static Future<CommentsRecord> getDocumentOnce(DocumentReference ref) async {
+    final row = await supaById('comments', ref.id) ?? const {};
+    return CommentsRecord.fromSupabase({...row, 'id': ref.id});
+  }
+
+  /// Build from a Supabase `comments` row. The reference is nested under the
+  /// post (`posts/<postId>/comments/<id>`) so `parentReference` still resolves.
+  static CommentsRecord fromSupabase(Map<String, dynamic> row) {
+    final id = (row['id'] ?? '').toString();
+    final postId = (row['post_id'] ?? '').toString();
+    final ref = FirebaseFirestore.instance.doc('posts/$postId/comments/$id');
+    return CommentsRecord.getDocumentFromData(
+        <String, dynamic>{
+          'post_user': supaUserRef(row['user_id']),
+          'time_posted': supaDate(row['created_at']),
+          'comment': row['body'],
+        }..removeWhere((_, v) => v == null),
+        ref);
+  }
 
   static CommentsRecord fromSnapshot(DocumentSnapshot snapshot) =>
       CommentsRecord._(

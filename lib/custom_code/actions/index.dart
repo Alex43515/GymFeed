@@ -45,3 +45,5 @@ export 'pick_image.dart' show pickImage;
 export 'compress_image.dart' show compressImage;
 export 'generate_video_thumbnail.dart' show generateVideoThumbnail;
 export 'generate2_second_video_preview.dart' show generate2SecondVideoPreview;
+export 'pick_and_prepare_video.dart' show pickAndPrepareVideo;
+export 'upload_video_to_bunny.dart' show uploadVideoToBunny;

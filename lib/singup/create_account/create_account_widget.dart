@@ -1,6 +1,9 @@
+import '/ai_workout/starter_plan/starter_plan_service.dart';
 import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
+import '/auth/supabase_auth/email_verification_service.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
 import '/components/eula/eula_widget.dart';
+import '/custom_code/widgets/upload_progress_screen.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -25,6 +28,7 @@ class CreateAccountWidget extends StatefulWidget {
 
 class _CreateAccountWidgetState extends State<CreateAccountWidget> {
   late CreateAccountModel _model;
+  bool _buildingStarterPlan = false;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -43,6 +47,20 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
     _model.confirmPasswordFocusNode ??= FocusNode();
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+  }
+
+  Future<void> _generateStarterPlan() async {
+    if (_buildingStarterPlan) return;
+    safeSetState(() => _buildingStarterPlan = true);
+    try {
+      await StarterPlanService().generateForOnboarding(
+        starterPlanProfileFromOnboarding(),
+      );
+    } catch (_) {
+      // Signup remains usable. Train retries this requested plan later.
+    } finally {
+      if (mounted) safeSetState(() => _buildingStarterPlan = false);
+    }
   }
 
   @override
@@ -478,6 +496,7 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
                                 0.0, 0.0, 0.0, 16.0),
                             child: FFButtonWidget(
                               onPressed: () async {
+                                if (_buildingStarterPlan) return;
                                 if (_model.checkboxValue == true) {
                                   GoRouter.of(context).prepareAuthEvent();
                                   if (_model.passwordTextController.text !=
@@ -498,44 +517,69 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
                                     context,
                                     _model.emailTextController.text,
                                     _model.passwordTextController.text,
+                                    data: signupMetadataFromOnboarding(),
                                   );
                                   if (user == null) {
                                     return;
                                   }
+                                  if (!user.loggedIn) {
+                                    if (!context.mounted) return;
+                                    context.goNamed(
+                                        EmailVerificationWidget.routeName);
+                                    return;
+                                  }
 
-                                  await UsersRecord.collection
-                                      .doc(user.uid)
-                                      .update({
-                                    ...createUsersRecordData(
-                                      enableEmail: false,
-                                      displayName: FFAppState().signupName,
-                                      email: FFAppState().signupEmail,
-                                      bio: FFAppState().bio,
-                                      createdTime: getCurrentTimestamp,
-                                      username: FFAppState().signupUsername,
-                                      website: '',
-                                      workoutLevel: FFAppState().workoutLevel,
-                                      days: FFAppState().days,
-                                      snacks: FFAppState().snacks,
-                                      goals: FFAppState().goals,
-                                      workouts: FFAppState().workouts,
-                                      age2: FFAppState().age2,
-                                      height: FFAppState().height,
-                                      weight: FFAppState().weight,
-                                      meals: FFAppState().meals,
-                                      workoutLenght: FFAppState().workoutLenght,
-                                      workoutPeriod: FFAppState().workoutPeriod,
-                                      photoUrl: FFAppState().profileImage,
-                                      gender2: FFAppState().gender2,
-                                    ),
-                                    ...mapToFirestore(
-                                      {
-                                        'following': FFAppState().emptyList,
-                                      },
-                                    ),
+                                  // Authenticated now — upload the profile
+                                  // photo held from the ProfilePicture step and
+                                  // persist the onboarding profile to Supabase.
+                                  String photoUrl = '';
+                                  if (FFAppState().signupProfileBytes != null &&
+                                      FFAppState()
+                                          .signupProfileBytes!
+                                          .isNotEmpty) {
+                                    final uploadRes = await showUploadProgress(
+                                      context,
+                                      imageBytes:
+                                          FFAppState().signupProfileBytes!,
+                                      imageFileName: 'profile.jpg',
+                                    );
+                                    photoUrl = uploadRes?.imageUrl ?? '';
+                                  }
+
+                                  await ProfileRepository().updatePublicProfile(
+                                    username: FFAppState().signupUsername,
+                                    displayName: FFAppState().signupName,
+                                    bio: FFAppState().bio,
+                                    photoUrl:
+                                        photoUrl.isNotEmpty ? photoUrl : null,
+                                  );
+                                  await ProfileRepository()
+                                      .updatePrivateProfile({
+                                    'email': FFAppState().signupEmail,
+                                    'workout_level': FFAppState().workoutLevel,
+                                    'days': FFAppState().days,
+                                    'snacks': FFAppState().snacks,
+                                    'goals': FFAppState().goals,
+                                    'workouts': FFAppState().workouts,
+                                    'workout_length':
+                                        FFAppState().workoutLenght,
+                                    'workout_period':
+                                        FFAppState().workoutPeriod,
+                                    'workout_where': FFAppState().workoutWhere,
+                                    'meals': FFAppState().meals,
+                                    'food_alergies': FFAppState().foodAlergies,
+                                    'height_cm': FFAppState().height,
+                                    'weight_kg': FFAppState().weight,
+                                    'gender2': FFAppState().gender2,
+                                    if (FFAppState().age2 != null)
+                                      'age2': dateTimeFormat(
+                                          'yyyy-MM-dd', FFAppState().age2!),
                                   });
 
-                                  await authManager.sendEmailVerification();
+                                  FFAppState().profileImage = photoUrl;
+                                  FFAppState().signupProfileBytes = null;
+
+                                  await _generateStarterPlan();
 
                                   context.pushNamedAuth(
                                       EmailVerificationWidget.routeName,
@@ -559,9 +603,11 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
                                   );
                                 }
                               },
-                              text: FFLocalizations.of(context).getText(
-                                'oulrg36u' /* Sign Up */,
-                              ),
+                              text: _buildingStarterPlan
+                                  ? 'Building your plans...'
+                                  : FFLocalizations.of(context).getText(
+                                      'oulrg36u' /* Sign Up */,
+                                    ),
                               options: FFButtonOptions(
                                 width: MediaQuery.sizeOf(context).width * 0.9,
                                 height: 52.0,

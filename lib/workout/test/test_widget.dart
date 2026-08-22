@@ -43,16 +43,8 @@ class _TestWidgetState extends State<TestWidget> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<WorkoutRecord>>(
-      stream: queryWorkoutRecord(
-        queryBuilder: (workoutRecord) => workoutRecord
-            .where(
-              'userWorkout',
-              isEqualTo: currentUserReference,
-            )
-            .where(
-              'date',
-              isEqualTo: _model.calendarSelectedDay?.start,
-            ),
+      stream: queryWorkoutsByDateStream(
+        _model.calendarSelectedDay?.start,
       ),
       builder: (context, snapshot) {
         // Customize what your widget looks like when it's loading.
@@ -293,17 +285,8 @@ class _TestWidgetState extends State<TestWidget> {
                               padding: EdgeInsetsDirectional.fromSTEB(
                                   0.0, 0.0, 0.0, 32.0),
                               child: StreamBuilder<List<WorkoutRecord>>(
-                                stream: queryWorkoutRecord(
-                                  queryBuilder: (workoutRecord) => workoutRecord
-                                      .where(
-                                        'userWorkout',
-                                        isEqualTo: currentUserReference,
-                                      )
-                                      .where(
-                                        'date',
-                                        isEqualTo:
-                                            _model.calendarSelectedDay?.start,
-                                      ),
+                                stream: queryWorkoutsByDateStream(
+                                  _model.calendarSelectedDay?.start,
                                 ),
                                 builder: (context, snapshot) {
                                   // Customize what your widget looks like when it's loading.

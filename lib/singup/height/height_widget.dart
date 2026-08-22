@@ -1,7 +1,6 @@
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/custom_functions.dart' as functions;
+import '/custom_code/widgets/signup_ui.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'height_model.dart';
@@ -42,6 +41,9 @@ class _HeightWidgetState extends State<HeightWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    final filled = _model.textController.text.trim().isNotEmpty;
+
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -49,325 +51,74 @@ class _HeightWidgetState extends State<HeightWidget> {
       },
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
+        backgroundColor: theme.secondary,
         body: SafeArea(
           top: true,
-          child: Align(
-            alignment: AlignmentDirectional(0.0, -1.0),
+          child: Padding(
+            padding:
+                const EdgeInsetsDirectional.fromSTEB(28.0, 24.0, 28.0, 28.0),
             child: Column(
-              mainAxisSize: MainAxisSize.max,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 30.0, 0.0, 0.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(10.0, 0.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            InkWell(
-                              splashColor: Colors.transparent,
-                              focusColor: Colors.transparent,
-                              hoverColor: Colors.transparent,
-                              highlightColor: Colors.transparent,
-                              onTap: () async {
-                                context.safePop();
-                              },
-                              child: Icon(
-                                Icons.arrow_back_ios_rounded,
-                                color: FlutterFlowTheme.of(context).tertiary,
-                                size: 20.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 50.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              FFLocalizations.of(context).getText(
-                                '6q588k9s' /* What is 
-Your Height ? */
-                                ,
-                              ),
-                              textAlign: TextAlign.center,
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    fontSize: functions
-                                        .resizeFontBasedOnScreenSize(
-                                            MediaQuery.sizeOf(context).width,
-                                            30)
-                                        .toDouble(),
-                                    letterSpacing: 0.0,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 10.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              FFLocalizations.of(context).getText(
-                                '59sibsxi' /* Complete your details to proce... */,
-                              ),
-                              textAlign: TextAlign.center,
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    color: FlutterFlowTheme.of(context).accent1,
-                                    fontSize: functions
-                                        .resizeFontBasedOnScreenSize(
-                                            MediaQuery.sizeOf(context).width,
-                                            15)
-                                        .toDouble(),
-                                    letterSpacing: 0.0,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(
-                            0.0, 80.0, 0.0, 80.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: MediaQuery.sizeOf(context).width * 0.9,
-                              height: 55.0,
-                              decoration: BoxDecoration(
-                                color: FlutterFlowTheme.of(context).tertiary,
-                                borderRadius: BorderRadius.circular(990.0),
-                                shape: BoxShape.rectangle,
-                              ),
-                              child: Stack(
-                                children: [
-                                  Form(
-                                    key: _model.formKey,
-                                    autovalidateMode: AutovalidateMode.disabled,
-                                    child: Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          20.0, 5.0, 8.0, 0.0),
-                                      child: TextFormField(
-                                        controller: _model.textController,
-                                        focusNode: _model.textFieldFocusNode,
-                                        autofocus: false,
-                                        obscureText: false,
-                                        decoration: InputDecoration(
-                                          hintText: FFLocalizations.of(context)
-                                              .getText(
-                                            'd8mrpzmx' /* Height (cm) */,
-                                          ),
-                                          hintStyle: FlutterFlowTheme.of(
-                                                  context)
-                                              .bodyMedium
-                                              .override(
-                                                fontFamily: 'Inter',
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .accent1,
-                                                fontSize: 15.0,
-                                                letterSpacing: 0.0,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                          enabledBorder: InputBorder.none,
-                                          focusedBorder: InputBorder.none,
-                                          errorBorder: InputBorder.none,
-                                          focusedErrorBorder: InputBorder.none,
-                                        ),
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              fontFamily: 'Inter',
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .accent1,
-                                              fontSize: 15.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                        textAlign: TextAlign.start,
-                                        maxLength: 3,
-                                        keyboardType: TextInputType.number,
-                                        cursorColor: Color(0x870A0A0A),
-                                        validator: _model
-                                            .textControllerValidator
-                                            .asValidator(context),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 40.0),
+                Text(
+                  'What is\nYour Height?',
+                  textAlign: TextAlign.center,
+                  style: theme.displaySmall.override(
+                    fontFamily: 'Poppins',
+                    color: theme.tertiary,
+                    fontSize: 30.0,
+                    letterSpacing: 0.0,
+                    fontWeight: FontWeight.w700,
+                    lineHeight: 1.15,
                   ),
                 ),
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 30.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.circle,
-                            color: FlutterFlowTheme.of(context).secondaryText,
-                            size: 10.0,
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: Color(0xA5FFFFFF),
-                              size: 10.0,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: FlutterFlowTheme.of(context).secondaryText,
-                              size: 10.0,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: FlutterFlowTheme.of(context).secondaryText,
-                              size: 10.0,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: FlutterFlowTheme.of(context).tertiary,
-                              size: 10.0,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: FlutterFlowTheme.of(context).secondaryText,
-                              size: 10.0,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Align(
-                              alignment: AlignmentDirectional(0.0, 0.0),
-                              child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 0.0, 0.0, 16.0),
-                                child: FFButtonWidget(
-                                  onPressed: () async {
-                                    if (_model.textController.text != '') {
-                                      FFAppState().height =
-                                          int.parse(_model.textController.text);
-                                      safeSetState(() {});
-
-                                      context.pushNamed(
-                                          WorkOutLevelWidget.routeName);
-                                    } else {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Select an option to move forward',
-                                            style: TextStyle(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondary,
-                                            ),
-                                          ),
-                                          duration:
-                                              Duration(milliseconds: 4000),
-                                          backgroundColor:
-                                              FlutterFlowTheme.of(context)
-                                                  .primary,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  text: FFLocalizations.of(context).getText(
-                                    'lhlbc3kb' /* Next */,
-                                  ),
-                                  options: FFButtonOptions(
-                                    width:
-                                        MediaQuery.sizeOf(context).width * 0.9,
-                                    height: 52.0,
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 0.0),
-                                    iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 0.0),
-                                    color: FlutterFlowTheme.of(context).accent3,
-                                    textStyle: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .override(
-                                          fontFamily: 'Poppins',
-                                          color: Color(0xFF0A0A0A),
-                                          fontSize: functions
-                                              .resizeFontBasedOnScreenSize(
-                                                  MediaQuery.sizeOf(context)
-                                                      .width,
-                                                  20)
-                                              .toDouble(),
-                                          letterSpacing: 0.0,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                    elevation: 3.0,
-                                    borderSide: BorderSide(
-                                      color: Colors.transparent,
-                                      width: 1.0,
-                                    ),
-                                    borderRadius: BorderRadius.circular(20.0),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 8.0),
+                Text(
+                  'Complete your details to proceed further',
+                  textAlign: TextAlign.center,
+                  style: theme.bodyMedium.override(
+                    fontFamily: 'Poppins',
+                    color: theme.secondaryText,
+                    fontSize: 16.0,
+                    letterSpacing: 0.0,
                   ),
+                ),
+                const SizedBox(height: 32.0),
+                signupTextField(
+                  context: context,
+                  controller: _model.textController!,
+                  focusNode: _model.textFieldFocusNode,
+                  hint: 'Height (cm)',
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => safeSetState(() {}),
+                ),
+                const Spacer(),
+                signupPageDots(context: context, active: 4),
+                const SizedBox(height: 24.0),
+                signupPrimaryButton(
+                  context: context,
+                  text: 'Next',
+                  enabled: filled,
+                  onPressed: () async {
+                    final value =
+                        int.tryParse(_model.textController.text.trim());
+                    if (value == null || value <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Please enter a valid height in cm.',
+                            style: TextStyle(color: theme.secondary),
+                          ),
+                          backgroundColor: theme.primary,
+                          duration: const Duration(milliseconds: 3000),
+                        ),
+                      );
+                      return;
+                    }
+                    FFAppState().height = value;
+                    FFAppState().update(() {});
+                    context.pushNamed(WorkOutLevelWidget.routeName);
+                  },
                 ),
               ],
             ),

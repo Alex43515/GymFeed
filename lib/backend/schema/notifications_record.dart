@@ -6,6 +6,7 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class NotificationsRecord extends FirestoreRecord {
   NotificationsRecord._(
@@ -59,10 +60,36 @@ class NotificationsRecord extends FirestoreRecord {
       parent.collection('notifications').doc(id);
 
   static Stream<NotificationsRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => NotificationsRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<NotificationsRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => NotificationsRecord.fromSnapshot(s));
+  static Future<NotificationsRecord> getDocumentOnce(
+      DocumentReference ref) async {
+    final row = await supaById('notifications', ref.id) ?? const {};
+    return NotificationsRecord.fromSupabase({...row, 'id': ref.id});
+  }
+
+  /// Build from a Supabase `notifications` row. Nested under the recipient
+  /// (`users/<recipientId>/notifications/<id>`) so `parentReference` resolves.
+  static NotificationsRecord fromSupabase(Map<String, dynamic> row) {
+    final id = (row['id'] ?? '').toString();
+    final recipientId = (row['recipient_id'] ?? '').toString();
+    final postId = (row['post_id'] ?? '').toString();
+    final commentId = (row['comment_id'] ?? '').toString();
+    final ref =
+        FirebaseFirestore.instance.doc('users/$recipientId/notifications/$id');
+    return NotificationsRecord.getDocumentFromData(
+        <String, dynamic>{
+          'notification_type': row['type'],
+          'userRef': supaUserRef(row['actor_id']),
+          'postRef': postId.isEmpty ? null : supaRef('posts', postId),
+          'commentRef': (postId.isEmpty || commentId.isEmpty)
+              ? null
+              : FirebaseFirestore.instance
+                  .doc('posts/$postId/comments/$commentId'),
+          'time_created': supaDate(row['created_at']),
+        }..removeWhere((_, v) => v == null),
+        ref);
+  }
 
   static NotificationsRecord fromSnapshot(DocumentSnapshot snapshot) =>
       NotificationsRecord._(

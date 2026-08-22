@@ -80,12 +80,17 @@ class _PrivacyPlocyWidgetState extends State<PrivacyPlocyWidget> {
                     padding:
                         EdgeInsetsDirectional.fromSTEB(10.0, 10.0, 10.0, 10.0),
                     child: Text(
-                      FFLocalizations.of(context).getText(
-                        'dev5w4fg' /* GymFeed Privacy Policy
+                      FFLocalizations.of(context)
+                          .getText(
+                            'dev5w4fg' /* GymFeed Privacy Policy
 
 Introd... */
-                        ,
-                      ),
+                            ,
+                          )
+                          .replaceAll(
+                            'aleksandar.zivkovc@gmail.com',
+                            'official@gymfeed.io',
+                          ),
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             fontFamily: 'Poppins',
                             fontSize: 15.0,

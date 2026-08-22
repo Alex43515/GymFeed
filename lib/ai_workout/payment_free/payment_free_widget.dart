@@ -6,6 +6,7 @@ import '/components/privacy_plocy/privacy_plocy_widget.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'payment_free_model.dart';
@@ -101,6 +102,12 @@ class _PaymentFreeWidgetState extends State<PaymentFreeWidget> {
                               hoverColor: Colors.transparent,
                               highlightColor: Colors.transparent,
                               onTap: () async {
+                                if (kIsWeb) {
+                                  await launchURL(
+                                    'https://play.google.com/store/apps/details?id=com.flutterflow.gymfeedofficial',
+                                  );
+                                  return;
+                                }
                                 await revenue_cat.restorePurchases();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(

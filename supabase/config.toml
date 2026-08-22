@@ -1,0 +1,26 @@
+project_id = "bzinwojowkxavfzilvat"
+
+[auth]
+site_url = "https://gymfeed.io"
+additional_redirect_urls = [
+  "https://gymfeed.io/**",
+  "https://www.gymfeed.io/**",
+  "com.flutterflow.gymfeedofficial://**",
+  "http://localhost:*/**",
+  "http://127.0.0.1:*/**",
+]
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[functions.share-post]
+verify_jwt = false
+
+[functions.push-worker]
+verify_jwt = false

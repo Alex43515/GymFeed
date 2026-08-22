@@ -1,0 +1,258 @@
+name: Validate GymFeed iOS and publish to TestFlight
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/deploy-ios-testflight.yml
+      - assets/**
+      - ios/**
+      - lib/**
+      - pubspec.lock
+      - pubspec.yaml
+  workflow_dispatch:
+    inputs:
+      publish_to_testflight:
+        description: Build a signed IPA and upload it to TestFlight
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gymfeed-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.27.4
+  IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
+  IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
+
+jobs:
+  validate-ios:
+    name: Test and build iOS Simulator app
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify current Xcode toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcode_major="$(xcodebuild -version | awk '/Xcode/{split($2, version, "."); print version[1]}')"
+          if [[ ! "$xcode_major" =~ ^[0-9]+$ ]] || (( xcode_major < 26 )); then
+            echo "::error::GymFeed App Store builds require Xcode 26 or newer"
+            exit 1
+          fi
+
+      - name: Install pinned Flutter SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone \
+            --branch "$FLUTTER_VERSION" \
+            --depth 1 \
+            https://github.com/flutter/flutter.git \
+            "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" config --no-analytics
+          "$RUNNER_TEMP/flutter/bin/flutter" precache --ios
+
+      - name: Install Flutter and CocoaPods dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          pod install --project-directory=ios --repo-update
+
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+
+      - name: Build unsigned Simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios \
+            --simulator \
+            --debug \
+            --no-pub
+          test -d build/ios/iphonesimulator/Runner.app
+
+      - name: Upload Simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: gymfeed-ios-simulator-${{ github.run_number }}
+          path: build/ios/iphonesimulator/Runner.app
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-testflight:
+    name: Build signed IPA and upload to TestFlight
+    needs: validate-ios
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to_testflight }}
+    runs-on: macos-26
+    environment: app-store-connect
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify current Xcode toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcode_major="$(xcodebuild -version | awk '/Xcode/{split($2, version, "."); print version[1]}')"
+          if [[ ! "$xcode_major" =~ ^[0-9]+$ ]] || (( xcode_major < 26 )); then
+            echo "::error::GymFeed App Store builds require Xcode 26 or newer"
+            exit 1
+          fi
+
+      - name: Install pinned Flutter SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone \
+            --branch "$FLUTTER_VERSION" \
+            --depth 1 \
+            https://github.com/flutter/flutter.git \
+            "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" config --no-analytics
+          "$RUNNER_TEMP/flutter/bin/flutter" precache --ios
+
+      - name: Install build and App Store dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          pod install --project-directory=ios --repo-update
+          python3 -m venv "$RUNNER_TEMP/codemagic-cli"
+          "$RUNNER_TEMP/codemagic-cli/bin/python" -m pip install \
+            --disable-pip-version-check \
+            codemagic-cli-tools
+          echo "$RUNNER_TEMP/codemagic-cli/bin" >> "$GITHUB_PATH"
+
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+
+      - name: Validate protected Apple credentials
+        shell: bash
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+          IOS_DISTRIBUTION_PRIVATE_KEY_BASE64: ${{ secrets.IOS_DISTRIBUTION_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          for value in \
+            APP_STORE_CONNECT_ISSUER_ID \
+            APP_STORE_CONNECT_KEY_ID \
+            APP_STORE_CONNECT_PRIVATE_KEY_BASE64 \
+            IOS_DISTRIBUTION_PRIVATE_KEY_BASE64; do
+            if [[ -z "${!value}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $value"
+              exit 1
+            fi
+          done
+
+          printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" \
+            | /usr/bin/base64 -D \
+            > "$RUNNER_TEMP/app-store-connect-key.p8"
+          printf '%s' "$IOS_DISTRIBUTION_PRIVATE_KEY_BASE64" \
+            | /usr/bin/base64 -D \
+            > "$RUNNER_TEMP/ios-distribution-private-key.pem"
+          chmod 600 \
+            "$RUNNER_TEMP/app-store-connect-key.p8" \
+            "$RUNNER_TEMP/ios-distribution-private-key.pem"
+
+          grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/app-store-connect-key.p8"
+          openssl pkey \
+            -in "$RUNNER_TEMP/ios-distribution-private-key.pem" \
+            -check \
+            -noout
+
+      - name: Configure App Store signing and build IPA
+        id: build-ipa
+        shell: bash
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          set -euo pipefail
+          export APP_STORE_CONNECT_PRIVATE_KEY
+          APP_STORE_CONNECT_PRIVATE_KEY="$(cat "$RUNNER_TEMP/app-store-connect-key.p8")"
+
+          keychain initialize
+          app-store-connect fetch-signing-files "$IOS_BUNDLE_ID" \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --certificate-key="@file:$RUNNER_TEMP/ios-distribution-private-key.pem" \
+            --create
+          app-store-connect fetch-signing-files "$IOS_EXTENSION_BUNDLE_ID" \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --certificate-key="@file:$RUNNER_TEMP/ios-distribution-private-key.pem" \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+          ios_build_number="$(date -u +'%Y%m%d%H%M')"
+          echo "IOS_BUILD_NUMBER=$ios_build_number" >> "$GITHUB_ENV"
+
+          flutter build ipa \
+            --release \
+            --no-pub \
+            --build-number "$ios_build_number" \
+            --export-options-plist="$HOME/export_options.plist"
+
+          ipa_path="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' -print -quit)"
+          if [[ -z "$ipa_path" || ! -s "$ipa_path" ]]; then
+            echo "::error::Flutter did not produce a release IPA"
+            exit 1
+          fi
+          echo "ipa_path=$ipa_path" >> "$GITHUB_OUTPUT"
+
+          archive_app="$(find build/ios/archive -path '*.xcarchive/Products/Applications/*.app' -print -quit)"
+          if [[ -z "$archive_app" ]]; then
+            echo "::error::Flutter did not produce a signed Xcode archive"
+            exit 1
+          fi
+          codesign --verify --deep --strict "$archive_app"
+
+      - name: Upload signed IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gymfeed-ios-${{ env.IOS_BUILD_NUMBER }}
+          path: ${{ steps.build-ipa.outputs.ipa_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish build to App Store Connect
+        shell: bash
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          IPA_PATH: ${{ steps.build-ipa.outputs.ipa_path }}
+        run: |
+          set -euo pipefail
+          export APP_STORE_CONNECT_PRIVATE_KEY
+          APP_STORE_CONNECT_PRIVATE_KEY="$(cat "$RUNNER_TEMP/app-store-connect-key.p8")"
+          app-store-connect publish --path "$IPA_PATH"
+
+      - name: Restore keychain and remove temporary credentials
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          keychain use-login || true
+          rm -f \
+            "$RUNNER_TEMP/app-store-connect-key.p8" \
+            "$RUNNER_TEMP/ios-distribution-private-key.pem"

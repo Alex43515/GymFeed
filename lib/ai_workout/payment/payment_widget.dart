@@ -1,19 +1,19 @@
-import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
 import '/components/eula/eula_widget.dart';
 import '/components/privacy_plocy/privacy_plocy_widget.dart';
 import '/custom_code/widgets/create_ui.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
-import '/index.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'payment_model.dart';
 export 'payment_model.dart';
 
 class PaymentWidget extends StatefulWidget {
-  const PaymentWidget({super.key});
+  const PaymentWidget({super.key, this.initialPremium = false});
+
+  final bool initialPremium;
 
   @override
   State<PaymentWidget> createState() => _PaymentWidgetState();
@@ -35,6 +35,13 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => PaymentModel());
+    _tab = widget.initialPremium ? 1 : 0;
+
+    if (revenue_cat.offerings == null) {
+      revenue_cat.loadOfferings().then((_) {
+        if (mounted) safeSetState(() {});
+      });
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
@@ -134,8 +141,8 @@ class _PaymentWidgetState extends State<PaymentWidget> {
           const TextSpan(text: 'By continuing you agree to our '),
           TextSpan(
             text: 'Terms of Use (EULA)',
-            style: TextStyle(
-                color: theme.tertiary, fontWeight: FontWeight.w600),
+            style:
+                TextStyle(color: theme.tertiary, fontWeight: FontWeight.w600),
             mouseCursor: SystemMouseCursors.click,
             recognizer: TapGestureRecognizer()
               ..onTap = () async => _sheet(EulaWidget()),
@@ -143,8 +150,8 @@ class _PaymentWidgetState extends State<PaymentWidget> {
           const TextSpan(text: ' and '),
           TextSpan(
             text: 'Privacy Policy',
-            style: TextStyle(
-                color: theme.tertiary, fontWeight: FontWeight.w600),
+            style:
+                TextStyle(color: theme.tertiary, fontWeight: FontWeight.w600),
             mouseCursor: SystemMouseCursors.click,
             recognizer: TapGestureRecognizer()
               ..onTap = () async => _sheet(PrivacyPlocyWidget()),
@@ -155,21 +162,38 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   }
 
   Future<void> _subscribe() async {
-    final purchased = await revenue_cat.purchasePackage(
-        revenue_cat.offerings!.current!.monthly!.identifier);
+    if (kIsWeb) {
+      await launchURL(
+        'https://play.google.com/store/apps/details?id=com.flutterflow.gymfeedofficial',
+      );
+      return;
+    }
+    var monthly = revenue_cat.offerings?.current?.monthly;
+    if (monthly == null) {
+      await revenue_cat.loadOfferings();
+      monthly = revenue_cat.offerings?.current?.monthly;
+    }
+    if (monthly == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The monthly plan is unavailable.')),
+      );
+      return;
+    }
+    final purchased = await revenue_cat.purchasePackage(monthly.identifier);
     if (purchased) {
-      await currentUserReference!.update(createUsersRecordData(
-        visionButton: 0,
-        gptButton: 0,
-      ));
-      context.goNamed(AssistantGPTProWidget.routeName);
+      await revenue_cat.loadCustomerInfo();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('GymFeed Pro is now active.')),
+      );
+      context.safePop();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Failed Purchase',
-            style:
-                TextStyle(color: FlutterFlowTheme.of(context).primaryText),
+            style: TextStyle(color: FlutterFlowTheme.of(context).primaryText),
           ),
           duration: const Duration(milliseconds: 4000),
           backgroundColor: FlutterFlowTheme.of(context).error,
@@ -210,17 +234,32 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                     splashColor: Colors.transparent,
                     highlightColor: Colors.transparent,
                     onTap: () async {
-                      await revenue_cat.restorePurchases();
+                      if (kIsWeb) {
+                        await launchURL(
+                          'https://play.google.com/store/apps/details?id=com.flutterflow.gymfeedofficial',
+                        );
+                        return;
+                      }
+                      final restored = await revenue_cat.restorePurchases();
+                      final premiumActive = revenue_cat.activeEntitlementIds
+                          .contains('premium_features');
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Purchase restored',
+                            premiumActive
+                                ? 'GymFeed Pro restored.'
+                                : restored
+                                    ? 'No active GymFeed Pro purchase was found.'
+                                    : 'Purchases could not be restored. Try again.',
                             style: TextStyle(color: theme.secondary),
                           ),
                           duration: const Duration(milliseconds: 4000),
-                          backgroundColor: theme.primary,
+                          backgroundColor:
+                              premiumActive ? theme.primary : theme.error,
                         ),
                       );
+                      safeSetState(() {});
                     },
                     child: Text(
                       'Restore',
@@ -269,7 +308,11 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                       // Price
                       Center(
                         child: Text(
-                          isFree ? '0€' : premiumPrice,
+                          isFree
+                              ? '0€'
+                              : premiumPrice.isEmpty
+                                  ? 'Monthly'
+                                  : premiumPrice,
                           style: theme.headlineMedium.override(
                             fontFamily: 'Poppins',
                             color: theme.tertiary,
@@ -324,12 +367,14 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                         _feature('Customer Support'),
                         _feature('Unlimited numbers of creations'),
                         _feature(
-                            'Up to 10 interactions with AI trainer or Machine Scanner uploads combined'),
+                            '3 shared uses of Scan food, Scan equipment, and AI Trainer'),
                       ] else ...[
                         _feature('Customer Support'),
                         _feature('Unlimited numbers of creations'),
-                        _feature('Up to 500 conversations with the AI trainer'),
-                        _feature('Up to 50 Machine Scanner uploads'),
+                        _feature('Unlimited food and equipment scans'),
+                        _feature('Unlimited AI Trainer conversations'),
+                        _feature('Detailed body composition reports'),
+                        _feature('One month of GymFeed Pro access'),
                       ],
                       const SizedBox(height: 8.0),
                     ],

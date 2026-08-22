@@ -154,19 +154,9 @@ perman... */
                         children: [
                           FFButtonWidget(
                             onPressed: () async {
-                              await columnAdministrativeRecord!.reference
-                                  .update({
-                                ...mapToFirestore(
-                                  {
-                                    'usernames': FieldValue.arrayRemove([
-                                      valueOrDefault(
-                                          currentUserDocument?.username, '')
-                                    ]),
-                                  },
-                                ),
-                              });
+                              // Account + all data are removed server-side by
+                              // the delete-account Edge Function.
                               await authManager.deleteUser(context);
-                              await currentUserReference!.delete();
                               GoRouter.of(context).prepareAuthEvent();
                               await authManager.signOut();
                               GoRouter.of(context).clearRedirectLocation();

@@ -1,10 +1,13 @@
-import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/custom_functions.dart' as functions;
+import '/auth/firebase_auth/auth_util.dart';
+import '/auth/supabase_auth/email_verification_service.dart';
+import '/auth/supabase_auth/social_auth_service.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'sign_up_password_model.dart';
 export 'sign_up_password_model.dart';
 
@@ -20,6 +23,8 @@ class SignUpPasswordWidget extends StatefulWidget {
 
 class _SignUpPasswordWidgetState extends State<SignUpPasswordWidget> {
   late SignUpPasswordModel _model;
+  bool _creatingAccount = false;
+  String? _signupError;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -31,6 +36,9 @@ class _SignUpPasswordWidgetState extends State<SignUpPasswordWidget> {
     _model.passwordTextController ??= TextEditingController();
     _model.passwordFocusNode ??= FocusNode();
 
+    _model.confirmPasswordTextController ??= TextEditingController();
+    _model.confirmPasswordFocusNode ??= FocusNode();
+
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
 
@@ -41,8 +49,66 @@ class _SignUpPasswordWidgetState extends State<SignUpPasswordWidget> {
     super.dispose();
   }
 
+  void _clearError() {
+    if (_model.passwordError || _signupError != null) {
+      safeSetState(() {
+        _model.passwordError = false;
+        _signupError = null;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    final bool hasError = _model.passwordError || _signupError != null;
+
+    InputDecoration fieldDecoration(String hint, {required Widget suffixIcon}) {
+      final normal = OutlineInputBorder(
+        borderSide: BorderSide(color: theme.secondary, width: 1.0),
+        borderRadius: BorderRadius.circular(16.0),
+      );
+      final errored = OutlineInputBorder(
+        borderSide: BorderSide(color: theme.error, width: 1.0),
+        borderRadius: BorderRadius.circular(16.0),
+      );
+      return InputDecoration(
+        hintText: hint,
+        hintStyle: theme.bodyMedium.override(
+          fontFamily: 'Poppins',
+          color: theme.secondaryText,
+          fontSize: 15.0,
+          letterSpacing: 0.0,
+        ),
+        enabledBorder: hasError ? errored : normal,
+        focusedBorder: hasError ? errored : normal,
+        errorBorder: errored,
+        focusedErrorBorder: errored,
+        filled: true,
+        fillColor: theme.secondary,
+        contentPadding:
+            const EdgeInsetsDirectional.fromSTEB(22.0, 20.0, 16.0, 20.0),
+        suffixIcon: suffixIcon,
+      );
+    }
+
+    final fieldTextStyle = theme.bodyMedium.override(
+      fontFamily: 'Poppins',
+      color: hasError ? theme.error : theme.tertiary,
+      fontSize: 15.0,
+      letterSpacing: 0.0,
+    );
+
+    Widget eye(bool visible, VoidCallback onTap) => InkWell(
+          onTap: onTap,
+          focusNode: FocusNode(skipTraversal: true),
+          child: Icon(
+            visible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+            color: hasError ? theme.error : theme.secondaryText,
+            size: 20.0,
+          ),
+        );
+
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -50,333 +116,329 @@ class _SignUpPasswordWidgetState extends State<SignUpPasswordWidget> {
       },
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).tertiary,
+        backgroundColor: theme.tertiary,
         body: SafeArea(
           top: true,
-          child: Align(
-            alignment: AlignmentDirectional(0.0, 0.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 0.0),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.max,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(30.0, 0.0, 0.0, 0.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            FlutterFlowIconButton(
-                              borderColor:
-                                  FlutterFlowTheme.of(context).secondary,
-                              borderRadius: 10.0,
-                              borderWidth: 1.0,
-                              buttonSize: 30.0,
-                              fillColor: FlutterFlowTheme.of(context).secondary,
-                              icon: Icon(
-                                Icons.arrow_back_ios_rounded,
-                                color: FlutterFlowTheme.of(context).tertiary,
-                                size: 15.0,
-                              ),
-                              onPressed: () async {
-                                context.safePop();
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [],
-                      ),
-                    ],
-                  ),
+          child: Column(
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(24.0, 12.0, 24.0, 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _circleIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      onTap: () => context.safePop(),
+                    ),
+                    _circleIconButton(
+                      icon: Icons.close_rounded,
+                      onTap: () => context.safePop(),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 58.0, 0.0, 0.0),
-                        child: Text(
-                          FFLocalizations.of(context).getText(
-                            'akcdmbl2' /* Create a Password */,
-                          ),
-                          textAlign: TextAlign.center,
-                          style: FlutterFlowTheme.of(context)
-                              .displaySmall
-                              .override(
-                                fontFamily: 'Poppins',
-                                color: FlutterFlowTheme.of(context).secondary,
-                                fontSize: functions
-                                    .resizeFontBasedOnScreenSize(
-                                        MediaQuery.sizeOf(context).width, 24)
-                                    .toDouble(),
-                                letterSpacing: 0.0,
-                                lineHeight: 1.5,
-                              ),
-                        ),
-                      ),
-                      Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(
-                            40.0, 18.0, 40.0, 0.0),
-                        child: Text(
-                          FFLocalizations.of(context).getText(
-                            'sd0k5jap' /* Create a password that is secu... */,
-                          ),
-                          textAlign: TextAlign.center,
-                          style: FlutterFlowTheme.of(context)
-                              .bodySmall
-                              .override(
-                                fontFamily: 'Poppins',
-                                color: FlutterFlowTheme.of(context).secondary,
-                                fontSize: functions
-                                    .resizeFontBasedOnScreenSize(
-                                        MediaQuery.sizeOf(context).width, 13)
-                                    .toDouble(),
-                                letterSpacing: 0.0,
-                                fontWeight: FontWeight.normal,
-                                lineHeight: 1.5,
-                              ),
-                        ),
-                      ),
-                      Form(
-                        key: _model.formKey,
-                        autovalidateMode: AutovalidateMode.disabled,
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              40.0, 24.0, 40.0, 12.0),
-                          child: TextFormField(
-                            controller: _model.passwordTextController,
-                            focusNode: _model.passwordFocusNode,
-                            autofocus: false,
-                            autofillHints: [AutofillHints.newPassword],
-                            textInputAction: TextInputAction.done,
-                            obscureText: !_model.passwordVisibility,
-                            decoration: InputDecoration(
-                              hintText: FFLocalizations.of(context).getText(
-                                's79x8n26' /* Password */,
-                              ),
-                              hintStyle: FlutterFlowTheme.of(context)
-                                  .bodySmall
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    color:
-                                        FlutterFlowTheme.of(context).tertiary,
-                                    fontSize: 14.0,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0xFFDADADA),
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(20.0),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0xFFDADADA),
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(20.0),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0xFFDADADA),
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(20.0),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0xFFDADADA),
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(20.0),
-                              ),
-                              filled: true,
-                              fillColor: FlutterFlowTheme.of(context).secondary,
-                              suffixIcon: InkWell(
-                                onTap: () => safeSetState(
-                                  () => _model.passwordVisibility =
-                                      !_model.passwordVisibility,
-                                ),
-                                focusNode: FocusNode(skipTraversal: true),
-                                child: Icon(
-                                  _model.passwordVisibility
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryText,
-                                  size: 18.0,
-                                ),
-                              ),
-                            ),
-                            style: FlutterFlowTheme.of(context)
-                                .bodyMedium
-                                .override(
-                                  fontFamily: 'Poppins',
-                                  color: FlutterFlowTheme.of(context).tertiary,
-                                  fontSize: 14.0,
-                                  letterSpacing: 0.0,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                            keyboardType: TextInputType.name,
-                            cursorColor:
-                                FlutterFlowTheme.of(context).primaryText,
-                            validator: _model.passwordTextControllerValidator
-                                .asValidator(context),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                  child: Form(
+                    key: _model.formKey,
+                    autovalidateMode: AutovalidateMode.disabled,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8.0),
+                        Text(
+                          'Register Account',
+                          style: theme.displaySmall.override(
+                            fontFamily: 'Poppins',
+                            color: theme.secondary,
+                            fontSize: 34.0,
+                            letterSpacing: 0.0,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(
-                            40.0, 100.0, 40.0, 0.0),
-                        child: FFButtonWidget(
-                          onPressed: () async {
-                            if (_model.formKey.currentState == null ||
-                                !_model.formKey.currentState!.validate()) {
-                              return;
-                            }
-                            FFAppState().signupPassword =
-                                _model.passwordTextController.text;
-                            FFAppState().update(() {});
-
-                            context.goNamed(SignUpUsernameWidget.routeName);
-                          },
-                          text: FFLocalizations.of(context).getText(
-                            'd43ulysq' /* Next */,
-                          ),
-                          options: FFButtonOptions(
-                            width: MediaQuery.sizeOf(context).width * 0.9,
-                            height: 55.0,
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                0.0, 0.0, 0.0, 0.0),
-                            iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                0.0, 0.0, 0.0, 0.0),
-                            color: FlutterFlowTheme.of(context).primary,
-                            textStyle: FlutterFlowTheme.of(context)
-                                .titleSmall
-                                .override(
-                                  fontFamily: 'Poppins',
-                                  color: FlutterFlowTheme.of(context).secondary,
-                                  fontSize: functions
-                                      .resizeFontBasedOnScreenSize(
-                                          MediaQuery.sizeOf(context).width, 14)
-                                      .toDouble(),
-                                  letterSpacing: 0.0,
-                                ),
-                            elevation: 0.0,
-                            borderSide: BorderSide(
-                              color: FlutterFlowTheme.of(context).tertiary,
-                              width: 1.0,
-                            ),
-                            borderRadius: BorderRadius.circular(20.0),
+                        const SizedBox(height: 6.0),
+                        Text(
+                          'Complete your details to continue',
+                          style: theme.bodyMedium.override(
+                            fontFamily: 'Poppins',
+                            color: theme.secondaryText,
+                            fontSize: 15.0,
+                            letterSpacing: 0.0,
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 50.0, 0.0, 0.0),
-                        child: Container(
-                          width: double.infinity,
-                          height: 0.5,
-                          decoration: BoxDecoration(
-                            color: Color(0xFFDADADA),
-                          ),
-                        ),
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
+                        if (hasError)
                           Padding(
-                            padding: EdgeInsets.all(24.0),
+                            padding: const EdgeInsetsDirectional.fromSTEB(
+                                0.0, 10.0, 0.0, 0.0),
                             child: Row(
-                              mainAxisSize: MainAxisSize.max,
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  FFLocalizations.of(context).getText(
-                                    'qv5e35xi' /* Already have an account? */,
-                                  ),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        fontFamily: 'Poppins',
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryText,
-                                        fontSize: functions
-                                            .resizeFontBasedOnScreenSize(
-                                                MediaQuery.sizeOf(context)
-                                                    .width,
-                                                13)
-                                            .toDouble(),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.normal,
-                                      ),
-                                ),
-                                Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(
-                                      3.0, 0.0, 0.0, 0.0),
-                                  child: InkWell(
-                                    splashColor: Colors.transparent,
-                                    focusColor: Colors.transparent,
-                                    hoverColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    onTap: () async {
-                                      context.goNamed(
-                                        SignInWidget.routeName,
-                                        extra: <String, dynamic>{
-                                          kTransitionInfoKey: TransitionInfo(
-                                            hasTransition: true,
-                                            transitionType:
-                                                PageTransitionType.leftToRight,
-                                          ),
-                                        },
-                                      );
-                                    },
-                                    child: Text(
-                                      FFLocalizations.of(context).getText(
-                                        '3r27m7tr' /* Sign In. */,
-                                      ),
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            fontFamily: 'Poppins',
-                                            color: FlutterFlowTheme.of(context)
-                                                .secondary,
-                                            fontSize: functions
-                                                .resizeFontBasedOnScreenSize(
-                                                    MediaQuery.sizeOf(context)
-                                                        .width,
-                                                    13)
-                                                .toDouble(),
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                Icon(Icons.error_outline_rounded,
+                                    color: theme.error, size: 18.0),
+                                const SizedBox(width: 6.0),
+                                Flexible(
+                                  child: Text(
+                                    _signupError ??
+                                        'Passwords do not match. Please try again.',
+                                    style: theme.bodyMedium.override(
+                                      fontFamily: 'Poppins',
+                                      color: theme.error,
+                                      fontSize: 14.0,
+                                      letterSpacing: 0.0,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(height: 26.0),
+                        TextFormField(
+                          controller: _model.passwordTextController,
+                          focusNode: _model.passwordFocusNode,
+                          onChanged: (_) => _clearError(),
+                          obscureText: !_model.passwordVisibility,
+                          textInputAction: TextInputAction.next,
+                          decoration: fieldDecoration(
+                            'Password',
+                            suffixIcon: eye(
+                              _model.passwordVisibility,
+                              () => safeSetState(() =>
+                                  _model.passwordVisibility =
+                                      !_model.passwordVisibility),
+                            ),
+                          ),
+                          style: fieldTextStyle,
+                          cursorColor: theme.primary,
+                          validator: _model.passwordTextControllerValidator
+                              .asValidator(context),
+                        ),
+                        const SizedBox(height: 14.0),
+                        TextFormField(
+                          controller: _model.confirmPasswordTextController,
+                          focusNode: _model.confirmPasswordFocusNode,
+                          onChanged: (_) => _clearError(),
+                          obscureText: !_model.confirmPasswordVisibility,
+                          textInputAction: TextInputAction.done,
+                          decoration: fieldDecoration(
+                            'Confirm password',
+                            suffixIcon: eye(
+                              _model.confirmPasswordVisibility,
+                              () => safeSetState(() =>
+                                  _model.confirmPasswordVisibility =
+                                      !_model.confirmPasswordVisibility),
+                            ),
+                          ),
+                          style: fieldTextStyle,
+                          cursorColor: theme.primary,
+                          validator: _model
+                              .confirmPasswordTextControllerValidator
+                              .asValidator(context),
+                        ),
+                        const SizedBox(height: 40.0),
+                        FFButtonWidget(
+                          onPressed: _creatingAccount
+                              ? null
+                              : () async {
+                                  _clearError();
+                                  if (_model.formKey.currentState == null ||
+                                      !_model.formKey.currentState!
+                                          .validate()) {
+                                    return;
+                                  }
+                                  if (_model.passwordTextController.text !=
+                                      _model
+                                          .confirmPasswordTextController.text) {
+                                    safeSetState(
+                                        () => _model.passwordError = true);
+                                    return;
+                                  }
+
+                                  safeSetState(() => _creatingAccount = true);
+                                  try {
+                                    final username =
+                                        FFAppState().signupUsername;
+                                    final available = await ProfileRepository()
+                                        .isUsernameAvailable(username);
+                                    if (!available) {
+                                      if (!mounted) return;
+                                      safeSetState(() {
+                                        _signupError =
+                                            'That username was just taken. Go back and choose another one.';
+                                      });
+                                      return;
+                                    }
+
+                                    GoRouter.of(context).prepareAuthEvent();
+                                    final user = await authManager
+                                        .createAccountWithEmail(
+                                      context,
+                                      FFAppState().signupEmail,
+                                      _model.passwordTextController.text,
+                                      data: signupIdentityMetadata(),
+                                    );
+                                    if (!mounted) return;
+                                    if (user == null) {
+                                      safeSetState(() {
+                                        _signupError =
+                                            'We could not create the pending account. Check the email and username, then try again.';
+                                      });
+                                      return;
+                                    }
+
+                                    // Supabase must keep a pending auth identity so it
+                                    // can deliver the confirmation email. The database
+                                    // does not expose a GymFeed profile until that
+                                    // email is verified.
+                                    FFAppState().signupPassword = '';
+                                    context.goNamed(
+                                        EmailVerificationWidget.routeName);
+                                  } catch (_) {
+                                    if (!mounted) return;
+                                    safeSetState(() {
+                                      _signupError =
+                                          'Signup could not be started. Check your connection and try again.';
+                                    });
+                                  } finally {
+                                    if (mounted) {
+                                      safeSetState(
+                                          () => _creatingAccount = false);
+                                    }
+                                  }
+                                },
+                          text: _creatingAccount
+                              ? 'Creating account…'
+                              : 'Sign up',
+                          options: FFButtonOptions(
+                            width: double.infinity,
+                            height: 56.0,
+                            padding: EdgeInsets.zero,
+                            iconPadding: EdgeInsets.zero,
+                            color: hasError ? theme.accent3 : theme.primary,
+                            textStyle: theme.titleSmall.override(
+                              fontFamily: 'Poppins',
+                              color: theme.secondary,
+                              fontSize: 17.0,
+                              letterSpacing: 0.0,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            elevation: 0.0,
+                            borderSide: const BorderSide(
+                                color: Colors.transparent, width: 1.0),
+                            borderRadius: BorderRadius.circular(28.0),
+                          ),
+                        ),
+                        const SizedBox(height: 22.0),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: Container(
+                                    height: 1.0, color: theme.accent4)),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                'Or sign up with',
+                                style: theme.bodySmall.override(
+                                  fontFamily: 'Poppins',
+                                  color: theme.secondaryText,
+                                  fontSize: 13.0,
+                                  letterSpacing: 0.0,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                                child: Container(
+                                    height: 1.0, color: theme.accent4)),
+                          ],
+                        ),
+                        const SizedBox(height: 22.0),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _socialButton(
+                                icon: FontAwesomeIcons.google,
+                                onTap: () => authManager.signInWithGoogle(
+                                      context,
+                                      nextPath: socialAuthSignupDestination,
+                                    )),
+                          ],
+                        ),
+                        const SizedBox(height: 24.0),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(24.0, 8.0, 24.0, 12.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Already have an account? ',
+                      style: theme.bodyMedium.override(
+                        fontFamily: 'Poppins',
+                        color: theme.secondaryText,
+                        fontSize: 14.0,
+                        letterSpacing: 0.0,
+                      ),
+                    ),
+                    InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      onTap: () => context.pushNamed(SignInWidget.routeName),
+                      child: Text(
+                        'Sign in',
+                        style: theme.bodyMedium.override(
+                          fontFamily: 'Poppins',
+                          color: theme.secondary,
+                          fontSize: 14.0,
+                          letterSpacing: 0.0,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _circleIconButton(
+      {required IconData icon, required VoidCallback onTap}) {
+    final theme = FlutterFlowTheme.of(context);
+    return InkWell(
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      onTap: onTap,
+      child: Container(
+        width: 40.0,
+        height: 40.0,
+        decoration:
+            BoxDecoration(color: theme.secondary, shape: BoxShape.circle),
+        child: Icon(icon, color: theme.tertiary, size: 18.0),
+      ),
+    );
+  }
+
+  Widget _socialButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    double size = 24.0,
+  }) {
+    final theme = FlutterFlowTheme.of(context);
+    return InkWell(
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      onTap: onTap,
+      child: FaIcon(icon, color: theme.secondary, size: size),
     );
   }
 }

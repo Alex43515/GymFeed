@@ -94,15 +94,6 @@ class _CreateExerciseWidgetState extends State<CreateExerciseWidget> {
                 ),
               );
             }
-            List<WorkoutRecord> columnWorkoutRecordList = snapshot.data!;
-            // Return an empty Container when the item does not exist.
-            if (snapshot.data!.isEmpty) {
-              return Container();
-            }
-            final columnWorkoutRecord = columnWorkoutRecordList.isNotEmpty
-                ? columnWorkoutRecordList.first
-                : null;
-
             return SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.max,
@@ -709,25 +700,21 @@ class _CreateExerciseWidgetState extends State<CreateExerciseWidget> {
                               5.0, 0.0, 0.0, 0.0),
                           child: FFButtonWidget(
                             onPressed: () async {
-                              await ExerciseRecord.collection
-                                  .doc()
-                                  .set(createExerciseRecordData(
-                                    sets: int.tryParse(
-                                        _model.setsTextController.text),
-                                    reps: int.tryParse(
-                                        _model.repsTextController.text),
-                                    userExercise: widget.woktoutRef?.reference,
-                                    kg: int.tryParse(
-                                        _model.kgTextController.text),
-                                    exerciseSessionName: _model
-                                        .exerciseNameSecondTextController.text,
-                                    exerciseSessionDescription: _model
-                                        .exerciseDescriptionSecondTextController
-                                        .text,
-                                    intensity: _model.dropDownValue,
-                                    eestTime: int.tryParse(
-                                        _model.restTextController.text),
-                                  ));
+                              await createExerciseSupabase(
+                                sets: int.tryParse(
+                                    _model.setsTextController.text),
+                                reps: int.tryParse(
+                                    _model.repsTextController.text),
+                                kg: int.tryParse(_model.kgTextController.text),
+                                name: _model
+                                    .exerciseNameSecondTextController.text,
+                                description: _model
+                                    .exerciseDescriptionSecondTextController
+                                    .text,
+                                intensity: _model.dropDownValue,
+                                restTime: int.tryParse(
+                                    _model.restTextController.text),
+                              );
                               safeSetState(() {
                                 _model.exerciseNameSecondTextController
                                     ?.clear();

@@ -1,12 +1,13 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_video_player.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -436,8 +437,7 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(
                                                       5.0, 0.0, 5.0, 85.0),
-                                              child: PagedGridView<
-                                                  DocumentSnapshot<Object?>?,
+                                              child: PagedGridView<DateTime?,
                                                   PostsRecord>(
                                                 pagingController: _model
                                                     .setGridViewController1(
@@ -543,70 +543,95 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                                           highlightColor: Colors
                                                               .transparent,
                                                           onTap: () async {
-                                                            if (containerUsersRecord
-                                                                .userBlocked
-                                                                .contains(
-                                                                    currentUserReference)) {
-                                                              context.pushNamed(
-                                                                  BlockedPageWidget
-                                                                      .routeName);
-                                                            } else {
-                                                              context.pushNamed(
-                                                                PostDetailsWidget
-                                                                    .routeName,
-                                                                queryParameters:
-                                                                    {
-                                                                  'post':
-                                                                      serializeParam(
-                                                                    gridViewPostsRecord
-                                                                        .reference,
-                                                                    ParamType
-                                                                        .DocumentReference,
-                                                                  ),
-                                                                }.withoutNulls,
-                                                              );
-                                                            }
+                                                            context.pushNamed(
+                                                              PostDetailsWidget
+                                                                  .routeName,
+                                                              queryParameters: {
+                                                                'post':
+                                                                    serializeParam(
+                                                                  gridViewPostsRecord
+                                                                      .reference,
+                                                                  ParamType
+                                                                      .DocumentReference,
+                                                                ),
+                                                              }.withoutNulls,
+                                                            );
                                                           },
                                                           child: Container(
                                                             width: 100.0,
                                                             height: 100.0,
+                                                            clipBehavior:
+                                                                Clip.antiAlias,
                                                             decoration:
                                                                 BoxDecoration(
                                                               color: Color(
                                                                   0xFF222222),
-                                                              image:
-                                                                  DecorationImage(
-                                                                fit: BoxFit
-                                                                    .contain,
-                                                                image: Image
-                                                                    .network(
-                                                                  functions.bunnyCDNImagePath(
-                                                                      gridViewPostsRecord
-                                                                          .postPhoto),
-                                                                ).image,
-                                                              ),
                                                               borderRadius:
                                                                   BorderRadius
                                                                       .circular(
                                                                           10.0),
                                                             ),
-                                                            child:
-                                                                FlutterFlowVideoPlayer(
-                                                              path: gridViewPostsRecord
-                                                                  .videoPreview,
-                                                              videoType:
-                                                                  VideoType
-                                                                      .network,
-                                                              width: 100.0,
-                                                              height: 100.0,
-                                                              autoPlay: true,
-                                                              looping: true,
-                                                              showControls:
-                                                                  false,
-                                                              allowFullScreen:
-                                                                  false,
-                                                              allowPlaybackSpeedMenu:
-                                                                  false,
+                                                            child: Stack(
+                                                              fit: StackFit
+                                                                  .expand,
+                                                              children: [
+                                                                CachedNetworkImage(
+                                                                  imageUrl:
+                                                                      functions
+                                                                          .bunnyCDNImagePath(
+                                                                    gridViewPostsRecord
+                                                                            .postVideo
+                                                                            .isNotEmpty
+                                                                        ? (gridViewPostsRecord.videoThumbnail.isNotEmpty
+                                                                            ? gridViewPostsRecord
+                                                                                .videoThumbnail
+                                                                            : gridViewPostsRecord
+                                                                                .postPhoto)
+                                                                        : gridViewPostsRecord
+                                                                            .postPhoto,
+                                                                  ),
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  placeholder: (_,
+                                                                          __) =>
+                                                                      Container(
+                                                                          color:
+                                                                              Color(0xFF222222)),
+                                                                  errorWidget: (_,
+                                                                          __,
+                                                                          ___) =>
+                                                                      Container(
+                                                                          color:
+                                                                              Color(0xFF222222)),
+                                                                ),
+                                                                if (gridViewPostsRecord
+                                                                    .postVideo
+                                                                    .isNotEmpty)
+                                                                  Align(
+                                                                    alignment:
+                                                                        AlignmentDirectional(
+                                                                            0.9,
+                                                                            -0.9),
+                                                                    child:
+                                                                        Padding(
+                                                                      padding: const EdgeInsetsDirectional
+                                                                          .fromSTEB(
+                                                                          0.0,
+                                                                          6.0,
+                                                                          6.0,
+                                                                          0.0),
+                                                                      child:
+                                                                          Icon(
+                                                                        Icons
+                                                                            .play_circle_fill_rounded,
+                                                                        color: Colors
+                                                                            .white,
+                                                                        size:
+                                                                            20.0,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                              ],
                                                             ),
                                                           ),
                                                         );
@@ -689,79 +714,92 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                                                 Colors
                                                                     .transparent,
                                                             onTap: () async {
-                                                              if (containerUsersRecord
-                                                                  .userBlocked
-                                                                  .contains(
-                                                                      currentUserReference)) {
-                                                                context.pushNamed(
-                                                                    BlockedPageWidget
-                                                                        .routeName);
-                                                              } else {
-                                                                context
-                                                                    .pushNamed(
-                                                                  PostDetailsWidget
-                                                                      .routeName,
-                                                                  queryParameters:
-                                                                      {
-                                                                    'post':
-                                                                        serializeParam(
-                                                                      localresultItem
-                                                                          .reference,
-                                                                      ParamType
-                                                                          .DocumentReference,
-                                                                    ),
-                                                                  }.withoutNulls,
-                                                                );
-                                                              }
+                                                              context.pushNamed(
+                                                                PostDetailsWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'post':
+                                                                      serializeParam(
+                                                                    localresultItem
+                                                                        .reference,
+                                                                    ParamType
+                                                                        .DocumentReference,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                              );
                                                             },
                                                             child: Container(
                                                               width: 100.0,
                                                               height: 100.0,
+                                                              clipBehavior: Clip
+                                                                  .antiAlias,
                                                               decoration:
                                                                   BoxDecoration(
                                                                 color: Color(
                                                                     0xFF222222),
-                                                                image:
-                                                                    DecorationImage(
-                                                                  fit: BoxFit
-                                                                      .contain,
-                                                                  image: Image
-                                                                      .network(
-                                                                    functions.bunnyCDNImagePath(
-                                                                        localresultItem
-                                                                            .postPhoto),
-                                                                  ).image,
-                                                                ),
                                                                 borderRadius:
                                                                     BorderRadius
                                                                         .circular(
                                                                             10.0),
                                                               ),
-                                                              child: Visibility(
-                                                                visible: localresultItem
-                                                                            .postVideo !=
-                                                                        '',
-                                                                child:
-                                                                    FlutterFlowVideoPlayer(
-                                                                  path: functions
-                                                                      .bunnyCDNVideoPath(
-                                                                          localresultItem
-                                                                              .postVideo),
-                                                                  videoType:
-                                                                      VideoType
-                                                                          .network,
-                                                                  width: 100.0,
-                                                                  height: 100.0,
-                                                                  autoPlay:
-                                                                      false,
-                                                                  looping: true,
-                                                                  showControls:
-                                                                      false,
-                                                                  allowFullScreen:
-                                                                      false,
-                                                                  allowPlaybackSpeedMenu:
-                                                                      false,
-                                                                ),
+                                                              child: Stack(
+                                                                fit: StackFit
+                                                                    .expand,
+                                                                children: [
+                                                                  CachedNetworkImage(
+                                                                    imageUrl: functions.bunnyCDNImagePath(localresultItem
+                                                                            .postVideo
+                                                                            .isNotEmpty
+                                                                        ? (localresultItem.videoThumbnail.isNotEmpty
+                                                                            ? localresultItem
+                                                                                .videoThumbnail
+                                                                            : localresultItem
+                                                                                .postPhoto)
+                                                                        : localresultItem
+                                                                            .postPhoto),
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    placeholder: (_,
+                                                                            __) =>
+                                                                        Container(
+                                                                            color:
+                                                                                Color(0xFF222222)),
+                                                                    errorWidget: (_,
+                                                                            __,
+                                                                            ___) =>
+                                                                        Container(
+                                                                            color:
+                                                                                Color(0xFF222222)),
+                                                                  ),
+                                                                  if (localresultItem
+                                                                      .postVideo
+                                                                      .isNotEmpty)
+                                                                    Align(
+                                                                      alignment:
+                                                                          AlignmentDirectional(
+                                                                              0.9,
+                                                                              -0.9),
+                                                                      child:
+                                                                          Padding(
+                                                                        padding: const EdgeInsetsDirectional
+                                                                            .fromSTEB(
+                                                                            0.0,
+                                                                            6.0,
+                                                                            6.0,
+                                                                            0.0),
+                                                                        child:
+                                                                            Icon(
+                                                                          Icons
+                                                                              .play_circle_fill_rounded,
+                                                                          color:
+                                                                              Colors.white,
+                                                                          size:
+                                                                              20.0,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                ],
                                                               ),
                                                             ),
                                                           );
@@ -1043,8 +1081,7 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(
                                                       5.0, 0.0, 5.0, 100.0),
-                                              child: PagedGridView<
-                                                  DocumentSnapshot<Object?>?,
+                                              child: PagedGridView<DateTime?,
                                                   PostsRecord>(
                                                 pagingController: _model
                                                     .setGridViewController3(
@@ -1150,77 +1187,95 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                                           highlightColor: Colors
                                                               .transparent,
                                                           onTap: () async {
-                                                            if (containerUsersRecord
-                                                                .userBlocked
-                                                                .contains(
-                                                                    currentUserReference)) {
-                                                              context.pushNamed(
-                                                                  BlockedPageWidget
-                                                                      .routeName);
-                                                            } else {
-                                                              context.pushNamed(
-                                                                PostDetailsWidget
-                                                                    .routeName,
-                                                                queryParameters:
-                                                                    {
-                                                                  'post':
-                                                                      serializeParam(
-                                                                    gridViewPostsRecord
-                                                                        .reference,
-                                                                    ParamType
-                                                                        .DocumentReference,
-                                                                  ),
-                                                                }.withoutNulls,
-                                                              );
-                                                            }
+                                                            context.pushNamed(
+                                                              PostDetailsWidget
+                                                                  .routeName,
+                                                              queryParameters: {
+                                                                'post':
+                                                                    serializeParam(
+                                                                  gridViewPostsRecord
+                                                                      .reference,
+                                                                  ParamType
+                                                                      .DocumentReference,
+                                                                ),
+                                                              }.withoutNulls,
+                                                            );
                                                           },
                                                           child: Container(
                                                             width: 100.0,
                                                             height: 100.0,
+                                                            clipBehavior:
+                                                                Clip.antiAlias,
                                                             decoration:
                                                                 BoxDecoration(
                                                               color: Color(
                                                                   0xFF222222),
-                                                              image:
-                                                                  DecorationImage(
-                                                                fit: BoxFit
-                                                                    .contain,
-                                                                image: Image
-                                                                    .network(
-                                                                  functions.bunnyCDNImagePath(
-                                                                      gridViewPostsRecord
-                                                                          .postPhoto),
-                                                                ).image,
-                                                              ),
                                                               borderRadius:
                                                                   BorderRadius
                                                                       .circular(
                                                                           10.0),
                                                             ),
-                                                            child: Visibility(
-                                                              visible: gridViewPostsRecord
-                                                                          .postVideo !=
-                                                                      '',
-                                                              child:
-                                                                  FlutterFlowVideoPlayer(
-                                                                path: functions
-                                                                    .bunnyCDNVideoPath(
-                                                                        gridViewPostsRecord
-                                                                            .postVideo),
-                                                                videoType:
-                                                                    VideoType
-                                                                        .network,
-                                                                width: 100.0,
-                                                                height: 100.0,
-                                                                autoPlay: false,
-                                                                looping: true,
-                                                                showControls:
-                                                                    false,
-                                                                allowFullScreen:
-                                                                    false,
-                                                                allowPlaybackSpeedMenu:
-                                                                    false,
-                                                              ),
+                                                            child: Stack(
+                                                              fit: StackFit
+                                                                  .expand,
+                                                              children: [
+                                                                CachedNetworkImage(
+                                                                  imageUrl:
+                                                                      functions
+                                                                          .bunnyCDNImagePath(
+                                                                    gridViewPostsRecord
+                                                                            .postVideo
+                                                                            .isNotEmpty
+                                                                        ? (gridViewPostsRecord.videoThumbnail.isNotEmpty
+                                                                            ? gridViewPostsRecord
+                                                                                .videoThumbnail
+                                                                            : gridViewPostsRecord
+                                                                                .postPhoto)
+                                                                        : gridViewPostsRecord
+                                                                            .postPhoto,
+                                                                  ),
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  placeholder: (_,
+                                                                          __) =>
+                                                                      Container(
+                                                                          color:
+                                                                              Color(0xFF222222)),
+                                                                  errorWidget: (_,
+                                                                          __,
+                                                                          ___) =>
+                                                                      Container(
+                                                                          color:
+                                                                              Color(0xFF222222)),
+                                                                ),
+                                                                if (gridViewPostsRecord
+                                                                    .postVideo
+                                                                    .isNotEmpty)
+                                                                  Align(
+                                                                    alignment:
+                                                                        AlignmentDirectional(
+                                                                            0.9,
+                                                                            -0.9),
+                                                                    child:
+                                                                        Padding(
+                                                                      padding: const EdgeInsetsDirectional
+                                                                          .fromSTEB(
+                                                                          0.0,
+                                                                          6.0,
+                                                                          6.0,
+                                                                          0.0),
+                                                                      child:
+                                                                          Icon(
+                                                                        Icons
+                                                                            .play_circle_fill_rounded,
+                                                                        color: Colors
+                                                                            .white,
+                                                                        size:
+                                                                            20.0,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                              ],
                                                             ),
                                                           ),
                                                         );
@@ -1303,79 +1358,92 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                                                 Colors
                                                                     .transparent,
                                                             onTap: () async {
-                                                              if (explorePageUsersRecord
-                                                                  .userBlocked
-                                                                  .contains(
-                                                                      currentUserReference)) {
-                                                                context.pushNamed(
-                                                                    BlockedPageWidget
-                                                                        .routeName);
-                                                              } else {
-                                                                context
-                                                                    .pushNamed(
-                                                                  PostDetailsWidget
-                                                                      .routeName,
-                                                                  queryParameters:
-                                                                      {
-                                                                    'post':
-                                                                        serializeParam(
-                                                                      localresultItem
-                                                                          .reference,
-                                                                      ParamType
-                                                                          .DocumentReference,
-                                                                    ),
-                                                                  }.withoutNulls,
-                                                                );
-                                                              }
+                                                              context.pushNamed(
+                                                                PostDetailsWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'post':
+                                                                      serializeParam(
+                                                                    localresultItem
+                                                                        .reference,
+                                                                    ParamType
+                                                                        .DocumentReference,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                              );
                                                             },
                                                             child: Container(
                                                               width: 100.0,
                                                               height: 100.0,
+                                                              clipBehavior: Clip
+                                                                  .antiAlias,
                                                               decoration:
                                                                   BoxDecoration(
                                                                 color: Color(
                                                                     0xFF222222),
-                                                                image:
-                                                                    DecorationImage(
-                                                                  fit: BoxFit
-                                                                      .contain,
-                                                                  image: Image
-                                                                      .network(
-                                                                    functions.bunnyCDNImagePath(
-                                                                        localresultItem
-                                                                            .postPhoto),
-                                                                  ).image,
-                                                                ),
                                                                 borderRadius:
                                                                     BorderRadius
                                                                         .circular(
                                                                             10.0),
                                                               ),
-                                                              child: Visibility(
-                                                                visible: localresultItem
-                                                                            .postVideo !=
-                                                                        '',
-                                                                child:
-                                                                    FlutterFlowVideoPlayer(
-                                                                  path: functions
-                                                                      .bunnyCDNVideoPath(
-                                                                          localresultItem
-                                                                              .postVideo),
-                                                                  videoType:
-                                                                      VideoType
-                                                                          .network,
-                                                                  width: 100.0,
-                                                                  height: 100.0,
-                                                                  autoPlay:
-                                                                      false,
-                                                                  looping: true,
-                                                                  showControls:
-                                                                      false,
-                                                                  allowFullScreen:
-                                                                      false,
-                                                                  allowPlaybackSpeedMenu:
-                                                                      false,
-                                                                ),
+                                                              child: Stack(
+                                                                fit: StackFit
+                                                                    .expand,
+                                                                children: [
+                                                                  CachedNetworkImage(
+                                                                    imageUrl: functions.bunnyCDNImagePath(localresultItem
+                                                                            .postVideo
+                                                                            .isNotEmpty
+                                                                        ? (localresultItem.videoThumbnail.isNotEmpty
+                                                                            ? localresultItem
+                                                                                .videoThumbnail
+                                                                            : localresultItem
+                                                                                .postPhoto)
+                                                                        : localresultItem
+                                                                            .postPhoto),
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    placeholder: (_,
+                                                                            __) =>
+                                                                        Container(
+                                                                            color:
+                                                                                Color(0xFF222222)),
+                                                                    errorWidget: (_,
+                                                                            __,
+                                                                            ___) =>
+                                                                        Container(
+                                                                            color:
+                                                                                Color(0xFF222222)),
+                                                                  ),
+                                                                  if (localresultItem
+                                                                      .postVideo
+                                                                      .isNotEmpty)
+                                                                    Align(
+                                                                      alignment:
+                                                                          AlignmentDirectional(
+                                                                              0.9,
+                                                                              -0.9),
+                                                                      child:
+                                                                          Padding(
+                                                                        padding: const EdgeInsetsDirectional
+                                                                            .fromSTEB(
+                                                                            0.0,
+                                                                            6.0,
+                                                                            6.0,
+                                                                            0.0),
+                                                                        child:
+                                                                            Icon(
+                                                                          Icons
+                                                                              .play_circle_fill_rounded,
+                                                                          color:
+                                                                              Colors.white,
+                                                                          size:
+                                                                              20.0,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                ],
                                                               ),
                                                             ),
                                                           );
@@ -1473,23 +1541,19 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                                                           milliseconds:
                                                                               2000),
                                                                       () async {
-                                                                        await queryUsersRecordOnce()
-                                                                            .then(
-                                                                              (records) => _model.simpleSearchResults3 = TextSearch(
-                                                                                records
-                                                                                    .map(
-                                                                                      (record) => TextSearchItem.fromTerms(record, [
-                                                                                        record.displayName,
-                                                                                        record.username
-                                                                                      ]),
-                                                                                    )
-                                                                                    .toList(),
-                                                                              ).search(_model.textController3.text).map((r) => r.object).take(50).toList(),
-                                                                            )
-                                                                            .onError((_, __) => _model.simpleSearchResults3 =
-                                                                                [])
-                                                                            .whenComplete(() =>
-                                                                                safeSetState(() {}));
+                                                                        try {
+                                                                          final profiles = await ProfileRepository().search(
+                                                                              _model.textController3.text,
+                                                                              limit: 50);
+                                                                          _model.simpleSearchResults3 = profiles
+                                                                              .map((profile) => UsersRecord.fromSupabase(profile.data))
+                                                                              .toList();
+                                                                        } catch (_) {
+                                                                          _model.simpleSearchResults3 =
+                                                                              [];
+                                                                        }
+                                                                        safeSetState(
+                                                                            () {});
 
                                                                         FFAppState().list =
                                                                             false;
@@ -1634,8 +1698,7 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                         ),
                                         if (FFAppState().list)
                                           Expanded(
-                                            child: PagedListView<
-                                                DocumentSnapshot<Object?>?,
+                                            child: PagedListView<int?,
                                                 UsersRecord>(
                                               pagingController:
                                                   _model.setListViewController1(
@@ -1712,28 +1775,19 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                                               ProfileWidget
                                                                   .routeName);
                                                         } else {
-                                                          if (listViewUsersRecord
-                                                              .userBlocked
-                                                              .contains(
-                                                                  currentUserReference)) {
-                                                            context.pushNamed(
-                                                                BlockedPageWidget
-                                                                    .routeName);
-                                                          } else {
-                                                            context.pushNamed(
-                                                              ProfileOtherWidget
-                                                                  .routeName,
-                                                              queryParameters: {
-                                                                'username':
-                                                                    serializeParam(
-                                                                  listViewUsersRecord
-                                                                      .username,
-                                                                  ParamType
-                                                                      .String,
-                                                                ),
-                                                              }.withoutNulls,
-                                                            );
-                                                          }
+                                                          context.pushNamed(
+                                                            ProfileOtherWidget
+                                                                .routeName,
+                                                            queryParameters: {
+                                                              'username':
+                                                                  serializeParam(
+                                                                listViewUsersRecord
+                                                                    .username,
+                                                                ParamType
+                                                                    .String,
+                                                              ),
+                                                            }.withoutNulls,
+                                                          );
                                                         }
                                                       },
                                                       child: Row(
@@ -1906,29 +1960,19 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                                                           if (currentUserReference !=
                                                               firendslistItem
                                                                   .reference) {
-                                                            if (firendslistItem
-                                                                .userBlocked
-                                                                .contains(
-                                                                    currentUserReference)) {
-                                                              context.pushNamed(
-                                                                  BlockedPageWidget
-                                                                      .routeName);
-                                                            } else {
-                                                              context.pushNamed(
-                                                                ProfileOtherWidget
-                                                                    .routeName,
-                                                                queryParameters:
-                                                                    {
-                                                                  'username':
-                                                                      serializeParam(
-                                                                    firendslistItem
-                                                                        .username,
-                                                                    ParamType
-                                                                        .String,
-                                                                  ),
-                                                                }.withoutNulls,
-                                                              );
-                                                            }
+                                                            context.pushNamed(
+                                                              ProfileOtherWidget
+                                                                  .routeName,
+                                                              queryParameters: {
+                                                                'username':
+                                                                    serializeParam(
+                                                                  firendslistItem
+                                                                      .username,
+                                                                  ParamType
+                                                                      .String,
+                                                                ),
+                                                              }.withoutNulls,
+                                                            );
                                                           }
                                                         },
                                                         child: Row(
@@ -2078,6 +2122,7 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
                     child: NavBarWidget(
                       selectPageIndex: 2,
                       hidden: false,
+                      overlay: true,
                     ),
                   ),
                 ],

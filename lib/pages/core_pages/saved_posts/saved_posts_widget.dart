@@ -291,11 +291,11 @@ class _SavedPostsWidgetState extends State<SavedPostsWidget>
                                                           MainAxisSize.max,
                                                       children: [
                                                         if ((columnPostsRecord
-                                                                        .postPhoto !=
-                                                                    '') ||
+                                                                    .postPhoto !=
+                                                                '') ||
                                                             (columnPostsRecord
-                                                                        .postVideo !=
-                                                                    ''))
+                                                                    .postVideo !=
+                                                                ''))
                                                           Expanded(
                                                             child: Container(
                                                               width: double
@@ -305,8 +305,8 @@ class _SavedPostsWidgetState extends State<SavedPostsWidget>
                                                               child: Stack(
                                                                 children: [
                                                                   if (columnPostsRecord
-                                                                              .postPhoto !=
-                                                                          '')
+                                                                          .postPhoto !=
+                                                                      '')
                                                                     StreamBuilder<
                                                                         PostsRecord>(
                                                                       stream: PostsRecord
@@ -370,8 +370,8 @@ class _SavedPostsWidgetState extends State<SavedPostsWidget>
                                                                       },
                                                                     ),
                                                                   if (columnPostsRecord
-                                                                              .postVideo !=
-                                                                          '')
+                                                                          .postVideo !=
+                                                                      '')
                                                                     StreamBuilder<
                                                                         PostsRecord>(
                                                                       stream: PostsRecord
@@ -693,16 +693,16 @@ class _SavedPostsWidgetState extends State<SavedPostsWidget>
                                                     ),
                                                     child: Visibility(
                                                       visible: (containerPostsRecord
-                                                                      .postPhoto !=
-                                                                  '') ||
+                                                                  .postPhoto !=
+                                                              '') ||
                                                           (containerPostsRecord
-                                                                      .postVideo !=
-                                                                  ''),
+                                                                  .postVideo !=
+                                                              ''),
                                                       child: Stack(
                                                         children: [
                                                           if (containerPostsRecord
-                                                                      .postPhoto !=
-                                                                  '')
+                                                                  .postPhoto !=
+                                                              '')
                                                             InkWell(
                                                               splashColor: Colors
                                                                   .transparent,
@@ -747,8 +747,8 @@ class _SavedPostsWidgetState extends State<SavedPostsWidget>
                                                               ),
                                                             ),
                                                           if (containerPostsRecord
-                                                                      .postVideo !=
-                                                                  '')
+                                                                  .postVideo !=
+                                                              '')
                                                             InkWell(
                                                               splashColor: Colors
                                                                   .transparent,

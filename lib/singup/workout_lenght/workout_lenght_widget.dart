@@ -1,9 +1,6 @@
-import '/flutter_flow/flutter_flow_radio_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/form_field_controller.dart';
-import '/flutter_flow/custom_functions.dart' as functions;
+import '/custom_code/widgets/signup_ui.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'workout_lenght_model.dart';
@@ -41,310 +38,81 @@ class _WorkoutLenghtWidgetState extends State<WorkoutLenghtWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        body: SafeArea(
-          top: true,
-          child: Align(
-            alignment: AlignmentDirectional(0.0, -1.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 30.0, 0.0, 0.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(10.0, 0.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            InkWell(
-                              splashColor: Colors.transparent,
-                              focusColor: Colors.transparent,
-                              hoverColor: Colors.transparent,
-                              highlightColor: Colors.transparent,
-                              onTap: () async {
-                                context.safePop();
-                              },
-                              child: Icon(
-                                Icons.arrow_back_ios_rounded,
-                                color: FlutterFlowTheme.of(context).tertiary,
-                                size: 15.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 10.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              FFLocalizations.of(context).getText(
-                                '88h9sbf2' /* What is Your daily
-workout len... */
-                                ,
-                              ),
-                              textAlign: TextAlign.center,
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    fontSize: functions
-                                        .resizeFontBasedOnScreenSize(
-                                            MediaQuery.sizeOf(context).width,
-                                            30)
-                                        .toDouble(),
-                                    letterSpacing: 0.0,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 10.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              FFLocalizations.of(context).getText(
-                                'rw8jfz9z' /* Complete your details to proce... */,
-                              ),
-                              textAlign: TextAlign.center,
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    color: FlutterFlowTheme.of(context).accent1,
-                                    fontSize: functions
-                                        .resizeFontBasedOnScreenSize(
-                                            MediaQuery.sizeOf(context).width,
-                                            15)
-                                        .toDouble(),
-                                    letterSpacing: 0.0,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Form(
-                            key: _model.formKey,
-                            autovalidateMode: AutovalidateMode.disabled,
-                            child: FlutterFlowRadioButton(
-                              options: [
-                                FFLocalizations.of(context).getText(
-                                  '5o0qyerd' /* 15min or less */,
-                                ),
-                                FFLocalizations.of(context).getText(
-                                  'u0s5ft46' /* 20-30 min */,
-                                ),
-                                FFLocalizations.of(context).getText(
-                                  'vqmm6per' /* 40-50 min */,
-                                ),
-                                FFLocalizations.of(context).getText(
-                                  'x4ujz6l9' /* 60 min or more */,
-                                )
-                              ].toList(),
-                              onChanged: (val) => safeSetState(() {}),
-                              controller: _model.radioButtonValueController ??=
-                                  FormFieldController<String>(null),
-                              optionHeight: 100.0,
-                              optionWidth:
-                                  MediaQuery.sizeOf(context).width * 0.7,
-                              textStyle: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .override(
-                                    fontFamily: 'Inter',
-                                    color:
-                                        FlutterFlowTheme.of(context).tertiary,
-                                    fontSize: 20.0,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                              selectedTextStyle: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    color:
-                                        FlutterFlowTheme.of(context).tertiary,
-                                    fontSize: functions
-                                        .resizeFontBasedOnScreenSize(
-                                            MediaQuery.sizeOf(context).width,
-                                            20)
-                                        .toDouble(),
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                              buttonPosition: RadioButtonPosition.left,
-                              direction: Axis.vertical,
-                              radioButtonColor: Color(0xFF8EFF76),
-                              inactiveRadioButtonColor:
-                                  FlutterFlowTheme.of(context).tertiary,
-                              toggleable: true,
-                              horizontalAlignment: WrapAlignment.start,
-                              verticalAlignment: WrapCrossAlignment.start,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 30.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.max,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.circle,
-                            color: Color(0xA5FFFFFF),
-                            size: 10.0,
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: Color(0xA5FFFFFF),
-                              size: 10.0,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: Color(0xA5FFFFFF),
-                              size: 10.0,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: Color(0xA5FFFFFF),
-                              size: 10.0,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                5.0, 0.0, 0.0, 0.0),
-                            child: Icon(
-                              Icons.circle,
-                              color: FlutterFlowTheme.of(context).tertiary,
-                              size: 0.0,
-                            ),
-                          ),
-                          Icon(
-                            Icons.circle,
-                            color: FlutterFlowTheme.of(context).tertiary,
-                            size: 10.0,
-                          ),
-                        ],
-                      ),
-                      Padding(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 0.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Align(
-                              alignment: AlignmentDirectional(0.0, 0.0),
-                              child: FFButtonWidget(
-                                onPressed: () async {
-                                  if (_model.radioButtonValue != null &&
-                                      _model.radioButtonValue != '') {
-                                    FFAppState().workoutLenght =
-                                        _model.radioButtonValue!;
-                                    safeSetState(() {});
+    final theme = FlutterFlowTheme.of(context);
+    final options = [
+      '15min or less',
+      '20-30 min',
+      '40-50 min',
+      '60 min or more'
+    ];
 
-                                    context.pushNamed(AllDone2Widget.routeName);
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Please select the field to move forward',
-                                          style: TextStyle(
-                                            color: FlutterFlowTheme.of(context)
-                                                .secondary,
-                                          ),
-                                        ),
-                                        duration: Duration(milliseconds: 4000),
-                                        backgroundColor:
-                                            FlutterFlowTheme.of(context)
-                                                .primary,
-                                      ),
-                                    );
-                                  }
-                                },
-                                text: FFLocalizations.of(context).getText(
-                                  '9to4qtfh' /* Next */,
-                                ),
-                                options: FFButtonOptions(
-                                  width: MediaQuery.sizeOf(context).width * 0.9,
-                                  height: 52.0,
-                                  padding: EdgeInsetsDirectional.fromSTEB(
-                                      0.0, 0.0, 0.0, 0.0),
-                                  iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                      0.0, 0.0, 0.0, 0.0),
-                                  color: FlutterFlowTheme.of(context).accent3,
-                                  textStyle: FlutterFlowTheme.of(context)
-                                      .titleSmall
-                                      .override(
-                                        fontFamily: 'Poppins',
-                                        color: Color(0xFF0A0A0A),
-                                        fontSize: functions
-                                            .resizeFontBasedOnScreenSize(
-                                                MediaQuery.sizeOf(context)
-                                                    .width,
-                                                20)
-                                            .toDouble(),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.normal,
-                                      ),
-                                  elevation: 3.0,
-                                  borderSide: BorderSide(
-                                    color: Colors.transparent,
-                                    width: 1.0,
-                                  ),
-                                  borderRadius: BorderRadius.circular(20.0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+    return Scaffold(
+      key: scaffoldKey,
+      backgroundColor: theme.secondary,
+      body: SafeArea(
+        top: true,
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(28.0, 24.0, 28.0, 28.0),
+          child: Column(
+            children: [
+              const SizedBox(height: 40.0),
+              Text(
+                'What is Your\nworkout lenght?',
+                textAlign: TextAlign.center,
+                style: theme.displaySmall.override(
+                  fontFamily: 'Poppins',
+                  color: theme.tertiary,
+                  fontSize: 30.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w700,
+                  lineHeight: 1.15,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 8.0),
+              Text(
+                'Complete your details to proceed further',
+                textAlign: TextAlign.center,
+                style: theme.bodyMedium.override(
+                  fontFamily: 'Poppins',
+                  color: theme.secondaryText,
+                  fontSize: 16.0,
+                  letterSpacing: 0.0,
+                ),
+              ),
+              const SizedBox(height: 32.0),
+              ...options.map((o) => signupOptionTile(
+                    context: context,
+                    label: o,
+                    selected: _model.selected == o,
+                    onTap: () => safeSetState(() => _model.selected = o),
+                  )),
+              const Spacer(),
+              signupPageDots(context: context, active: 5, count: 6),
+              const SizedBox(height: 24.0),
+              signupPrimaryButton(
+                context: context,
+                text: 'Next',
+                enabled: _model.selected.isNotEmpty,
+                onPressed: () async {
+                  if (_model.selected.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Please choose your typical workout length.',
+                          style: TextStyle(color: theme.secondary),
+                        ),
+                        backgroundColor: theme.primary,
+                        duration: const Duration(milliseconds: 3000),
+                      ),
+                    );
+                    return;
+                  }
+                  FFAppState().workoutLenght = _model.selected;
+                  FFAppState().update(() {});
+                  context.pushNamed(AllDone2Widget.routeName);
+                },
+              ),
+            ],
           ),
         ),
       ),

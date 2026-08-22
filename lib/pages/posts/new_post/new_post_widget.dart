@@ -1,12 +1,10 @@
 import '/backend/api_requests/api_calls.dart';
 import '/backend/backend.dart';
-import '/backend/firebase_storage/storage.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_place_picker.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/upload_data.dart';
 import '/custom_code/widgets/create_ui.dart';
 import '/custom_code/widgets/upload_progress_screen.dart';
 import '/backend/supabase/repositories/post_repository.dart';
@@ -40,6 +38,7 @@ class _NewPostWidgetState extends State<NewPostWidget>
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late StreamSubscription<bool> _keyboardVisibilitySubscription;
   bool _isKeyboardVisible = false;
+  String? _videoAssetId;
 
   final animationsMap = <String, AnimationInfo>{};
 
@@ -167,8 +166,8 @@ class _NewPostWidgetState extends State<NewPostWidget>
                 ),
                 if (hasAddr)
                   Padding(
-                    padding:
-                        const EdgeInsetsDirectional.fromSTEB(0.0, 3.0, 0.0, 0.0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                        0.0, 3.0, 0.0, 0.0),
                     child: Text(
                       addr,
                       maxLines: 1,
@@ -206,7 +205,8 @@ class _NewPostWidgetState extends State<NewPostWidget>
                 fontWeight: FontWeight.w600,
               ),
               elevation: 0.0,
-              borderSide: const BorderSide(color: Colors.transparent, width: 1.0),
+              borderSide:
+                  const BorderSide(color: Colors.transparent, width: 1.0),
               borderRadius: BorderRadius.circular(19.0),
             ),
           ),
@@ -339,24 +339,23 @@ class _NewPostWidgetState extends State<NewPostWidget>
       label: selected ? 'Change video' : 'Video',
       selected: selected,
       onTap: () async {
-        _model.pickVideo = await actions.pickVideo();
-        if (_model.pickVideo == null) {
-          return;
-        }
-        _model.compressVideo = await actions.compressVideo(_model.pickVideo!);
-        _model.previewVideo =
-            await actions.generate2SecondVideoPreview(_model.compressVideo!);
+        _model.compressVideo = await actions.pickAndPrepareVideo();
+        if (_model.compressVideo?.bytes == null ||
+            _model.compressVideo!.bytes!.isEmpty) return;
         // Custom upload progress screen — pushes the video to Bunny Stream
         // (TUS) and stores its HLS URL.
         final uploadRes = await showUploadProgress(
           context,
           videoBytes: _model.compressVideo!.bytes!,
           videoTitle: 'GymFeed video',
+          videoFileName: _model.compressVideo!.name ?? 'gymfeed-video.mp4',
         );
         if (uploadRes?.videoPlaylistUrl != null) {
           safeSetState(() {
             _model.uploadedLocalFile2 = _model.compressVideo!;
             _model.uploadedFileUrl2 = uploadRes!.videoPlaylistUrl!;
+            _model.uploadedFileUrl3 = uploadRes.videoThumbnailUrl ?? '';
+            _videoAssetId = uploadRes.videoAssetId;
           });
         } else {
           return;
@@ -373,6 +372,8 @@ class _NewPostWidgetState extends State<NewPostWidget>
                 _model.uploadedLocalFile2 =
                     FFUploadedFile(bytes: Uint8List.fromList([]));
                 _model.uploadedFileUrl2 = '';
+                _model.uploadedFileUrl3 = '';
+                _videoAssetId = null;
               });
               FFAppState().uploadVideo = '';
               safeSetState(() {});
@@ -422,7 +423,8 @@ class _NewPostWidgetState extends State<NewPostWidget>
           ),
           actions: [
             Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 16.0, 0.0),
+              padding:
+                  const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 16.0, 0.0),
               child: InkWell(
                 splashColor: Colors.transparent,
                 focusColor: Colors.transparent,
@@ -431,52 +433,6 @@ class _NewPostWidgetState extends State<NewPostWidget>
                 onTap: () async {
                   if ((_model.uploadedFileUrl1 != '') ||
                       (_model.uploadedFileUrl2 != '')) {
-                    {
-                      safeSetState(() => _model.isDataUploading3 = true);
-                      var selectedUploadedFiles = <FFUploadedFile>[];
-                      var selectedMedia = <SelectedFile>[];
-                      var downloadUrls = <String>[];
-                      try {
-                        showUploadMessage(
-                          context,
-                          'Uploading file...',
-                          showLoading: true,
-                        );
-                        selectedUploadedFiles =
-                            _model.previewVideo!.bytes!.isNotEmpty
-                                ? [_model.previewVideo!]
-                                : <FFUploadedFile>[];
-                        selectedMedia = selectedFilesFromUploadedFiles(
-                          selectedUploadedFiles,
-                        );
-                        downloadUrls = (await Future.wait(
-                          selectedMedia.map(
-                            (m) async =>
-                                await uploadData(m.storagePath, m.bytes),
-                          ),
-                        ))
-                            .where((u) => u != null)
-                            .map((u) => u!)
-                            .toList();
-                      } finally {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        _model.isDataUploading3 = false;
-                      }
-                      if (selectedUploadedFiles.length == selectedMedia.length &&
-                          downloadUrls.length == selectedMedia.length) {
-                        safeSetState(() {
-                          _model.uploadedLocalFile3 =
-                              selectedUploadedFiles.first;
-                          _model.uploadedFileUrl3 = downloadUrls.first;
-                        });
-                        showUploadMessage(context, 'Success!');
-                      } else {
-                        safeSetState(() {});
-                        showUploadMessage(context, 'Failed to upload data');
-                        return;
-                      }
-                    }
-
                     // Create the post in Supabase (photo/video stored as
                     // direct URLs; the feed resolves them via feed_page).
                     await PostRepository().createPost(
@@ -484,6 +440,7 @@ class _NewPostWidgetState extends State<NewPostWidget>
                       photoUrl: _model.uploadedFileUrl1,
                       videoUrl: _model.uploadedFileUrl2,
                       videoThumbnail: _model.uploadedFileUrl3,
+                      videoAssetId: _videoAssetId,
                       allowComments: !_model.switchValue2!,
                       allowLikes: !_model.switchValue1!,
                       location: _model.placePickerValue.address,
@@ -622,10 +579,11 @@ class _NewPostWidgetState extends State<NewPostWidget>
                           label: FFAppState().calltoactiontext.isEmpty
                               ? 'Call to action'
                               : FFAppState().calltoactiontext,
-                          subtitle: FFAppState().calltoactionurl.maybeHandleOverflow(
-                                maxChars: 42,
-                                replacement: '…',
-                              ),
+                          subtitle:
+                              FFAppState().calltoactionurl.maybeHandleOverflow(
+                                    maxChars: 42,
+                                    replacement: '…',
+                                  ),
                           onTap: () async {
                             context.pushNamed(
                               CallToActionWidget.routeName,

@@ -6,6 +6,8 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class UsersRecord extends FirestoreRecord {
   UsersRecord._(
@@ -522,11 +524,33 @@ class UsersRecord extends FirestoreRecord {
   static CollectionReference get collection =>
       FirebaseFirestore.instance.collection('users');
 
-  static Stream<UsersRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => UsersRecord.fromSnapshot(s));
+  // ── Supabase-backed reads ─────────────────────────────────────────────────
+  // Reads now hit Supabase (profiles + profile_private) using ref.id as the
+  // user id. Firestore is no longer queried for user data.
 
-  static Future<UsersRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => UsersRecord.fromSnapshot(s));
+  static Stream<UsersRecord> getDocument(DocumentReference ref) =>
+      Stream.fromFuture(getDocumentOnce(ref));
+
+  static Future<UsersRecord> getDocumentOnce(DocumentReference ref) async {
+    final id = ref.id;
+    final pub = await supaById('profiles', id) ?? const {};
+    // Private fields are only readable for the current user (RLS).
+    Map<String, dynamic> priv = const {};
+    if (id == supabase.auth.currentUser?.id) {
+      priv = await supaById('profile_private', id) ?? const {};
+    }
+    return UsersRecord.getDocumentFromData(_supaUserData(id, pub, priv), ref);
+  }
+
+  /// Build a UsersRecord straight from Supabase rows (used by list queries).
+  static UsersRecord fromSupabase(
+    Map<String, dynamic> pub, [
+    Map<String, dynamic> priv = const {},
+  ]) {
+    final id = (pub['id'] ?? '').toString();
+    return UsersRecord.getDocumentFromData(
+        _supaUserData(id, pub, priv), supaRef('users', id));
+  }
 
   static UsersRecord fromSnapshot(DocumentSnapshot snapshot) => UsersRecord._(
         snapshot.reference,
@@ -550,6 +574,95 @@ class UsersRecord extends FirestoreRecord {
   bool operator ==(other) =>
       other is UsersRecord &&
       reference.path.hashCode == other.reference.path.hashCode;
+}
+
+/// Maps Supabase `profiles` [p] + `profile_private` [v] rows to the Firestore
+/// field names the UsersRecord expects. Relational list fields (following,
+/// chats, …) are intentionally omitted; they come from repositories.
+Map<String, dynamic> _supaUserData(
+  String id,
+  Map<String, dynamic> p,
+  Map<String, dynamic> v,
+) {
+  return <String, dynamic>{
+    'uid': id,
+    'username': p['username'],
+    'display_name': p['display_name'],
+    'photo_url': p['photo_url'],
+    'bio': p['bio'],
+    'website': p['website'],
+    'customLink': p['custom_link'],
+    'created_time': supaDate(p['created_at']),
+    'email': v['email'],
+    'phone_number': v['phone_number'],
+    'birthday': supaDate(v['birthday']),
+    'enable_email': v['enable_email'],
+    'gender': v['gender'],
+    'age': v['age'],
+    'height': v['height_cm'],
+    'weight': v['weight_kg'],
+    'age2': supaDate(v['age2']),
+    'workoutLevel': v['workout_level'],
+    'goals': v['goals'],
+    'workouts': v['workouts'],
+    'workoutLenght': v['workout_length'],
+    'workoutPeriod': v['workout_period'],
+    'meals': v['meals'],
+    'snacks': v['snacks'],
+    'days': v['days'],
+    'gptprompt': v['gpt_prompt'],
+    'personalTrainerSuggestions': v['personal_trainer_suggestions'],
+    'visionURL': v['vision_url'],
+    'progressImage': v['progress_image'],
+    'progressImage2': v['progress_image2'],
+    'progressImage3': v['progress_image3'],
+    'progressImage4': v['progress_image4'],
+    'progressImage5': v['progress_image5'],
+    'progressImage6': v['progress_image6'],
+    'progressImage12': v['progress_image12'],
+    'progressButtonIndex': v['progress_button_index'],
+    'leanMassIndex': v['lean_mass_index'],
+    'fatMassIndex': v['fat_mass_index'],
+    'ufat2': v['ufat2'],
+    'bfat2': v['bfat2'],
+    'efat2': v['efat2'],
+    'leanMass2': v['lean_mass2'],
+    'gptButton': v['gpt_button'],
+    'visionButton': v['vision_button'],
+    'buttonClick': v['button_click'],
+    'caloriesScanner': v['calories_scanner'],
+    'fatsScanner': v['fats_scanner'],
+    'proteinScanner': v['protein_scanner'],
+    'carbsScanner': v['carbs_scanner'],
+    'geminiParse': v['gemini_parse'],
+    'geminiParse2': v['gemini_parse2'],
+    'geminiParse3': v['gemini_parse3'],
+    'ufat': v['ufat'],
+    'bfat': v['bfat'],
+    'leanmass': v['leanmass'],
+    'efat': v['efat'],
+    'caloriesBurnt': v['calories_burnt'],
+    'caloriesBurn': v['calories_burn'],
+    'caloriesIntake': v['calories_intake'],
+    'mealPlan': v['meal_plan'],
+    'workoutPlan': v['workout_plan'],
+    'proTips': v['pro_tips'],
+    'quotes': v['quotes'],
+    'carbsPerDay': v['carbs_per_day'],
+    'proteinPerDay': v['protein_per_day'],
+    'fatsPerDay': v['fats_per_day'],
+    'caloricIntakePerDay': v['caloric_intake_per_day'],
+    'gender2': v['gender2'],
+    'workoutWhere': v['workout_where'],
+    'foodAlergies': v['food_alergies'],
+    'descriptionScanner': v['description_scanner'],
+    'compressVideo': v['compress_video'],
+    'isLoadedHome': v['is_loaded_home'],
+    'isLoadedTraining': v['is_loaded_training'],
+    'isLoadedProfile': v['is_loaded_profile'],
+    'isLoadedJoinTraining': v['is_loaded_join_training'],
+    'isLoadedTrainings': v['is_loaded_trainings'],
+  }..removeWhere((_, value) => value == null);
 }
 
 Map<String, dynamic> createUsersRecordData({

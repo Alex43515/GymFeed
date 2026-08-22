@@ -75,15 +75,7 @@ class _VideoReelsCopyWidgetState extends State<VideoReelsCopyWidget> {
                   children: [
                     Expanded(
                       child: StreamBuilder<List<UserTrainingsRecord>>(
-                        stream: queryUserTrainingsRecord(
-                          queryBuilder: (userTrainingsRecord) =>
-                              userTrainingsRecord
-                                  .where(
-                                    'TrainingVideo',
-                                    isNotEqualTo: '${''}',
-                                  )
-                                  .orderBy('TrainingVideo', descending: true),
-                        ),
+                        stream: queryTrainingsFeedStream(),
                         builder: (context, snapshot) {
                           // Customize what your widget looks like when it's loading.
                           if (!snapshot.hasData) {

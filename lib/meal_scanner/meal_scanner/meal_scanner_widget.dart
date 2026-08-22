@@ -171,7 +171,7 @@ class _MealScannerWidgetState extends State<MealScannerWidget> {
                         Stack(
                           children: [
                             if ((_model.uploadedLocalFile.bytes?.isEmpty ??
-                                    true))
+                                true))
                               InkWell(
                                 splashColor: Colors.transparent,
                                 focusColor: Colors.transparent,
@@ -238,7 +238,7 @@ class _MealScannerWidgetState extends State<MealScannerWidget> {
                                 ),
                               ),
                             if ((_model.uploadedLocalFile.bytes?.isNotEmpty ??
-                                    false))
+                                false))
                               InkWell(
                                 splashColor: Colors.transparent,
                                 focusColor: Colors.transparent,
@@ -277,7 +277,8 @@ class _MealScannerWidgetState extends State<MealScannerWidget> {
                       shape: BoxShape.rectangle,
                     ),
                     child: Visibility(
-                      visible: (_model.uploadedLocalFile.bytes?.isNotEmpty ?? false),
+                      visible:
+                          (_model.uploadedLocalFile.bytes?.isNotEmpty ?? false),
                       child: Align(
                         alignment: AlignmentDirectional(0.0, 0.0),
                         child: ClipRRect(

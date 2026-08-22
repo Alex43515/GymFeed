@@ -11,11 +11,12 @@ import 'package:flutter/material.dart';
 
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
+import '/backend/share_links.dart';
 
 Future<void> sharePost(
     String postId, String postTitle, String imagePath) async {
   // Construct the deep link URL for the specific post
-  final String deepLinkUrl = 'https://yourdomain.com/posts/$postId';
+  final String deepLinkUrl = gymFeedPostShareUrl(postId);
 
   // Prepare the content to share
   final String content = '$postTitle\nCheck out this post: $deepLinkUrl';

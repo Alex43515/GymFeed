@@ -5,6 +5,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
+import '/custom_code/widgets/gym_feed_video_controls.dart';
+import '/custom_code/widgets/media_request_headers.dart';
+import '/custom_code/widgets/web_hls_video_player.dart';
 import '/flutter_flow/flutter_flow_util.dart' show routeObserver;
 
 const kDefaultAspectRatio = 16 / 9;
@@ -58,10 +61,16 @@ class _FlutterFlowVideoPlayerState extends State<FlutterFlowVideoPlayer>
   bool _subscribedRoute = false;
   bool _isFullScreen = false;
 
+  bool get _useWebHls =>
+      kIsWeb &&
+      widget.videoType == VideoType.network &&
+      (Uri.tryParse(widget.path)?.path.toLowerCase().endsWith('.m3u8') ??
+          false);
+
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
+    if (!_useWebHls) _initializePlayer();
   }
 
   @override
@@ -78,7 +87,7 @@ class _FlutterFlowVideoPlayerState extends State<FlutterFlowVideoPlayer>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.path != widget.path) {
       _disposeCurrentPlayer();
-      _initializePlayer();
+      if (!_useWebHls) _initializePlayer();
     }
   }
 
@@ -115,11 +124,16 @@ class _FlutterFlowVideoPlayerState extends State<FlutterFlowVideoPlayer>
     _videoPlayers.remove(_videoPlayerController);
     _videoPlayerController?.dispose();
     _chewieController?.dispose();
+    _videoPlayerController = null;
+    _chewieController = null;
   }
 
   Future _initializePlayer() async {
     _videoPlayerController = widget.videoType == VideoType.network
-        ? VideoPlayerController.networkUrl(Uri.parse(widget.path))
+        ? VideoPlayerController.networkUrl(
+            Uri.parse(widget.path),
+            httpHeaders: gymFeedMediaHeaders(widget.path),
+          )
         : VideoPlayerController.asset(widget.path);
     if (kIsWeb && widget.autoPlay) {
       // Browsers generally don't allow autoplay unless it's muted.
@@ -142,6 +156,34 @@ class _FlutterFlowVideoPlayerState extends State<FlutterFlowVideoPlayer>
       autoPlay: widget.autoPlay,
       looping: widget.looping,
       showControls: widget.showControls,
+      customControls: widget.showControls
+          ? GymFeedVideoControls(
+              valueListenable: _videoPlayerController!,
+              onPlayPause: () {
+                final controller = _videoPlayerController!;
+                if (controller.value.isCompleted) {
+                  controller.seekTo(Duration.zero);
+                }
+                controller.value.isPlaying
+                    ? controller.pause()
+                    : controller.play();
+              },
+              onStop: () {
+                final controller = _videoPlayerController!;
+                controller.pause();
+                controller.seekTo(Duration.zero);
+              },
+              onToggleMute: () {
+                final controller = _videoPlayerController!;
+                controller.setVolume(controller.value.volume <= 0.01 ? 1 : 0);
+              },
+              onSeek: _videoPlayerController!.seekTo,
+              onFullScreen: widget.allowFullScreen
+                  ? () => _chewieController?.toggleFullScreen()
+                  : null,
+              controlKeyPrefix: 'video-${widget.path.hashCode}',
+            )
+          : null,
       allowFullScreen: widget.allowFullScreen,
       allowPlaybackSpeedChanging: widget.allowPlaybackSpeedMenu,
     );
@@ -187,35 +229,47 @@ class _FlutterFlowVideoPlayerState extends State<FlutterFlowVideoPlayer>
   }
 
   @override
-  Widget build(BuildContext context) => FittedBox(
-        fit: BoxFit.cover,
-        child: Container(
-          height: height,
-          width: width,
-          child: _chewieController != null &&
-                  (widget.lazyLoad ||
-                      _chewieController!
-                          .videoPlayerController.value.isInitialized)
-              ? Chewie(controller: _chewieController!)
-              : (_chewieController != null &&
-                      _chewieController!.videoPlayerController.value.hasError)
-                  ? Text('Error playing video')
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 12.0,
-                          height: 12.0,
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        const Text('Loading'),
-                      ],
-                    ),
+  Widget build(BuildContext context) {
+    if (_useWebHls) {
+      return SizedBox(
+        height: height,
+        width: width,
+        child: WebHlsVideoPlayer(
+          videoUrl: widget.path,
+          autoPlay: widget.autoPlay,
+          looping: widget.looping,
+          muted: widget.autoPlay,
+          showControls: widget.showControls,
+          fit: BoxFit.contain,
         ),
       );
+    }
+    return SizedBox(
+      height: height,
+      width: width,
+      child: _chewieController != null &&
+              (widget.lazyLoad ||
+                  _chewieController!.videoPlayerController.value.isInitialized)
+          ? Chewie(controller: _chewieController!)
+          : (_chewieController != null &&
+                  _chewieController!.videoPlayerController.value.hasError)
+              ? Text('Error playing video')
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 12.0,
+                      height: 12.0,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text('Loading'),
+                  ],
+                ),
+    );
+  }
 }

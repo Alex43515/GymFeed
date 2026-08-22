@@ -350,11 +350,11 @@ class _Bodyscanner4WidgetState extends State<Bodyscanner4Widget> {
                               Stack(
                                 children: [
                                   if (((_model.uploadedLocalFile1.bytes
-                                                  ?.isNotEmpty ??
-                                              false)) &&
+                                              ?.isNotEmpty ??
+                                          false)) &&
                                       ((_model.uploadedLocalFile2.bytes
-                                                  ?.isNotEmpty ??
-                                              false)))
+                                              ?.isNotEmpty ??
+                                          false)))
                                     Padding(
                                       padding: EdgeInsetsDirectional.fromSTEB(
                                           0.0, 20.0, 0.0, 0.0),
@@ -410,9 +410,9 @@ class _Bodyscanner4WidgetState extends State<Bodyscanner4Widget> {
                                         ],
                                       ),
                                     ),
-                                  if ((_model.uploadedLocalFile2.bytes
-                                              ?.isEmpty ??
-                                          true))
+                                  if ((_model
+                                          .uploadedLocalFile2.bytes?.isEmpty ??
+                                      true))
                                     Padding(
                                       padding: EdgeInsetsDirectional.fromSTEB(
                                           0.0, 20.0, 0.0, 0.0),
@@ -515,8 +515,8 @@ class _Bodyscanner4WidgetState extends State<Bodyscanner4Widget> {
                                             ),
                                           ),
                                           if ((_model.uploadedLocalFile1.bytes
-                                                      ?.isNotEmpty ??
-                                                  false))
+                                                  ?.isNotEmpty ??
+                                              false))
                                             FFButtonWidget(
                                               onPressed: () async {
                                                 final selectedMedia =
@@ -649,9 +649,9 @@ class _Bodyscanner4WidgetState extends State<Bodyscanner4Widget> {
                     FFButtonWidget(
                       onPressed: () async {
                         if (((_model.uploadedLocalFile1.bytes?.isNotEmpty ??
-                                    false)) &&
+                                false)) &&
                             ((_model.uploadedLocalFile2.bytes?.isNotEmpty ??
-                                    false))) {
+                                false))) {
                           _model.waitCheck = true;
                           safeSetState(() {});
                           await geminiTextFromImage(

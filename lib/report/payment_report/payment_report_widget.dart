@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
 import '/index.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'payment_report_model.dart';
@@ -100,6 +101,12 @@ class _PaymentReportWidgetState extends State<PaymentReportWidget> {
                             hoverColor: Colors.transparent,
                             highlightColor: Colors.transparent,
                             onTap: () async {
+                              if (kIsWeb) {
+                                await launchURL(
+                                  'https://play.google.com/store/apps/details?id=com.flutterflow.gymfeedofficial',
+                                );
+                                return;
+                              }
                               await revenue_cat.restorePurchases();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -468,6 +475,12 @@ class _PaymentReportWidgetState extends State<PaymentReportWidget> {
                               0.0, 10.0, 0.0, 0.0),
                           child: FFButtonWidget(
                             onPressed: () async {
+                              if (kIsWeb) {
+                                await launchURL(
+                                  'https://play.google.com/store/apps/details?id=com.flutterflow.gymfeedofficial',
+                                );
+                                return;
+                              }
                               _model.isPurchaseSuccessful =
                                   await revenue_cat.purchasePackage(revenue_cat
                                       .offerings!

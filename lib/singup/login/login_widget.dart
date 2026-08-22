@@ -4,7 +4,6 @@ import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import '/singup/email_resend/email_resend_widget.dart';
 import '/index.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -353,33 +352,22 @@ class _LoginWidgetState extends State<LoginWidget> {
                                   _model.passwordTextController.text,
                                 );
                                 if (user == null) {
+                                  if (authManager.lastFailure ==
+                                      SupabaseAuthFailureKind
+                                          .emailNotConfirmed) {
+                                    if (!context.mounted) return;
+                                    context.goNamed(
+                                        EmailVerificationWidget.routeName);
+                                  }
                                   return;
                                 }
 
+                                if (!context.mounted) return;
                                 if (currentUserEmailVerified == true) {
-                                  context.pushNamedAuth(
-                                      FeedWidget.routeName, context.mounted);
+                                  context.goAfterAuth(FeedWidget.routeName);
                                 } else {
-                                  await showModalBottomSheet(
-                                    isScrollControlled: true,
-                                    backgroundColor: Colors.transparent,
-                                    enableDrag: false,
-                                    context: context,
-                                    builder: (context) {
-                                      return GestureDetector(
-                                        onTap: () {
-                                          FocusScope.of(context).unfocus();
-                                          FocusManager.instance.primaryFocus
-                                              ?.unfocus();
-                                        },
-                                        child: Padding(
-                                          padding:
-                                              MediaQuery.viewInsetsOf(context),
-                                          child: EmailResendWidget(),
-                                        ),
-                                      );
-                                    },
-                                  ).then((value) => safeSetState(() {}));
+                                  context.goNamed(
+                                      EmailVerificationWidget.routeName);
                                 }
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(

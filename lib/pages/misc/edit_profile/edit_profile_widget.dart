@@ -1,5 +1,5 @@
 import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
+import '/backend/supabase/repositories/profile_repository.dart';
 import '/backend/firebase_storage/storage.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -128,72 +128,65 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
               child: Row(
                 mainAxisSize: MainAxisSize.max,
                 children: [
-                  StreamBuilder<List<AdministrativeRecord>>(
-                    stream: queryAdministrativeRecord(
-                      singleRecord: true,
-                    ),
-                    builder: (context, snapshot) {
-                      // Customize what your widget looks like when it's loading.
-                      if (!snapshot.hasData) {
-                        return Center(
-                          child: SizedBox(
-                            width: 12.0,
-                            height: 12.0,
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
+                  InkWell(
+                    splashColor: Colors.transparent,
+                    focusColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    onTap: _model.isSaving
+                        ? null
+                        : () async {
+                            if (_model.formKey.currentState == null ||
+                                !_model.formKey.currentState!.validate()) {
+                              return;
+                            }
+
+                            safeSetState(() => _model.isSaving = true);
+                            try {
+                              await ProfileRepository().updatePublicProfile(
+                                displayName: _model.textController1.text.trim(),
+                                photoUrl: FFAppState().tempProfilePic,
+                                bio: _model.textController3.text.trim(),
+                                website: _model.textController4.text.trim(),
+                              );
+                              await ProfileRepository().updatePrivateProfile({
+                                'email': _model.textController2.text.trim(),
+                              });
+                              await refreshCurrentUserProfile();
+                              if (context.mounted) context.pop(true);
+                            } catch (_) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Could not save your profile. Try again.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                safeSetState(() => _model.isSaving = false);
+                              }
+                            }
+                          },
+                    child: Text(
+                      _model.isSaving
+                          ? 'Saving...'
+                          : FFLocalizations.of(context).getText(
+                              'nqa7zerc' /* Done */,
                             ),
+                      style: FlutterFlowTheme.of(context).titleMedium.override(
+                            fontFamily: 'Poppins',
+                            color: FlutterFlowTheme.of(context).tertiary,
+                            fontSize: functions
+                                .resizeFontBasedOnScreenSize(
+                                    MediaQuery.sizeOf(context).width, 16)
+                                .toDouble(),
+                            letterSpacing: 0.0,
+                            fontWeight: FontWeight.w500,
                           ),
-                        );
-                      }
-                      List<AdministrativeRecord> textAdministrativeRecordList =
-                          snapshot.data!;
-                      final textAdministrativeRecord =
-                          textAdministrativeRecordList.isNotEmpty
-                              ? textAdministrativeRecordList.first
-                              : null;
-
-                      return InkWell(
-                        splashColor: Colors.transparent,
-                        focusColor: Colors.transparent,
-                        hoverColor: Colors.transparent,
-                        highlightColor: Colors.transparent,
-                        onTap: () async {
-                          if (_model.formKey.currentState == null ||
-                              !_model.formKey.currentState!.validate()) {
-                            return;
-                          }
-
-                          await currentUserReference!
-                              .update(createUsersRecordData(
-                            displayName: _model.textController1.text,
-                            photoUrl: FFAppState().tempProfilePic,
-                            bio: _model.textController3.text,
-                            website: _model.textController4.text,
-                            email: _model.textController2.text,
-                          ));
-                          context.pop();
-                        },
-                        child: Text(
-                          FFLocalizations.of(context).getText(
-                            'nqa7zerc' /* Done */,
-                          ),
-                          style: FlutterFlowTheme.of(context)
-                              .titleMedium
-                              .override(
-                                fontFamily: 'Poppins',
-                                color: FlutterFlowTheme.of(context).tertiary,
-                                fontSize: functions
-                                    .resizeFontBasedOnScreenSize(
-                                        MediaQuery.sizeOf(context).width, 16)
-                                    .toDouble(),
-                                letterSpacing: 0.0,
-                                fontWeight: FontWeight.w500,
-                              ),
-                        ),
-                      );
-                    },
+                    ),
                   ),
                 ],
               ),

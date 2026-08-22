@@ -1,145 +1,75 @@
+import 'package:flutter/material.dart';
+
 import '/backend/backend.dart';
 import '/components/report_status/report_status_widget.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import 'package:flutter/material.dart';
-import 'post_options_model.dart';
-export 'post_options_model.dart';
 
-class PostOptionsWidget extends StatefulWidget {
-  const PostOptionsWidget({
-    super.key,
-    this.post,
-  });
+class PostOptionsWidget extends StatelessWidget {
+  const PostOptionsWidget({super.key, this.post});
 
   final PostsRecord? post;
 
   @override
-  State<PostOptionsWidget> createState() => _PostOptionsWidgetState();
-}
-
-class _PostOptionsWidgetState extends State<PostOptionsWidget> {
-  late PostOptionsModel _model;
-
-  @override
-  void setState(VoidCallback callback) {
-    super.setState(callback);
-    _model.onUpdate();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _model = createModel(context, () => PostOptionsModel());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _model.maybeDispose();
-
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.max,
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: FlutterFlowTheme.of(context).secondaryBackground,
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(0.0),
-              bottomRight: Radius.circular(0.0),
-              topLeft: Radius.circular(16.0),
-              topRight: Radius.circular(16.0),
-            ),
+  Widget build(BuildContext context) => SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF0A0A0A),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(top: BorderSide(color: Color(0xFF292929))),
           ),
-          child: Padding(
-            padding: EdgeInsetsDirectional.fromSTEB(20.0, 10.0, 20.0, 0.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Container(
-                  width: 40.0,
-                  height: 4.0,
-                  decoration: BoxDecoration(
-                    color: Color(0xFFDADADA),
-                    borderRadius: BorderRadius.circular(4.0),
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF454545),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 30.0, 0.0, 56.0),
-                  child: InkWell(
-                    splashColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () async {
-                      await showModalBottomSheet(
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        enableDrag: false,
-                        context: context,
-                        builder: (context) {
-                          return Padding(
-                            padding: MediaQuery.viewInsetsOf(context),
-                            child: ReportStatusWidget(
-                              postReference: widget.post!.reference,
-                            ),
-                          );
-                        },
-                      ).then((value) => safeSetState(() {}));
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF2F2F2),
-                        borderRadius: BorderRadius.circular(12.0),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.all(15.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Icon(
-                              Icons.report_outlined,
-                              color: Color(0xFFF83639),
-                              size: 24.0,
-                            ),
-                            Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  12.0, 0.0, 0.0, 0.0),
-                              child: Text(
-                                FFLocalizations.of(context).getText(
-                                  '3fyk404o' /* Report Post */,
-                                ),
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      color: Color(0xFFF83639),
-                                      fontSize: 16.0,
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+              ),
+              ListTile(
+                onTap: post == null ? null : () => _openReport(context),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                tileColor: const Color(0xFF171717),
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFF35191E), shape: BoxShape.circle),
+                  child:
+                      const Icon(Icons.outlined_flag, color: Color(0xFFFF5A62)),
                 ),
-              ],
-            ),
+                title: Text(
+                  post?.foodPost == true ? 'Report food post' : 'Report post',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text('Tell GymFeed moderation what happened',
+                    style: TextStyle(color: Color(0xFF8B8B8B), fontSize: 12)),
+                trailing:
+                    const Icon(Icons.chevron_right, color: Color(0xFF8B8B8B)),
+              ),
+            ],
           ),
         ),
-      ],
+      );
+
+  Future<void> _openReport(BuildContext context) async {
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+    Navigator.of(context).pop();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await showModalBottomSheet<bool>(
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      context: rootContext,
+      builder: (context) => ReportStatusWidget(
+        postReference: post!.reference,
+      ),
     );
   }
 }

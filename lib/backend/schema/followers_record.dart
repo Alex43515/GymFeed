@@ -6,6 +6,8 @@ import '/backend/schema/util/firestore_util.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/supabase/supabase.dart';
+import '/backend/supabase/supabase_records.dart';
 
 class FollowersRecord extends FirestoreRecord {
   FollowersRecord._(
@@ -35,10 +37,37 @@ class FollowersRecord extends FirestoreRecord {
       parent.collection('followers').doc(id);
 
   static Stream<FollowersRecord> getDocument(DocumentReference ref) =>
-      ref.snapshots().map((s) => FollowersRecord.fromSnapshot(s));
+      Stream.fromFuture(getDocumentOnce(ref));
 
-  static Future<FollowersRecord> getDocumentOnce(DocumentReference ref) =>
-      ref.get().then((s) => FollowersRecord.fromSnapshot(s));
+  static Future<FollowersRecord> getDocumentOnce(DocumentReference ref) async {
+    // ref is `users/<userId>/followers/main`; parent user id is the followee.
+    final userId = ref.parent.parent?.id ?? '';
+    return FollowersRecord.forUser(userId);
+  }
+
+  /// Build a FollowersRecord whose `userRefs` are everyone following [userId].
+  static Future<FollowersRecord> forUser(String userId) async {
+    final refs = <DocumentReference>[];
+    if (userId.isNotEmpty) {
+      final rows = await supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('followee_id', userId);
+      for (final r in (rows as List)) {
+        final id = (r['follower_id'] ?? '').toString();
+        if (id.isNotEmpty) refs.add(supaRef('users', id));
+      }
+    }
+    return FollowersRecord.fromSupabase(userId, refs);
+  }
+
+  static FollowersRecord fromSupabase(
+    String userId,
+    List<DocumentReference> userRefs,
+  ) {
+    final ref = FirebaseFirestore.instance.doc('users/$userId/followers/main');
+    return FollowersRecord.getDocumentFromData({'userRefs': userRefs}, ref);
+  }
 
   static FollowersRecord fromSnapshot(DocumentSnapshot snapshot) =>
       FollowersRecord._(

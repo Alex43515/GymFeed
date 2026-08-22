@@ -246,9 +246,8 @@ class _TrainingpostDetailsWidgetState extends State<TrainingpostDetailsWidget> {
                                                               EditTrainingPreWidget(
                                                             trainingPost: widget
                                                                 .trainingReference,
-                                                            userTraining:
-                                                                widget
-                                                                    .userRecord,
+                                                            userTraining: widget
+                                                                .userRecord,
                                                           ),
                                                         ),
                                                       ),
@@ -509,8 +508,8 @@ class _TrainingpostDetailsWidgetState extends State<TrainingpostDetailsWidget> {
                                       Stack(
                                         children: [
                                           if (trainingpostDetailsUserTrainingsRecord
-                                                      .trainingVideo ==
-                                                  '')
+                                                  .trainingVideo ==
+                                              '')
                                             Column(
                                               mainAxisSize: MainAxisSize.max,
                                               mainAxisAlignment:
@@ -540,8 +539,8 @@ class _TrainingpostDetailsWidgetState extends State<TrainingpostDetailsWidget> {
                                               ],
                                             ),
                                           if (trainingpostDetailsUserTrainingsRecord
-                                                      .trainingVideo !=
-                                                  '')
+                                                  .trainingVideo !=
+                                              '')
                                             Column(
                                               mainAxisSize: MainAxisSize.max,
                                               mainAxisAlignment:
