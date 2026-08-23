@@ -63,17 +63,32 @@ class WorkoutLocationSearchService {
 }
 
 Future<FFPlace?> showWorkoutLocationPicker(BuildContext context) {
+  return showGymFeedLocationPicker(
+    context,
+    title: 'Workout location',
+    subtitle: 'Search for a gym, park, city, or address.',
+  );
+}
+
+Future<FFPlace?> showGymFeedLocationPicker(
+  BuildContext context, {
+  String title = 'Add location',
+  String subtitle = 'Search for a place, city, or address.',
+}) {
   return showModalBottomSheet<FFPlace>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const _WorkoutLocationSheet(),
+    builder: (_) => _WorkoutLocationSheet(title: title, subtitle: subtitle),
   );
 }
 
 class _WorkoutLocationSheet extends StatefulWidget {
-  const _WorkoutLocationSheet();
+  const _WorkoutLocationSheet({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
 
   @override
   State<_WorkoutLocationSheet> createState() => _WorkoutLocationSheetState();
@@ -161,9 +176,9 @@ class _WorkoutLocationSheetState extends State<_WorkoutLocationSheet> {
             ),
           ),
           const SizedBox(height: 18),
-          Text('Workout location', style: _style(21, weight: FontWeight.w700)),
+          Text(widget.title, style: _style(21, weight: FontWeight.w700)),
           const SizedBox(height: 5),
-          Text('Search for a gym, park, city, or address.',
+          Text(widget.subtitle,
               style: _style(12, color: const Color(0xFF929292))),
           const SizedBox(height: 16),
           TextField(

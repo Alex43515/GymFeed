@@ -1,7 +1,5 @@
-import '/auth/firebase_auth/auth_util.dart';
 import '/backend/supabase/repositories/post_repository.dart';
 import '/backend/firebase_storage/storage.dart';
-import '/backend/push_notifications/push_notifications_util.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_video_player.dart';
@@ -195,7 +193,15 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
         protein: int.tryParse(_model.proteinTextController.text),
         carbs: _model.carbsTextController.text,
         fats: _model.fatsTextController.text,
+        taggedUserIds: FFAppState()
+            .taggedUsers
+            .map((reference) => reference.id)
+            .toList(growable: false),
       );
+      FFAppState().taggedUsers = [];
+      FFAppState().calltoactionenabled = false;
+      FFAppState().calltoactiontext = '';
+      FFAppState().calltoactionurl = '';
       if (!mounted) return;
       context.goNamed(FeedWidget.routeName);
     } catch (error) {
@@ -2207,34 +2213,18 @@ class _CreateFoodPostWidgetState extends State<CreateFoodPostWidget>
                                                           fats: _model
                                                               .fatsTextController
                                                               .text,
+                                                          taggedUserIds: FFAppState()
+                                                              .taggedUsers
+                                                              .map(
+                                                                  (reference) =>
+                                                                      reference
+                                                                          .id)
+                                                              .toList(
+                                                                  growable:
+                                                                      false),
                                                         );
-                                                        if (FFAppState()
-                                                                .taggedUsers
-                                                                .length >
-                                                            0) {
-                                                          triggerPushNotification(
-                                                            notificationTitle:
-                                                                'Instagram',
-                                                            notificationText:
-                                                                '${valueOrDefault(currentUserDocument?.username, '')} tagged you in a photo.',
-                                                            notificationImageUrl:
-                                                                FFAppState()
-                                                                    .uploadPhoto,
-                                                            notificationSound:
-                                                                'default',
-                                                            userRefs:
-                                                                FFAppState()
-                                                                    .taggedUsers
-                                                                    .toList(),
-                                                            initialPageName:
-                                                                'PostDetails',
-                                                            parameterData: {
-                                                              'post': _model
-                                                                  .post
-                                                                  ?.reference,
-                                                            },
-                                                          );
-                                                        }
+                                                        FFAppState()
+                                                            .taggedUsers = [];
 
                                                         context.goNamed(
                                                             FeedWidget

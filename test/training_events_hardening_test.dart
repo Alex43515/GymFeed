@@ -95,5 +95,35 @@ void main() {
       expect(clips, isNot(contains('PostsRecord')));
       expect(clips, isNot(contains('reels_page')));
     });
+
+    test('all event entry points use the complete shared details surface', () {
+      final events = File(
+        'lib/ai_workout/coach_events/coach_events_widget.dart',
+      ).readAsStringSync();
+      final train = File(
+        'lib/workout/training_home/training_home_widget.dart',
+      ).readAsStringSync();
+      final details = File(
+        'lib/ai_workout/coach_events/event_details_sheet.dart',
+      ).readAsStringSync();
+
+      expect(events, contains('showGymFeedEventDetails'));
+      expect(train, contains('showGymFeedEventDetails'));
+      expect(details, contains('event-participants-section'));
+      expect(details, contains('Created by'));
+      expect(details, contains('event-google-maps-link'));
+      expect(details, contains('TrainingRepository().participants'));
+    });
+
+    test('Explore has one mixed content tab with food badges', () {
+      final explore = File(
+        'lib/pages/core_pages/explore_page/explore_page_widget.dart',
+      ).readAsStringSync();
+
+      expect(explore, contains('FoodPostBadge'));
+      expect(explore, contains("Tab(text: 'Explore')"));
+      expect(explore, contains("Tab(text: 'People')"));
+      expect(explore, isNot(contains("Tab(text: 'Meals')")));
+    });
   });
 }

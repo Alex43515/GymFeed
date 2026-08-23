@@ -32,6 +32,7 @@ const _androidChannel = AndroidNotificationChannel(
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
 bool _pushNotificationsInitialized = false;
+final Set<String> _shownForegroundPushes = <String>{};
 
 @pragma('vm:entry-point')
 Future<void> gymFeedFirebaseMessagingBackgroundHandler(
@@ -115,8 +116,22 @@ Future<void> _showForegroundAndroidNotification(RemoteMessage message) async {
     return;
   }
 
+  // Android may deliver the same FCM envelope more than once when a token was
+  // recently refreshed or the worker retries an ambiguous response.  Keep the
+  // foreground renderer idempotent as a final client-side safety net.  Server
+  // rows are also deduplicated by their durable source id.
+  final notificationKey = (message.data['push_id'] ??
+          message.data['pushId'] ??
+          message.messageId ??
+          '${title ?? ''}|${body ?? ''}|${message.sentTime?.millisecondsSinceEpoch ?? 0}')
+      .toString();
+  if (!_shownForegroundPushes.add(notificationKey)) return;
+  if (_shownForegroundPushes.length > 100) {
+    _shownForegroundPushes.remove(_shownForegroundPushes.first);
+  }
+
   await _localNotifications.show(
-    message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch,
+    notificationKey.hashCode,
     title?.toString(),
     body?.toString(),
     const NotificationDetails(

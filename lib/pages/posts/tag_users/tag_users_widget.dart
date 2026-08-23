@@ -1,327 +1,146 @@
 import '/backend/backend.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_video_player.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'tag_users_model.dart';
-export 'tag_users_model.dart';
 
-class TagUsersWidget extends StatefulWidget {
+class TagUsersWidget extends StatelessWidget {
   const TagUsersWidget({super.key});
 
   static String routeName = 'TagUsers';
   static String routePath = 'tagUsers';
-
-  @override
-  State<TagUsersWidget> createState() => _TagUsersWidgetState();
-}
-
-class _TagUsersWidgetState extends State<TagUsersWidget> {
-  late TagUsersModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
-
-  @override
-  void initState() {
-    super.initState();
-    _model = createModel(context, () => TagUsersModel());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _model.dispose();
-
-    super.dispose();
-  }
+  static const _green = Color(0xFF0EEA78);
 
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
-
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        appBar: AppBar(
-          backgroundColor: FlutterFlowTheme.of(context).secondary,
-          automaticallyImplyLeading: false,
-          title: Text(
-            FFLocalizations.of(context).getText(
-              'uuvj5mvl' /* Tag users */,
-            ),
-            style: FlutterFlowTheme.of(context).titleMedium.override(
-                  fontFamily: 'Poppins',
-                  fontSize: 16.0,
-                  letterSpacing: 0.0,
-                ),
+    final references = FFAppState().taggedUsers.toList();
+    return Scaffold(
+      backgroundColor: const Color(0xFF080808),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF080808),
+        foregroundColor: Colors.white,
+        title: const Text('Tag people',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        actions: [
+          TextButton(
+            onPressed: () => context.pop(),
+            child: const Text('Done',
+                style: TextStyle(color: _green, fontWeight: FontWeight.w700)),
           ),
-          actions: [
-            Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 15.0, 0.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  InkWell(
-                    splashColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () async {
-                      context.pop();
-                    },
-                    child: Text(
-                      FFLocalizations.of(context).getText(
-                        '1u6kanvb' /* Done */,
-                      ),
-                      style: FlutterFlowTheme.of(context).titleMedium.override(
-                            fontFamily: 'Poppins',
-                            color: FlutterFlowTheme.of(context).tertiary,
-                            fontSize: 15.0,
-                            letterSpacing: 0.0,
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ),
-                ],
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
+          children: [
+            const Text('People in this post',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            const Text(
+              'Tagged people are linked to the post and receive a notification.',
+              style: TextStyle(color: Color(0xFF8A8A8A), height: 1.4),
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              key: const Key('add-tagged-people'),
+              onPressed: () =>
+                  context.pushNamed(SelectTaggedUsersWidget.routeName),
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: Text(
+                  references.isEmpty ? 'Add people' : 'Add or remove people'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _green,
+                minimumSize: const Size.fromHeight(54),
+                side: const BorderSide(color: Color(0xFF315D43)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(17)),
               ),
             ),
-          ],
-          centerTitle: true,
-          elevation: 0.0,
-        ),
-        body: SafeArea(
-          top: true,
-          child: Form(
-            key: _model.formKey,
-            autovalidateMode: AutovalidateMode.disabled,
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            if (references.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 42),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF121212),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFF252525)),
+                ),
+                child: const Column(
                   children: [
-                    InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(SelectTaggedUsersWidget.routeName);
-                      },
-                      child: Container(
-                        width: MediaQuery.sizeOf(context).width * 1.0,
-                        height: 350.0,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          image: DecorationImage(
-                            fit: BoxFit.cover,
-                            image: Image.network(
-                              FFAppState().uploadPhoto,
-                            ).image,
-                          ),
-                        ),
-                        child: Visibility(
-                          visible: FFAppState().uploadVideo != '',
-                          child: FlutterFlowVideoPlayer(
-                            path: FFAppState().uploadVideo,
-                            videoType: VideoType.network,
-                            width: MediaQuery.sizeOf(context).width * 1.0,
-                            height: 350.0,
-                            autoPlay: false,
-                            looping: true,
-                            showControls: true,
-                            allowFullScreen: true,
-                            allowPlaybackSpeedMenu: false,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(15.0, 15.0, 0.0, 6.0),
-                      child: Text(
-                        FFLocalizations.of(context).getText(
-                          'l45r3ba7' /* Tag users */,
-                        ),
-                        style:
-                            FlutterFlowTheme.of(context).titleMedium.override(
-                                  fontFamily: 'Poppins',
-                                  letterSpacing: 0.0,
-                                ),
-                      ),
-                    ),
-                    Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(15.0, 0.0, 15.0, 15.0),
-                      child: Text(
-                        FFLocalizations.of(context).getText(
-                          'ewight4d' /* Tag users so others know who i... */,
-                        ),
-                        style: FlutterFlowTheme.of(context).bodySmall.override(
-                              fontFamily: 'Poppins',
-                              letterSpacing: 0.0,
-                              fontWeight: FontWeight.normal,
-                            ),
-                      ),
-                    ),
-                    Container(
-                      width: double.infinity,
-                      height: 0.5,
-                      decoration: BoxDecoration(
-                        color: Color(0xFFDADADA),
-                      ),
-                    ),
-                    Container(
-                      width: double.infinity,
-                      height: 0.5,
-                      decoration: BoxDecoration(
-                        color: Color(0xFFDADADA),
-                      ),
-                    ),
+                    Icon(Icons.people_outline_rounded,
+                        color: Color(0xFF6F6F6F), size: 34),
+                    SizedBox(height: 8),
+                    Text('No one tagged yet',
+                        style: TextStyle(color: Color(0xFF8A8A8A))),
                   ],
                 ),
-                Expanded(
-                  child: Padding(
-                    padding:
-                        EdgeInsetsDirectional.fromSTEB(15.0, 0.0, 15.0, 0.0),
-                    child: Builder(
-                      builder: (context) {
-                        final taggedUsers = FFAppState().taggedUsers.toList();
-
-                        return Column(
-                          mainAxisSize: MainAxisSize.max,
-                          children: List.generate(taggedUsers.length,
-                              (taggedUsersIndex) {
-                            final taggedUsersItem =
-                                taggedUsers[taggedUsersIndex];
-                            return Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  0.0, 12.0, 0.0, 0.0),
-                              child: StreamBuilder<UsersRecord>(
-                                stream:
-                                    UsersRecord.getDocument(taggedUsersItem),
-                                builder: (context, snapshot) {
-                                  // Customize what your widget looks like when it's loading.
-                                  if (!snapshot.hasData) {
-                                    return Center(
-                                      child: SizedBox(
-                                        width: 12.0,
-                                        height: 12.0,
-                                        child: CircularProgressIndicator(
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                            Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }
-
-                                  final rowUsersRecord = snapshot.data!;
-
-                                  return Row(
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: [
-                                      Container(
-                                        width: 55.0,
-                                        height: 55.0,
-                                        clipBehavior: Clip.antiAlias,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Image.network(
-                                          valueOrDefault<String>(
-                                            rowUsersRecord.photoUrl,
-                                            'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                          ),
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Padding(
-                                          padding:
-                                              EdgeInsetsDirectional.fromSTEB(
-                                                  12.0, 0.0, 0.0, 0.0),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.max,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                rowUsersRecord.displayName,
-                                                maxLines: 1,
-                                                style:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          fontFamily: 'Poppins',
-                                                          fontSize: 14.0,
-                                                          letterSpacing: 0.0,
-                                                        ),
-                                              ),
-                                              Padding(
-                                                padding: EdgeInsetsDirectional
-                                                    .fromSTEB(
-                                                        0.0, 2.0, 0.0, 0.0),
-                                                child: Text(
-                                                  rowUsersRecord.username,
-                                                  maxLines: 1,
-                                                  style: FlutterFlowTheme.of(
-                                                          context)
-                                                      .bodySmall
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      InkWell(
-                                        splashColor: Colors.transparent,
-                                        focusColor: Colors.transparent,
-                                        hoverColor: Colors.transparent,
-                                        highlightColor: Colors.transparent,
-                                        onTap: () async {
-                                          FFAppState().removeFromTaggedUsers(
-                                              rowUsersRecord.reference);
-                                          FFAppState().update(() {});
-                                        },
-                                        child: Icon(
-                                          Icons.close_rounded,
-                                          color: FlutterFlowTheme.of(context)
-                                              .secondaryText,
-                                          size: 18.0,
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            );
-                          }),
-                        );
-                      },
+              ),
+            for (final reference in references)
+              StreamBuilder<UsersRecord>(
+                stream: UsersRecord.getDocument(reference),
+                builder: (context, snapshot) {
+                  final user = snapshot.data;
+                  if (user == null) return const SizedBox.shrink();
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141414),
+                      borderRadius: BorderRadius.circular(17),
+                      border: Border.all(color: const Color(0xFF292929)),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: const Color(0xFF173A25),
+                          backgroundImage: user.photoUrl.isEmpty
+                              ? null
+                              : NetworkImage(user.photoUrl),
+                          child: user.photoUrl.isEmpty
+                              ? const Icon(Icons.person_rounded, color: _green)
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.displayName.isEmpty
+                                    ? '@${user.username}'
+                                    : user.displayName,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              Text('@${user.username}',
+                                  style: const TextStyle(
+                                      color: Color(0xFF898989), fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove tag',
+                          onPressed: () => FFAppState().update(() {
+                            FFAppState()
+                                .taggedUsers
+                                .removeWhere((item) => item.id == reference.id);
+                          }),
+                          icon: const Icon(Icons.close_rounded,
+                              color: Color(0xFF999999)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+          ],
         ),
       ),
     );

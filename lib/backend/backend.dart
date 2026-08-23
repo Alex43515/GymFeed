@@ -163,7 +163,7 @@ Stream<List<PostsRecord>> queryPostsRecord({
   // client-side). Per-user grids use queryPostsByUserStream.
   final future = supabase
       .from('posts')
-      .select()
+      .select('*, post_tags(user_id)')
       .eq('deleted', false)
       .order('created_at', ascending: false)
       .limit(limit > 0 ? limit : 200)
@@ -184,7 +184,7 @@ Stream<List<PostsRecord>> queryPostsByUserStream(
   if (normalizedUserId.isEmpty) return Stream.value(const []);
   var filter = supabase
       .from('posts')
-      .select()
+      .select('*, post_tags(user_id)')
       .eq('user_id', normalizedUserId)
       .eq('deleted', false);
   if (foodPost != null) filter = filter.eq('food_post', foodPost);
@@ -222,7 +222,7 @@ Stream<List<PostsRecord>> queryTaggedPostsByUserStream(String userId) {
 
     final rows = await supabase
         .from('posts')
-        .select()
+        .select('*, post_tags(user_id)')
         .inFilter('id', postIds)
         .eq('deleted', false)
         .order('created_at', ascending: false);
@@ -290,7 +290,7 @@ Future<List<PostsRecord>> queryPostsRecordOnce({
   // Supabase: recent non-deleted posts for client-side search.
   final rows = await supabase
       .from('posts')
-      .select()
+      .select('*, post_tags(user_id)')
       .eq('deleted', false)
       .order('created_at', ascending: false)
       .limit(limit > 0 ? limit : 500);
@@ -793,24 +793,29 @@ Future<String> createTrainingSupabase({
   if (uid == null) {
     throw StateError('Sign in before scheduling a workout.');
   }
-  final row = await supabase.from('user_trainings').insert(<String, dynamic>{
-    'user_id': uid,
-    if (title != null) 'title': title,
-    if (description != null) 'description': description,
-    if (category != null) 'category': category,
-    if (difficultyLevel != null) 'difficulty_level': difficultyLevel,
-    if (trainingDateRaw != null) 'training_date_raw': trainingDateRaw,
-    if (trainingTimeRaw != null) 'training_time_raw': trainingTimeRaw,
-    if (startsAt != null) 'starts_at': startsAt.toUtc().toIso8601String(),
-    if (duration != null) 'duration': duration,
-    if (backgroundImage != null && backgroundImage.isNotEmpty)
-      'background_image': backgroundImage,
-    if (videoUrl != null && videoUrl.isNotEmpty) 'legacy_video_url': videoUrl,
-    if (videoAssetId != null && videoAssetId.isNotEmpty)
-      'video_asset_id': videoAssetId,
-    if (location != null) 'location_lat': location.latitude,
-    if (location != null) 'location_lng': location.longitude,
-  }).select('id').single();
+  final row = await supabase
+      .from('user_trainings')
+      .insert(<String, dynamic>{
+        'user_id': uid,
+        if (title != null) 'title': title,
+        if (description != null) 'description': description,
+        if (category != null) 'category': category,
+        if (difficultyLevel != null) 'difficulty_level': difficultyLevel,
+        if (trainingDateRaw != null) 'training_date_raw': trainingDateRaw,
+        if (trainingTimeRaw != null) 'training_time_raw': trainingTimeRaw,
+        if (startsAt != null) 'starts_at': startsAt.toUtc().toIso8601String(),
+        if (duration != null) 'duration': duration,
+        if (backgroundImage != null && backgroundImage.isNotEmpty)
+          'background_image': backgroundImage,
+        if (videoUrl != null && videoUrl.isNotEmpty)
+          'legacy_video_url': videoUrl,
+        if (videoAssetId != null && videoAssetId.isNotEmpty)
+          'video_asset_id': videoAssetId,
+        if (location != null) 'location_lat': location.latitude,
+        if (location != null) 'location_lng': location.longitude,
+      })
+      .select('id')
+      .single();
   return row['id'].toString();
 }
 

@@ -1,4 +1,5 @@
 import '/ai_workout/coach_home/coach_section_switcher.dart';
+import '/ai_workout/coach_events/event_details_sheet.dart';
 import '/backend/supabase/repositories/training_repository.dart';
 import '/backend/supabase/supabase.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
@@ -182,7 +183,13 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
     final joined = _joined[training.id] ?? training.joinedByMe;
     return GestureDetector(
       key: ValueKey('upcoming-event-${training.id}'),
-      onTap: () => _openEventDetails(training),
+      onTap: () => showGymFeedEventDetails(
+        context,
+        training,
+        initiallyJoined: _joined[training.id] ?? training.joinedByMe,
+        onJoinedChanged: (value) =>
+            setState(() => _joined[training.id] = value),
+      ),
       child: Container(
         width: 238,
         padding: const EdgeInsets.all(15),
@@ -282,7 +289,13 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => _openEventDetails(training),
+          onTap: () => showGymFeedEventDetails(
+            context,
+            training,
+            initiallyJoined: _joined[training.id] ?? training.joinedByMe,
+            onJoinedChanged: (value) =>
+                setState(() => _joined[training.id] = value),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -380,138 +393,6 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
       ),
     );
   }
-
-  Future<void> _openEventDetails(Training training) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(builder: (context, setSheetState) {
-          final joined = _joined[training.id] ?? training.joinedByMe;
-          return Container(
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * .9),
-            decoration: const BoxDecoration(
-              color: Color(0xFF101010),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
-              children: [
-                Align(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF555555),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                if (training.coverUrl.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Image.network(
-                      training.coverUrl,
-                      height: 210,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                    ),
-                  ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        training.category.isEmpty
-                            ? 'Workout event'
-                            : training.category,
-                        style: _text(
-                            size: 12,
-                            color: FlutterFlowTheme.of(context).primary,
-                            weight: FontWeight.w600),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(sheetContext),
-                      icon:
-                          const Icon(Icons.close_rounded, color: Colors.white),
-                    ),
-                  ],
-                ),
-                Text(
-                    training.title.isEmpty ? 'GymFeed workout' : training.title,
-                    style: _text(size: 24, weight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                _detailLine(
-                    Icons.calendar_month_rounded, _scheduleLabel(training)),
-                _detailLine(
-                    Icons.speed_rounded,
-                    training.difficultyLevel.isEmpty
-                        ? 'All levels'
-                        : training.difficultyLevel),
-                _detailLine(
-                    Icons.timer_outlined,
-                    training.duration > 0
-                        ? '${training.duration} minutes'
-                        : 'Flexible duration'),
-                if (training.locationLat != null &&
-                    training.locationLng != null)
-                  _detailLine(Icons.location_on_outlined,
-                      '${training.locationLat!.toStringAsFixed(5)}, ${training.locationLng!.toStringAsFixed(5)}'),
-                if (training.description?.trim().isNotEmpty == true) ...[
-                  const SizedBox(height: 14),
-                  Text(training.description!,
-                      style: _text(size: 13, color: const Color(0xFFC4C4C4))),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 54,
-                  child: FilledButton(
-                    key: ValueKey('event-details-join-${training.id}'),
-                    onPressed: () async {
-                      await _toggleJoined(training);
-                      setSheetState(() {});
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: joined
-                          ? const Color(0xFF292929)
-                          : FlutterFlowTheme.of(context).primary,
-                      foregroundColor:
-                          joined ? Colors.white : const Color(0xFF080808),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(27)),
-                    ),
-                    child: Text(joined ? 'Leave event' : 'Join event',
-                        style: _text(
-                            size: 14,
-                            color:
-                                joined ? Colors.white : const Color(0xFF080808),
-                            weight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          );
-        });
-      },
-    );
-  }
-
-  Widget _detailLine(IconData icon, String value) => Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Row(
-          children: [
-            Icon(icon, color: _muted, size: 19),
-            const SizedBox(width: 10),
-            Expanded(child: Text(value, style: _text(size: 13))),
-          ],
-        ),
-      );
 
   Widget _loadingCard({double height = 210}) => Container(
         height: height,

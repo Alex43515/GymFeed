@@ -17,4 +17,29 @@ void main() {
     expect(sql, contains('suppress_duplicate_social_notification_insert'));
     expect(sql, contains('on conflict do nothing'));
   });
+
+  test('durable sources deduplicate social, chat, and device delivery', () {
+    final sql = File(
+      'supabase/migrations/0029_notification_source_deduplication.sql',
+    ).readAsStringSync();
+    final client = File(
+      'lib/backend/push_notifications/push_notifications_util.dart',
+    ).readAsStringSync();
+
+    for (final sourceIndex in [
+      'notifications_like_source_unique',
+      'notifications_follow_source_unique',
+      'notifications_comment_source_unique',
+      'notifications_tag_source_unique',
+      'push_queue_source_unique',
+      'fcm_tokens_token_unique',
+    ]) {
+      expect(sql, contains(sourceIndex));
+    }
+    expect(sql, contains("'chat_message',new.id"));
+    expect(sql, contains("'notification',new.id"));
+    expect(sql, contains('new.comment_id is null'));
+    expect(client, contains('_shownForegroundPushes'));
+    expect(client, contains('notificationKey.hashCode'));
+  });
 }

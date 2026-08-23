@@ -1,296 +1,126 @@
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'location_model.dart';
-export 'location_model.dart';
+
+import '/flutter_flow/flutter_flow_util.dart';
+import '/workout/schedule_training/workout_location_picker.dart';
 
 class LocationWidget extends StatefulWidget {
   const LocationWidget({super.key});
-
-  static String routeName = 'Location';
-  static String routePath = 'location';
-
+  static const String routeName = 'Location';
+  static const String routePath = 'location';
   @override
   State<LocationWidget> createState() => _LocationWidgetState();
 }
 
 class _LocationWidgetState extends State<LocationWidget> {
-  late LocationModel _model;
+  static const _green = Color(0xFF0EEA78);
+  bool _opening = false;
 
-  final scaffoldKey = GlobalKey<ScaffoldState>();
-
-  @override
-  void initState() {
-    super.initState();
-    _model = createModel(context, () => LocationModel());
-
-    _model.textController ??=
-        TextEditingController(text: FFAppState().location);
-    _model.textFieldFocusNode ??= FocusNode();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _model.dispose();
-
-    super.dispose();
+  Future<void> _pick() async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    final place = await showGymFeedLocationPicker(
+      context,
+      title: 'Post location',
+      subtitle: 'Search for a restaurant, gym, city, or address.',
+    );
+    if (!mounted) return;
+    setState(() => _opening = false);
+    if (place == null) return;
+    FFAppState().location = place.address;
+    FFAppState().update(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    context.watch<FFAppState>();
-
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        appBar: AppBar(
-          backgroundColor: FlutterFlowTheme.of(context).secondary,
-          automaticallyImplyLeading: false,
-          leading: InkWell(
-            splashColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            onTap: () async {
-              context.pop();
-            },
-            child: Icon(
-              Icons.close_rounded,
-              color: FlutterFlowTheme.of(context).tertiary,
-              size: 15.0,
-            ),
+    final location = FFAppState().location.trim();
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Location',
+            style:
+                TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        actions: [
+          TextButton(
+            onPressed: () => context.pop(),
+            child: const Text('Done',
+                style: TextStyle(color: _green, fontWeight: FontWeight.w700)),
           ),
-          title: Text(
-            FFLocalizations.of(context).getText(
-              'fbncfi46' /* Location */,
-            ),
-            style: FlutterFlowTheme.of(context).titleMedium.override(
-                  fontFamily: 'Poppins',
-                  fontSize: 16.0,
-                  letterSpacing: 0.0,
-                ),
-          ),
-          actions: [
-            Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 15.0, 0.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  InkWell(
-                    splashColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () async {
-                      if (_model.formKey.currentState == null ||
-                          !_model.formKey.currentState!.validate()) {
-                        return;
-                      }
-                      FFAppState().location = _model.textController.text;
-                      FFAppState().update(() {});
-                      context.pop();
-                    },
-                    child: Text(
-                      FFLocalizations.of(context).getText(
-                        'bluqhn9l' /* Done */,
-                      ),
-                      style: FlutterFlowTheme.of(context).titleMedium.override(
-                            fontFamily: 'Poppins',
-                            color: FlutterFlowTheme.of(context).tertiary,
-                            fontSize: 15.0,
-                            letterSpacing: 0.0,
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          centerTitle: true,
-          elevation: 0.0,
-        ),
-        body: SafeArea(
-          top: true,
-          child: Form(
-            key: _model.formKey,
-            autovalidateMode: AutovalidateMode.disabled,
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(15.0, 15.0, 0.0, 6.0),
-                  child: Text(
-                    FFLocalizations.of(context).getText(
-                      'ev8aef5r' /* Add a location */,
-                    ),
-                    style: FlutterFlowTheme.of(context).titleMedium.override(
-                          fontFamily: 'Poppins',
-                          letterSpacing: 0.0,
-                        ),
-                  ),
-                ),
-                Padding(
-                  padding:
-                      EdgeInsetsDirectional.fromSTEB(15.0, 0.0, 15.0, 15.0),
-                  child: Text(
-                    FFLocalizations.of(context).getText(
-                      'irx732pm' /* Add a location so users know w... */,
-                    ),
-                    style: FlutterFlowTheme.of(context).bodySmall.override(
-                          fontFamily: 'Poppins',
-                          letterSpacing: 0.0,
-                          fontWeight: FontWeight.normal,
-                        ),
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  height: 0.5,
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Add a location',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text('Help people find the place connected to this post.',
+                  style: TextStyle(color: Color(0xFF929292), fontSize: 13)),
+              const SizedBox(height: 22),
+              InkWell(
+                key: const Key('post-location-search-button'),
+                onTap: _pick,
+                borderRadius: BorderRadius.circular(18),
+                child: Container(
+                  padding: const EdgeInsets.all(17),
                   decoration: BoxDecoration(
-                    color: Color(0xFFDADADA),
+                    color: const Color(0xFF151515),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFF2A2A2A)),
                   ),
-                ),
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0.0, 6.0, 0.0, 0.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
+                  child: Row(
                     children: [
-                      Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(
-                            15.0, 0.0, 15.0, 6.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                FFLocalizations.of(context).getText(
-                                  '5l9eudq6' /* Location */,
-                                ),
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 14.0,
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 6,
-                              child: TextFormField(
-                                controller: _model.textController,
-                                focusNode: _model.textFieldFocusNode,
-                                onChanged: (_) => EasyDebounce.debounce(
-                                  '_model.textController',
-                                  Duration(milliseconds: 500),
-                                  () => safeSetState(() {}),
-                                ),
-                                autofocus: true,
-                                textCapitalization:
-                                    TextCapitalization.sentences,
-                                obscureText: false,
-                                decoration: InputDecoration(
-                                  labelStyle: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        fontFamily: 'Poppins',
-                                        letterSpacing: 0.0,
-                                      ),
-                                  hintText: FFLocalizations.of(context).getText(
-                                    'olyw413i' /* Location */,
-                                  ),
-                                  hintStyle: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        fontFamily: 'Poppins',
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryText,
-                                        fontSize: 14.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.normal,
-                                      ),
-                                  enabledBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0x00000000),
-                                      width: 1.0,
-                                    ),
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(4.0),
-                                      topRight: Radius.circular(4.0),
-                                    ),
-                                  ),
-                                  focusedBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0x00000000),
-                                      width: 1.0,
-                                    ),
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(4.0),
-                                      topRight: Radius.circular(4.0),
-                                    ),
-                                  ),
-                                  errorBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0x00000000),
-                                      width: 1.0,
-                                    ),
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(4.0),
-                                      topRight: Radius.circular(4.0),
-                                    ),
-                                  ),
-                                  focusedErrorBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0x00000000),
-                                      width: 1.0,
-                                    ),
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(4.0),
-                                      topRight: Radius.circular(4.0),
-                                    ),
-                                  ),
-                                ),
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                                cursorColor:
-                                    FlutterFlowTheme.of(context).primaryText,
-                                validator: _model.textControllerValidator
-                                    .asValidator(context),
-                              ),
-                            ),
-                          ],
+                      const Icon(Icons.location_on_rounded, color: _green),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          location.isEmpty ? 'Search location' : location,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: location.isEmpty
+                                  ? const Color(0xFF888888)
+                                  : Colors.white,
+                              fontFamily: 'Poppins'),
                         ),
                       ),
+                      if (_opening)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _green),
+                        )
+                      else
+                        const Icon(Icons.chevron_right_rounded,
+                            color: Color(0xFF888888)),
                     ],
                   ),
                 ),
-                Container(
-                  width: double.infinity,
-                  height: 0.5,
-                  decoration: BoxDecoration(
-                    color: Color(0xFFDADADA),
-                  ),
+              ),
+              if (location.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    FFAppState().location = '';
+                    FFAppState().update(() {});
+                    setState(() {});
+                  },
+                  icon: const Icon(Icons.close_rounded),
+                  label: const Text('Remove location'),
+                  style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFFF6B6B)),
                 ),
               ],
-            ),
+            ],
           ),
         ),
       ),

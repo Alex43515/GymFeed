@@ -1,13 +1,12 @@
 import '/backend/api_requests/api_calls.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
-import '/flutter_flow/flutter_flow_place_picker.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
 import '/custom_code/widgets/create_ui.dart';
 import '/custom_code/widgets/upload_progress_screen.dart';
 import '/backend/supabase/repositories/post_repository.dart';
+import '/workout/schedule_training/workout_location_picker.dart';
 import 'dart:async';
 import '/custom_code/actions/index.dart' as actions;
 import '/flutter_flow/custom_functions.dart' as functions;
@@ -184,31 +183,17 @@ class _NewPostWidgetState extends State<NewPostWidget>
               ],
             ),
           ),
-          FlutterFlowPlacePicker(
-            iOSGoogleMapsApiKey: 'AIzaSyAhiNjvBpWvH1VVuoRGU5J3WnjVPFIzkE4',
-            androidGoogleMapsApiKey: 'AIzaSyD60h9pruOAaVuyPzjCD5Cg3fxemawEUpg',
-            webGoogleMapsApiKey: 'AIzaSyBaAKbRwjQpBxUxfa46HZYGwxPTwpXqy4g',
-            onSelect: (place) async {
-              safeSetState(() => _model.placePickerValue = place);
+          TextButton.icon(
+            key: const Key('post-location-picker'),
+            onPressed: () async {
+              final place = await showGymFeedLocationPicker(context);
+              if (place != null && mounted) {
+                safeSetState(() => _model.placePickerValue = place);
+              }
             },
-            defaultText: hasAddr ? 'Change' : 'Add',
             icon: Icon(Icons.place, color: theme.primary, size: 16.0),
-            buttonOptions: FFButtonOptions(
-              height: 38.0,
-              padding:
-                  const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 0.0),
-              color: Colors.transparent,
-              textStyle: theme.titleSmall.override(
-                fontFamily: 'Poppins',
-                color: theme.primary,
-                letterSpacing: 0.0,
-                fontWeight: FontWeight.w600,
-              ),
-              elevation: 0.0,
-              borderSide:
-                  const BorderSide(color: Colors.transparent, width: 1.0),
-              borderRadius: BorderRadius.circular(19.0),
-            ),
+            label: Text(hasAddr ? 'Change' : 'Add'),
+            style: TextButton.styleFrom(foregroundColor: theme.primary),
           ),
         ],
       ),
@@ -449,7 +434,16 @@ class _NewPostWidgetState extends State<NewPostWidget>
                       callToActionLink: FFAppState().calltoactionurl,
                       labels: FFAppState().imageLabels,
                       foodPost: false,
+                      taggedUserIds: FFAppState()
+                          .taggedUsers
+                          .map((reference) => reference.id)
+                          .toList(growable: false),
                     );
+
+                    FFAppState().taggedUsers = [];
+                    FFAppState().calltoactionenabled = false;
+                    FFAppState().calltoactiontext = '';
+                    FFAppState().calltoactionurl = '';
 
                     context.goNamed(FeedWidget.routeName);
                   } else {

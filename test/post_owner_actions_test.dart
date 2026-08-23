@@ -92,6 +92,49 @@ void main() {
       expect(repository, contains(".select('id')"));
     });
 
+    test('editor replaces media, edits CTA and tags, and can delete', () {
+      final editor = File(
+        'lib/pages/posts/edit_post/edit_post_widget.dart',
+      ).readAsStringSync();
+      final repository = File(
+        'lib/backend/supabase/repositories/post_repository.dart',
+      ).readAsStringSync();
+
+      expect(editor, contains('Replace image'));
+      expect(editor, contains('Replace video'));
+      expect(editor, contains("Key('remove-post-media')"));
+      expect(editor, contains("Key('delete-post-from-editor')"));
+      expect(editor, contains('showGymFeedLocationPicker'));
+      expect(editor, contains('TagUsersWidget.routeName'));
+      expect(repository, contains("'video_asset_id': videoAssetId"));
+      expect(repository, contains("from('post_tags')"));
+      expect(repository, contains('callToActionEnabled'));
+    });
+
+    test('food details expose comments and complete information tabs', () {
+      final details = File(
+        'lib/pages/posts/post_details/food_post_details_view.dart',
+      ).readAsStringSync();
+      final feedSql = File(
+        'supabase/migrations/0028_feed_post_metadata.sql',
+      ).readAsStringSync();
+
+      expect(details, contains("_tabButton('Comments', 0)"));
+      expect(details, contains("_tabButton('Info', 1)"));
+      expect(details, isNot(contains('TabBarView(')));
+      for (final label in [
+        'Meal type',
+        'Preparation time',
+        'Nutrition facts',
+        'Recipe & preparation',
+      ]) {
+        expect(details, contains(label));
+      }
+      expect(feedSql, contains('call_to_action_enabled'));
+      expect(feedSql, contains('tagged_user_ids'));
+      expect(feedSql, contains('nutrition_facts'));
+    });
+
     test('home replaces or removes only the changed post in place', () {
       final source = File(
         'lib/pages/core_pages/feed/feed_widget.dart',

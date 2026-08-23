@@ -3,9 +3,15 @@ import 'package:flutter/material.dart';
 
 import '/backend/backend.dart';
 import '/backend/supabase/repositories/post_repository.dart';
+import '/backend/supabase/supabase.dart';
+import '/backend/supabase/supabase_records.dart';
 import '/custom_code/widgets/feed_video_player.dart';
+import '/custom_code/widgets/upload_progress_screen.dart';
+import '/custom_code/actions/index.dart' as actions;
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/flutter_flow/flutter_flow_util.dart';
+import '/pages/posts/tag_users/tag_users_widget.dart';
+import '/workout/schedule_training/workout_location_picker.dart';
 
 class EditPostWidget extends StatefulWidget {
   const EditPostWidget({super.key, this.post});
@@ -36,6 +42,16 @@ class _EditPostWidgetState extends State<EditPostWidget> {
   late final TextEditingController _protein;
   late final TextEditingController _fats;
   late final TextEditingController _carbs;
+  late final TextEditingController _ctaText;
+  late final TextEditingController _ctaLink;
+  late String _photoUrl;
+  late String _videoUrl;
+  late String _thumbnailUrl;
+  String? _videoAssetId;
+  bool _mediaChanged = false;
+  bool _mediaUploading = false;
+  late bool _ctaEnabled;
+  late final Future<void> _tagsLoaded;
   bool _saving = false;
 
   PostsRecord? get _post => widget.post;
@@ -62,6 +78,36 @@ class _EditPostWidgetState extends State<EditPostWidget> {
     );
     _fats = TextEditingController(text: post?.fats ?? '');
     _carbs = TextEditingController(text: post?.carbs ?? '');
+    _ctaText = TextEditingController(text: post?.callToActionText ?? '');
+    _ctaLink = TextEditingController(text: post?.callToActionLink ?? '');
+    _ctaEnabled = post?.callToActionEnabled ?? false;
+    _photoUrl = post == null
+        ? ''
+        : (post.postPhoto.isNotEmpty ? post.postPhoto : post.postPhotoFood);
+    _videoUrl = post == null
+        ? ''
+        : (post.postVideo.isNotEmpty ? post.postVideo : post.postVideoFood);
+    _thumbnailUrl = post?.videoThumbnail ?? '';
+    FFAppState().taggedUsers = post?.taggedUsers.toList() ?? [];
+    _tagsLoaded = _loadTags();
+  }
+
+  Future<void> _loadTags() async {
+    final postId = _post?.reference.id;
+    if (postId == null || postId.isEmpty) return;
+    final rows = await supabase
+        .from('post_tags')
+        .select('user_id')
+        .eq('post_id', postId);
+    final references = (rows as List)
+        .whereType<Map>()
+        .map((row) => (row['user_id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .map(supaUserRef)
+        .whereType<DocumentReference>()
+        .toList(growable: false);
+    FFAppState().taggedUsers = references;
+    if (mounted) setState(() {});
   }
 
   @override
@@ -79,6 +125,8 @@ class _EditPostWidgetState extends State<EditPostWidget> {
       _protein,
       _fats,
       _carbs,
+      _ctaText,
+      _ctaLink,
     ]) {
       controller.dispose();
     }
@@ -94,6 +142,7 @@ class _EditPostWidgetState extends State<EditPostWidget> {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _saving = true);
     try {
+      await _tagsLoaded;
       await PostRepository().updatePost(
         post.reference.id,
         caption: _caption.text.trim(),
@@ -108,7 +157,21 @@ class _EditPostWidgetState extends State<EditPostWidget> {
         protein: _isFood ? _number(_protein) : null,
         fats: _isFood ? _fats.text.trim() : null,
         carbs: _isFood ? _carbs.text.trim() : null,
+        replaceMedia: _mediaChanged,
+        photoUrl: _photoUrl.trim().isEmpty ? null : _photoUrl.trim(),
+        videoUrl: _videoUrl.trim().isEmpty ? null : _videoUrl.trim(),
+        videoThumbnail:
+            _thumbnailUrl.trim().isEmpty ? null : _thumbnailUrl.trim(),
+        videoAssetId: _videoAssetId,
+        callToActionEnabled: _ctaEnabled,
+        callToActionText: _ctaText.text.trim(),
+        callToActionLink: _ctaLink.text.trim(),
+        taggedUserIds: FFAppState()
+            .taggedUsers
+            .map((reference) => reference.id)
+            .toList(growable: false),
       );
+      FFAppState().taggedUsers = [];
       if (mounted) context.pop(true);
     } catch (_) {
       if (!mounted) return;
@@ -117,6 +180,96 @@ class _EditPostWidgetState extends State<EditPostWidget> {
       );
       setState(() => _saving = false);
     }
+  }
+
+  Future<void> _replacePhoto() async {
+    if (_mediaUploading) return;
+    setState(() => _mediaUploading = true);
+    try {
+      final path = await actions.pickImage();
+      if (path == null || path.isEmpty) return;
+      final compressed = await actions.compressImage(path);
+      if (compressed?.bytes == null || compressed!.bytes!.isEmpty) return;
+      if (!mounted) return;
+      final result = await showUploadProgress(
+        context,
+        imageBytes: compressed.bytes!,
+        imageFileName: compressed.name ?? 'post-photo.jpg',
+      );
+      if (!mounted || result?.imageUrl == null) return;
+      setState(() {
+        _photoUrl = result!.imageUrl!;
+        _videoUrl = '';
+        _thumbnailUrl = '';
+        _videoAssetId = null;
+        _mediaChanged = true;
+      });
+    } finally {
+      if (mounted) setState(() => _mediaUploading = false);
+    }
+  }
+
+  Future<void> _replaceVideo() async {
+    if (_mediaUploading) return;
+    setState(() => _mediaUploading = true);
+    try {
+      final file = await actions.pickAndPrepareVideo();
+      if (file?.bytes == null || file!.bytes!.isEmpty || !mounted) return;
+      final result = await showUploadProgress(
+        context,
+        videoBytes: file.bytes!,
+        videoTitle: 'GymFeed post video',
+        videoFileName: file.name ?? 'gymfeed-video.mp4',
+      );
+      if (!mounted || result?.videoPlaylistUrl == null) return;
+      setState(() {
+        _photoUrl = '';
+        _videoUrl = result!.videoPlaylistUrl!;
+        _thumbnailUrl = result.videoThumbnailUrl ?? '';
+        _videoAssetId = result.videoAssetId;
+        _mediaChanged = true;
+      });
+    } finally {
+      if (mounted) setState(() => _mediaUploading = false);
+    }
+  }
+
+  Future<void> _pickLocation() async {
+    final place = await showGymFeedLocationPicker(
+      context,
+      title: 'Post location',
+      subtitle: 'Search for a place, city, restaurant, gym, or address.',
+    );
+    if (place != null && mounted)
+      setState(() => _location.text = place.address);
+  }
+
+  Future<void> _delete() async {
+    final post = _post;
+    if (post == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _surface,
+        title:
+            const Text('Delete post?', style: TextStyle(color: Colors.white)),
+        content: const Text('This removes the post from GymFeed.',
+            style: TextStyle(color: Color(0xFFAAAAAA))),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete',
+                style: TextStyle(color: Color(0xFFFF5C68))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await PostRepository().deletePost(post.reference.id);
+    if (mounted) context.pop('deleted');
   }
 
   @override
@@ -130,12 +283,8 @@ class _EditPostWidgetState extends State<EditPostWidget> {
         ),
       );
     }
-    final rawPhoto =
-        post.postPhoto.isNotEmpty ? post.postPhoto : post.postPhotoFood;
-    final rawVideo =
-        post.postVideo.isNotEmpty ? post.postVideo : post.postVideoFood;
-    final photo = functions.bunnyCDNImagePath(rawPhoto);
-    final video = functions.bunnyCDNVideoPath(rawVideo);
+    final photo = functions.bunnyCDNImagePath(_photoUrl);
+    final video = functions.bunnyCDNVideoPath(_videoUrl);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -184,9 +333,62 @@ class _EditPostWidgetState extends State<EditPostWidget> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
           children: [
             _mediaPreview(photo: photo, video: video, post: post),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                    child: _mediaButton(
+                        Icons.image_outlined, 'Replace image', _replacePhoto)),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: _mediaButton(Icons.videocam_outlined,
+                        'Replace video', _replaceVideo)),
+              ],
+            ),
+            if (_photoUrl.isNotEmpty || _videoUrl.isNotEmpty)
+              TextButton.icon(
+                key: const Key('remove-post-media'),
+                onPressed: _mediaUploading
+                    ? null
+                    : () => setState(() {
+                          _photoUrl = '';
+                          _videoUrl = '';
+                          _thumbnailUrl = '';
+                          _videoAssetId = null;
+                          _mediaChanged = true;
+                        }),
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('Remove media'),
+                style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF6B6B)),
+              ),
             const SizedBox(height: 18),
             _field('Caption', _caption, maxLines: 4),
-            _field('Location', _location, icon: Icons.location_on_outlined),
+            InkWell(
+              key: const Key('edit-post-location-picker'),
+              onTap: _pickLocation,
+              child: IgnorePointer(
+                child: _field('Location', _location,
+                    icon: Icons.location_on_outlined),
+              ),
+            ),
+            _actionRow(),
+            ListTile(
+              key: const Key('edit-post-tags'),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              leading:
+                  const Icon(Icons.person_add_alt_1_rounded, color: _green),
+              title: const Text('Tag people',
+                  style: TextStyle(color: Colors.white)),
+              subtitle: Text('${FFAppState().taggedUsers.length} selected',
+                  style: const TextStyle(color: Color(0xFF888888))),
+              trailing: const Icon(Icons.chevron_right_rounded,
+                  color: Color(0xFF888888)),
+              onTap: () async {
+                await context.pushNamed(TagUsersWidget.routeName);
+                if (mounted) setState(() {});
+              },
+            ),
             if (_isFood) ...[
               const Padding(
                 padding: EdgeInsets.only(top: 10, bottom: 14),
@@ -243,8 +445,73 @@ class _EditPostWidgetState extends State<EditPostWidget> {
                 ],
               ),
             ],
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              key: const Key('delete-post-from-editor'),
+              onPressed: _saving ? null : _delete,
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('Delete post'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFFF5C68),
+                minimumSize: const Size.fromHeight(52),
+                side: const BorderSide(color: Color(0xFF5A242A)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _mediaButton(
+      IconData icon, String label, Future<void> Function() action) {
+    return OutlinedButton.icon(
+      onPressed: _mediaUploading ? null : action,
+      icon: _mediaUploading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _green))
+          : Icon(icon),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _green,
+        minimumSize: const Size.fromHeight(48),
+        side: const BorderSide(color: _border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      ),
+    );
+  }
+
+  Widget _actionRow() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 13),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _ctaEnabled,
+            activeColor: _green,
+            title: const Text('Call to action',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+            subtitle: const Text('Show a link button below this post',
+                style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
+            onChanged: (value) => setState(() => _ctaEnabled = value),
+          ),
+          if (_ctaEnabled) ...[
+            _field('Button text', _ctaText),
+            _field('Link URL', _ctaLink, keyboardType: TextInputType.url),
+          ],
+        ],
       ),
     );
   }
@@ -263,8 +530,8 @@ class _EditPostWidgetState extends State<EditPostWidget> {
           child: video.isNotEmpty
               ? FeedVideoPlayer(
                   videoUrl: video,
-                  thumbnailUrl: post.videoThumbnail.isNotEmpty
-                      ? functions.bunnyCDNImagePath(post.videoThumbnail)
+                  thumbnailUrl: _thumbnailUrl.isNotEmpty
+                      ? functions.bunnyCDNImagePath(_thumbnailUrl)
                       : (photo.isEmpty ? null : photo),
                   borderRadius: 20,
                 )

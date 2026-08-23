@@ -112,6 +112,7 @@ class PostRepository {
     String? callToActionText,
     String? callToActionLink,
     String? labels,
+    List<String> taggedUserIds = const [],
   }) async {
     final uid = _requireUid();
     final row = await _db
@@ -148,7 +149,9 @@ class PostRepository {
         })
         .select('id')
         .single();
-    return row['id'] as String;
+    final postId = row['id'] as String;
+    await _replaceTags(postId, taggedUserIds);
+    return postId;
   }
 
   /// Edit an owned post. Food metadata lives on the same `posts` row, so the
@@ -167,6 +170,15 @@ class PostRepository {
     int? protein,
     String? fats,
     String? carbs,
+    bool replaceMedia = false,
+    String? photoUrl,
+    String? videoUrl,
+    String? videoThumbnail,
+    String? videoAssetId,
+    bool? callToActionEnabled,
+    String? callToActionText,
+    String? callToActionLink,
+    List<String>? taggedUserIds,
   }) async {
     final uid = _requireUid();
     final updated = await _db
@@ -184,6 +196,14 @@ class PostRepository {
           if (protein != null) 'protein': protein,
           if (fats != null) 'fats': fats,
           if (carbs != null) 'carbs': carbs,
+          if (replaceMedia) 'legacy_photo_url': photoUrl,
+          if (replaceMedia) 'legacy_video_url': videoUrl,
+          if (replaceMedia) 'video_thumbnail': videoThumbnail,
+          if (replaceMedia) 'video_asset_id': videoAssetId,
+          if (callToActionEnabled != null)
+            'call_to_action_enabled': callToActionEnabled,
+          if (callToActionText != null) 'call_to_action_text': callToActionText,
+          if (callToActionLink != null) 'call_to_action_link': callToActionLink,
         })
         .eq('id', postId)
         .eq('user_id', uid)
@@ -192,6 +212,20 @@ class PostRepository {
     if (updated == null) {
       throw StateError('Post was not found or is not owned by this user.');
     }
+    if (taggedUserIds != null) await _replaceTags(postId, taggedUserIds);
+  }
+
+  Future<void> _replaceTags(String postId, Iterable<String> userIds) async {
+    await _db.from('post_tags').delete().eq('post_id', postId);
+    final uid = _uid;
+    final normalized = userIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty && id != uid)
+        .toSet();
+    if (normalized.isEmpty) return;
+    await _db.from('post_tags').insert([
+      for (final userId in normalized) {'post_id': postId, 'user_id': userId},
+    ]);
   }
 
   /// Posts authored by a given user (their profile grid), newest first.

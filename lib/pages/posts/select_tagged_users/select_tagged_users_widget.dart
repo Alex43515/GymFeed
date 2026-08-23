@@ -1,13 +1,8 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:text_search/text_search.dart';
-import 'select_tagged_users_model.dart';
-export 'select_tagged_users_model.dart';
 
 class SelectTaggedUsersWidget extends StatefulWidget {
   const SelectTaggedUsersWidget({super.key});
@@ -21,361 +16,198 @@ class SelectTaggedUsersWidget extends StatefulWidget {
 }
 
 class _SelectTaggedUsersWidgetState extends State<SelectTaggedUsersWidget> {
-  late SelectTaggedUsersModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
+  static const _green = Color(0xFF0EEA78);
+  late final Future<List<UsersRecord>> _usersFuture;
+  final _search = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => SelectTaggedUsersModel());
-
-    _model.textController ??= TextEditingController();
-    _model.textFieldFocusNode ??= FocusNode();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    _usersFuture = queryUsersRecordOnce(limit: 500);
+    _search.addListener(() {
+      final value = _search.text.trim().toLowerCase();
+      if (value != _query && mounted) setState(() => _query = value);
+    });
   }
 
   @override
   void dispose() {
-    _model.dispose();
-
+    _search.dispose();
     super.dispose();
+  }
+
+  bool _selected(UsersRecord user) => FFAppState()
+      .taggedUsers
+      .any((reference) => reference.id == user.reference.id);
+
+  void _toggle(UsersRecord user) {
+    final state = FFAppState();
+    state.update(() {
+      if (_selected(user)) {
+        state.taggedUsers.removeWhere(
+          (reference) => reference.id == user.reference.id,
+        );
+      } else {
+        state.addToTaggedUsers(user.reference);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
-
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        appBar: AppBar(
-          backgroundColor: FlutterFlowTheme.of(context).secondary,
-          automaticallyImplyLeading: false,
-          title: Text(
-            FFLocalizations.of(context).getText(
-              'sbjxj84y' /* Select users */,
+    return Scaffold(
+      backgroundColor: const Color(0xFF080808),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF080808),
+        foregroundColor: Colors.white,
+        title: const Text('Tag people',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        actions: [
+          TextButton(
+            key: const Key('tag-users-done'),
+            onPressed: () => context.pop(),
+            child: Text(
+              FFAppState().taggedUsers.isEmpty
+                  ? 'Done'
+                  : 'Done (${FFAppState().taggedUsers.length})',
+              style:
+                  const TextStyle(color: _green, fontWeight: FontWeight.w700),
             ),
-            style: FlutterFlowTheme.of(context).titleMedium.override(
-                  fontFamily: 'Poppins',
-                  fontSize: 16.0,
-                  letterSpacing: 0.0,
-                ),
           ),
-          actions: [],
-          centerTitle: true,
-          elevation: 0.0,
-        ),
-        body: SafeArea(
-          top: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              Padding(
-                padding: EdgeInsetsDirectional.fromSTEB(15.0, 0.0, 15.0, 12.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: StreamBuilder<List<UsersRecord>>(
-                        stream: queryUsersRecord(),
-                        builder: (context, snapshot) {
-                          // Customize what your widget looks like when it's loading.
-                          if (!snapshot.hasData) {
-                            return Center(
-                              child: SizedBox(
-                                width: 12.0,
-                                height: 12.0,
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                          List<UsersRecord> textFieldUsersRecordList = snapshot
-                              .data!
-                              .where((u) => u.uid != currentUserUid)
-                              .toList();
-
-                          return Container(
-                            width: 50.0,
-                            child: TextFormField(
-                              controller: _model.textController,
-                              focusNode: _model.textFieldFocusNode,
-                              onChanged: (_) => EasyDebounce.debounce(
-                                '_model.textController',
-                                Duration(milliseconds: 1000),
-                                () async {
-                                  safeSetState(() {
-                                    _model.simpleSearchResults = TextSearch(
-                                      textFieldUsersRecordList
-                                          .map(
-                                            (record) =>
-                                                TextSearchItem.fromTerms(
-                                                    record, [
-                                              record.displayName,
-                                              record.username
-                                            ]),
-                                          )
-                                          .toList(),
-                                    )
-                                        .search(_model.textController.text)
-                                        .map((r) => r.object)
-                                        .take(15)
-                                        .toList();
-                                    ;
-                                  });
-                                },
-                              ),
-                              autofocus: true,
-                              textInputAction: TextInputAction.search,
-                              obscureText: false,
-                              decoration: InputDecoration(
-                                hintText: FFLocalizations.of(context).getText(
-                                  '4pt3didt' /* Search for a person */,
-                                ),
-                                hintStyle: FlutterFlowTheme.of(context)
-                                    .bodySmall
-                                    .override(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 16.0,
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.normal,
-                                      lineHeight: 1.5,
-                                    ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color:
-                                        FlutterFlowTheme.of(context).tertiary,
-                                    width: 1.0,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16.0),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color:
-                                        FlutterFlowTheme.of(context).tertiary,
-                                    width: 1.0,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16.0),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color: Color(0x00000000),
-                                    width: 1.0,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16.0),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color: Color(0x00000000),
-                                    width: 1.0,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16.0),
-                                ),
-                                filled: true,
-                                fillColor:
-                                    FlutterFlowTheme.of(context).secondary,
-                                contentPadding: EdgeInsetsDirectional.fromSTEB(
-                                    24.0, 0.0, 24.0, 0.0),
-                                prefixIcon: Icon(
-                                  FFIcons.ksearch,
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryText,
-                                  size: 16.0,
-                                ),
-                                suffixIcon: _model
-                                        .textController!.text.isNotEmpty
-                                    ? InkWell(
-                                        onTap: () async {
-                                          _model.textController?.clear();
-                                          safeSetState(() {
-                                            _model.simpleSearchResults =
-                                                TextSearch(
-                                              textFieldUsersRecordList
-                                                  .map(
-                                                    (record) => TextSearchItem
-                                                        .fromTerms(record, [
-                                                      record.displayName,
-                                                      record.username
-                                                    ]),
-                                                  )
-                                                  .toList(),
-                                            )
-                                                    .search(_model
-                                                        .textController.text)
-                                                    .map((r) => r.object)
-                                                    .take(15)
-                                                    .toList();
-                                            ;
-                                          });
-                                          safeSetState(() {});
-                                        },
-                                        child: Icon(
-                                          Icons.clear,
-                                          color: FlutterFlowTheme.of(context)
-                                              .tertiary,
-                                          size: 18.0,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 16.0,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                              keyboardType: TextInputType.name,
-                              cursorColor:
-                                  FlutterFlowTheme.of(context).primaryText,
-                              validator: _model.textControllerValidator
-                                  .asValidator(context),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 0.0, 0.0),
-                      child: InkWell(
-                        splashColor: Colors.transparent,
-                        focusColor: Colors.transparent,
-                        hoverColor: Colors.transparent,
-                        highlightColor: Colors.transparent,
-                        onTap: () async {
-                          context.pop();
-                        },
-                        child: Text(
-                          FFLocalizations.of(context).getText(
-                            'b8an91bf' /* Cancel */,
-                          ),
-                          style:
-                              FlutterFlowTheme.of(context).bodyMedium.override(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 16.0,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.normal,
-                                  ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: TextField(
+                key: const Key('tag-users-search'),
+                controller: _search,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Search by name or username',
+                  hintStyle: const TextStyle(color: Color(0xFF777777)),
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      color: Color(0xFF8A8A8A)),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: _search.clear,
+                          icon: const Icon(Icons.close_rounded,
+                              color: Color(0xFF8A8A8A)),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(15.0, 0.0, 15.0, 0.0),
-                  child: Builder(
-                    builder: (context) {
-                      final taggedUsers = _model.simpleSearchResults
-                          .where((e) =>
-                              !FFAppState().taggedUsers.contains(e.reference))
-                          .toList();
-
-                      return Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: List.generate(taggedUsers.length,
-                            (taggedUsersIndex) {
-                          final taggedUsersItem = taggedUsers[taggedUsersIndex];
-                          return Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                0.0, 12.0, 0.0, 0.0),
-                            child: InkWell(
-                              splashColor: Colors.transparent,
-                              focusColor: Colors.transparent,
-                              hoverColor: Colors.transparent,
-                              highlightColor: Colors.transparent,
-                              onTap: () async {
-                                FFAppState().addToTaggedUsers(
-                                    taggedUsersItem.reference);
-                                FFAppState().update(() {});
-                                context.pop();
-                              },
-                              child: Row(
-                                mainAxisSize: MainAxisSize.max,
-                                children: [
-                                  Container(
-                                    width: 55.0,
-                                    height: 55.0,
-                                    clipBehavior: Clip.antiAlias,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Image.network(
-                                      valueOrDefault<String>(
-                                        taggedUsersItem.photoUrl,
-                                        'https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg',
-                                      ),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          12.0, 0.0, 0.0, 0.0),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.max,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            taggedUsersItem.displayName,
-                                            maxLines: 1,
-                                            style: FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .override(
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 14.0,
-                                                  letterSpacing: 0.0,
-                                                ),
-                                          ),
-                                          Padding(
-                                            padding:
-                                                EdgeInsetsDirectional.fromSTEB(
-                                                    0.0, 2.0, 0.0, 0.0),
-                                            child: Text(
-                                              taggedUsersItem.username,
-                                              maxLines: 1,
-                                              style:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .override(
-                                                        fontFamily: 'Poppins',
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.normal,
-                                                      ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                      );
-                    },
+                  filled: true,
+                  fillColor: const Color(0xFF151515),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: const BorderSide(color: Color(0xFF292929)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: const BorderSide(color: _green),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<UsersRecord>>(
+                future: _usersFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                        child: CircularProgressIndicator(color: _green));
+                  }
+                  if (snapshot.hasError) {
+                    return const Center(
+                      child: Text('People could not be loaded.',
+                          style: TextStyle(color: Color(0xFF999999))),
+                    );
+                  }
+                  final users = (snapshot.data ?? const <UsersRecord>[])
+                      .where((user) => user.uid != currentUserUid)
+                      .where((user) {
+                    if (_query.isEmpty) return true;
+                    return user.displayName.toLowerCase().contains(_query) ||
+                        user.username.toLowerCase().contains(_query);
+                  }).toList()
+                    ..sort((a, b) {
+                      final selectedOrder =
+                          (_selected(b) ? 1 : 0) - (_selected(a) ? 1 : 0);
+                      if (selectedOrder != 0) return selectedOrder;
+                      return a.displayName.compareTo(b.displayName);
+                    });
+                  if (users.isEmpty) {
+                    return const Center(
+                      child: Text('No people found.',
+                          style: TextStyle(color: Color(0xFF888888))),
+                    );
+                  }
+                  return ListView.separated(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 30),
+                    itemCount: users.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFF202020)),
+                    itemBuilder: (context, index) {
+                      final user = users[index];
+                      final isSelected = _selected(user);
+                      return ListTile(
+                        key: Key('tag-user-${user.uid}'),
+                        onTap: () => _toggle(user),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 5),
+                        leading: CircleAvatar(
+                          radius: 25,
+                          backgroundColor: const Color(0xFF173A25),
+                          backgroundImage: user.photoUrl.isEmpty
+                              ? null
+                              : NetworkImage(user.photoUrl),
+                          child: user.photoUrl.isEmpty
+                              ? const Icon(Icons.person_rounded, color: _green)
+                              : null,
+                        ),
+                        title: Text(
+                          user.displayName.isEmpty
+                              ? '@${user.username}'
+                              : user.displayName,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text('@${user.username}',
+                            style: const TextStyle(
+                                color: Color(0xFF8A8A8A), fontSize: 13)),
+                        trailing: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 27,
+                          height: 27,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSelected ? _green : Colors.transparent,
+                            border: Border.all(
+                              color:
+                                  isSelected ? _green : const Color(0xFF555555),
+                            ),
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check_rounded,
+                                  color: Color(0xFF07150D), size: 18)
+                              : null,
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

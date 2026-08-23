@@ -3,6 +3,8 @@ import '/backend/backend.dart';
 import '/backend/supabase/repositories/chat_repository.dart';
 import '/backend/supabase/repositories/notification_repository.dart';
 import '/backend/supabase/repositories/post_repository.dart';
+import '/backend/supabase/repositories/training_repository.dart';
+import '/ai_workout/coach_events/event_details_sheet.dart';
 import '/components/create/create_widget.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/components/home_post_engagement/home_post_engagement_widget.dart';
@@ -46,7 +48,7 @@ class _FeedWidgetState extends State<FeedWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late final Stream<List<ConversationSummary>> _conversationsStream;
-  late final Stream<List<UserTrainingsRecord>> _myTrainingsStream;
+  late Future<List<Training>> _upcomingActivities;
   late final Stream<List<StoriesRecord>> _myStoriesStream;
   late final Stream<List<StoriesRecord>> _followingStoriesStream;
   final bool _showLegacyStoryTray = false;
@@ -60,7 +62,7 @@ class _FeedWidgetState extends State<FeedWidget> {
     // These helpers wrap one-shot Supabase requests. Stable stream instances
     // prevent rebuilds from issuing the same requests repeatedly.
     _conversationsStream = ChatRepository().watchConversations();
-    _myTrainingsStream = queryTrainingsByUserStream(userId);
+    _upcomingActivities = _loadUpcomingActivities(userId);
     // The Supabase-native StoryTrayWidget owns its live data. These empty
     // compatibility streams keep the generated legacy subtree inert until it
     // can be removed in a mechanical cleanup without risking the feed layout.
@@ -75,6 +77,30 @@ class _FeedWidgetState extends State<FeedWidget> {
         setAppLanguage(context, 'sr');
       }
     });
+  }
+
+  Future<List<Training>> _loadUpcomingActivities(String userId) async {
+    if (userId.isEmpty) return const [];
+    final repository = TrainingRepository();
+    final results = await Future.wait([
+      repository.joinedByCurrentUser(limit: 100),
+      repository.byUser(userId, limit: 100),
+    ]);
+    final unique = <String, Training>{};
+    for (final training in [...results[0], ...results[1]]) {
+      unique[training.id] = training;
+    }
+    final now = DateTime.now().subtract(const Duration(hours: 3));
+    final upcoming = unique.values
+        .where((training) =>
+            training.startsAt == null || training.startsAt!.isAfter(now))
+        .toList();
+    upcoming.sort((a, b) {
+      final left = a.startsAt ?? a.createdAt ?? DateTime(2100);
+      final right = b.startsAt ?? b.createdAt ?? DateTime(2100);
+      return left.compareTo(right);
+    });
+    return upcoming;
   }
 
   @override
@@ -454,6 +480,10 @@ class _FeedWidgetState extends State<FeedWidget> {
                         ),
                         child: RefreshIndicator(
                           onRefresh: () async {
+                            safeSetState(() {
+                              _upcomingActivities =
+                                  _loadUpcomingActivities(currentUserUid);
+                            });
                             _model.postFeedPagingController?.refresh();
                           },
                           child: CustomScrollView(
@@ -494,7 +524,7 @@ class _FeedWidgetState extends State<FeedWidget> {
                                             splashColor: Colors.transparent,
                                             highlightColor: Colors.transparent,
                                             onTap: () => context.pushNamed(
-                                                TrainingHomeWidget.routeName),
+                                                CoachEventsWidget.routeName),
                                             child: Text(
                                               'View more',
                                               style:
@@ -518,9 +548,8 @@ class _FeedWidgetState extends State<FeedWidget> {
                                       padding:
                                           const EdgeInsetsDirectional.fromSTEB(
                                               16.0, 0.0, 16.0, 12.0),
-                                      child: StreamBuilder<
-                                          List<UserTrainingsRecord>>(
-                                        stream: _myTrainingsStream,
+                                      child: FutureBuilder<List<Training>>(
+                                        future: _upcomingActivities,
                                         builder: (context, snapshot) {
                                           if (!snapshot.hasData) {
                                             return const SizedBox(height: 8.0);
@@ -535,8 +564,12 @@ class _FeedWidgetState extends State<FeedWidget> {
                                             highlightColor: Colors.transparent,
                                             borderRadius:
                                                 BorderRadius.circular(20.0),
-                                            onTap: () => context.pushNamed(
-                                                TrainingHomeWidget.routeName),
+                                            onTap: () =>
+                                                showGymFeedEventDetails(
+                                              context,
+                                              t,
+                                              initiallyJoined: t.joinedByMe,
+                                            ),
                                             child: Container(
                                               width: double.infinity,
                                               decoration: BoxDecoration(
@@ -560,8 +593,8 @@ class _FeedWidgetState extends State<FeedWidget> {
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    t.trainingTitle.isNotEmpty
-                                                        ? t.trainingTitle
+                                                    t.title.isNotEmpty
+                                                        ? t.title
                                                         : 'Your next session',
                                                     style: FlutterFlowTheme.of(
                                                             context)
@@ -591,7 +624,7 @@ class _FeedWidgetState extends State<FeedWidget> {
                                                       _activityMeta(
                                                           context,
                                                           'Category:',
-                                                          t.trainingCategory),
+                                                          t.category),
                                                     ],
                                                   ),
                                                 ],

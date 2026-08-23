@@ -8,6 +8,7 @@ import 'index.dart';
 import 'users_record.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/backend/supabase/supabase_records.dart';
+import '/backend/supabase/supabase.dart';
 
 class PostsRecord extends FirestoreRecord {
   PostsRecord._(
@@ -272,7 +273,12 @@ class PostsRecord extends FirestoreRecord {
       Stream.fromFuture(getDocumentOnce(ref));
 
   static Future<PostsRecord> getDocumentOnce(DocumentReference ref) async {
-    final row = await supaById('posts', ref.id) ?? const {};
+    final row = await supabase
+            .from('posts')
+            .select('*, post_tags(user_id)')
+            .eq('id', ref.id)
+            .maybeSingle() ??
+        const <String, dynamic>{};
     return PostsRecord.getDocumentFromData(_supaPostData(row), ref);
   }
 
@@ -302,6 +308,21 @@ class PostsRecord extends FirestoreRecord {
       // missing values as enabled until migration 0010 is applied.
       'allow_comments': row['allow_comments'] ?? true,
       'allow_likes': row['allow_likes'] ?? true,
+      'location': row['location'],
+      'call_to_action_enabled': row['call_to_action_enabled'],
+      'call_to_action_text': row['call_to_action_text'],
+      'call_to_action_link': row['call_to_action_link'],
+      'food_title': row['food_title'],
+      'food_description': row['food_description'],
+      'recipe': row['recipe'],
+      'nutrition_facts': row['nutrition_facts'],
+      'cooking_time': row['cooking_time'],
+      'meal_type': row['meal_type'],
+      'calories': row['calories'],
+      'protein': row['protein'],
+      'fats': row['fats'],
+      'carbs': row['carbs'],
+      'tagged_user_ids': row['tagged_user_ids'],
     });
     final likeCount = castToType<int>(row['like_count']) ?? 0;
     data['likes'] = likePlaceholders(
@@ -344,6 +365,15 @@ Map<String, dynamic> _supaPostData(Map<String, dynamic> row) {
   final photo = row['legacy_photo_url'] ?? row['photo_url'];
   final video = row['legacy_video_url'] ?? row['video_url'];
   final likeCount = castToType<int>(row['like_count']) ?? 0;
+  final rawTaggedUsers = row['tagged_user_ids'] ?? row['post_tags'];
+  final taggedUsers = rawTaggedUsers is List
+      ? rawTaggedUsers
+          .map((value) => value is Map ? value['user_id'] : value)
+          .where((value) => value != null && value.toString().isNotEmpty)
+          .map(supaUserRef)
+          .whereType<DocumentReference>()
+          .toList(growable: false)
+      : const <DocumentReference>[];
   return <String, dynamic>{
     'post_photo': photo,
     'post_video': video,
@@ -358,6 +388,7 @@ Map<String, dynamic> _supaPostData(Map<String, dynamic> row) {
     'call_to_action_enabled': row['call_to_action_enabled'],
     'call_to_action_text': row['call_to_action_text'],
     'call_to_action_link': row['call_to_action_link'],
+    'tagged_users': taggedUsers,
     'labels': row['labels'],
     'foodPost': row['food_post'],
     'videoThumbnail': row['video_thumbnail'],

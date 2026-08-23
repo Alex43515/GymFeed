@@ -376,23 +376,41 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                 ),
                                 if (widget.post?.location != null &&
                                     widget.post?.location != '')
-                                  Text(
-                                    valueOrDefault<String>(
-                                      widget.post?.location,
-                                      'no address',
+                                  InkWell(
+                                    key: const Key('post-location-link'),
+                                    onTap: () => launchURL(
+                                      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(widget.post!.location)}',
                                     ),
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'Poppins',
-                                          fontSize:
-                                              MediaQuery.sizeOf(context).width <
-                                                      768.0
-                                                  ? 12.0
-                                                  : 17.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: FontWeight.normal,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.location_on_outlined,
+                                            color: Color(0xFF15E47B), size: 14),
+                                        const SizedBox(width: 3),
+                                        Flexible(
+                                          child: Text(
+                                            widget.post!.location,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  fontFamily: 'Poppins',
+                                                  color:
+                                                      const Color(0xFF15E47B),
+                                                  fontSize:
+                                                      MediaQuery.sizeOf(context)
+                                                                  .width <
+                                                              768.0
+                                                          ? 12.0
+                                                          : 17.0,
+                                                  letterSpacing: 0.0,
+                                                  fontWeight: FontWeight.normal,
+                                                ),
+                                          ),
                                         ),
+                                      ],
+                                    ),
                                   ),
                               ],
                             ),
@@ -568,7 +586,9 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                               animationsMap['iconOnActionTriggerAnimation']!,
                             ),
                           ),
-                          if (widget.post?.callToActionEnabled ?? true)
+                          if ((widget.post?.callToActionEnabled ?? false) &&
+                              (widget.post?.callToActionLink.isNotEmpty ??
+                                  false))
                             Align(
                               alignment: AlignmentDirectional(0.0, 1.0),
                               child: InkWell(

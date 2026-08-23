@@ -310,20 +310,44 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                   ),
                                   if (widget.postFood?.location != null &&
                                       widget.postFood?.location != '')
-                                    Text(
-                                      widget.postFood!.location,
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            fontFamily: 'Poppins',
-                                            fontSize: MediaQuery.sizeOf(context)
-                                                        .width <
-                                                    768.0
-                                                ? 13.0
-                                                : 17.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.normal,
+                                    InkWell(
+                                      key: const Key('food-post-location-link'),
+                                      onTap: () => launchURL(
+                                        'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(widget.postFood!.location)}',
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.location_on_outlined,
+                                              color: Color(0xFF15E47B),
+                                              size: 14),
+                                          const SizedBox(width: 3),
+                                          Flexible(
+                                            child: Text(
+                                              widget.postFood!.location,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: FlutterFlowTheme.of(
+                                                      context)
+                                                  .bodyMedium
+                                                  .override(
+                                                    fontFamily: 'Poppins',
+                                                    color:
+                                                        const Color(0xFF15E47B),
+                                                    fontSize: MediaQuery.sizeOf(
+                                                                    context)
+                                                                .width <
+                                                            768.0
+                                                        ? 13.0
+                                                        : 17.0,
+                                                    letterSpacing: 0.0,
+                                                    fontWeight:
+                                                        FontWeight.normal,
+                                                  ),
+                                            ),
                                           ),
+                                        ],
+                                      ),
                                     ),
                                 ],
                               ),
@@ -600,7 +624,10 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                 animationsMap['iconOnActionTriggerAnimation']!,
                               ),
                             ),
-                            if (widget.postFood?.callToActionEnabled ?? true)
+                            if ((widget.postFood?.callToActionEnabled ??
+                                    false) &&
+                                (widget.postFood?.callToActionLink.isNotEmpty ??
+                                    false))
                               Align(
                                 alignment: AlignmentDirectional(0.0, 1.0),
                                 child: InkWell(

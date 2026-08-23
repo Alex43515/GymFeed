@@ -2,7 +2,7 @@ import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/posts/post/post_widget.dart';
-import '/pages/posts/post_food/post_food_widget.dart';
+import 'food_post_details_view.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import 'package:flutter/material.dart';
 import 'post_details_model.dart';
@@ -171,7 +171,7 @@ class _PostDetailsWidgetState extends State<PostDetailsWidget> {
                   width: double.infinity,
                   height: 100.0,
                   decoration: BoxDecoration(
-                    color: FlutterFlowTheme.of(context).secondaryBackground,
+                    color: const Color(0xFF080808),
                   ),
                   child: StreamBuilder<PostsRecord>(
                     stream: PostsRecord.getDocument(widget.post!),
@@ -230,19 +230,11 @@ class _PostDetailsWidgetState extends State<PostDetailsWidget> {
                                   Container(
                                     width:
                                         MediaQuery.sizeOf(context).width * 1.0,
-                                    height:
-                                        MediaQuery.sizeOf(context).height * 1.0,
                                     child: Padding(
                                       padding: EdgeInsetsDirectional.fromSTEB(
                                           0.0, 12.0, 0.0, 0.0),
-                                      child: wrapWithModel(
-                                        model: _model.postFoodModel,
-                                        updateCallback: () =>
-                                            safeSetState(() {}),
-                                        child: PostFoodWidget(
-                                          postFood: columnPostsRecord,
-                                          isHomePage: false,
-                                        ),
+                                      child: FoodPostDetailsView(
+                                        post: columnPostsRecord,
                                       ),
                                     ),
                                   ),

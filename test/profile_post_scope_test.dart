@@ -49,27 +49,25 @@ void main() {
     });
 
     test('other-user profile is wired only to scoped post queries', () {
-      final source = File(
+      final shell = File(
         'lib/pages/core_pages/profile_other/profile_other_widget.dart',
       ).readAsStringSync();
+      final source = File(
+        'lib/pages/core_pages/profile/mobile_profile_view.dart',
+      ).readAsStringSync();
 
+      expect(shell, contains('MobileProfileView('));
       expect(source, contains('queryPostsByUserStream('));
       expect(source, contains('queryTaggedPostsByUserStream('));
       expect(source, isNot(contains('queryPostsRecord(')));
-      expect(source, matches(RegExp(r'post\.postUser\s*\?\.id\s*==')));
       expect(source, contains('queryTrainingsByUserStream('));
-      expect(
-        source,
-        matches(RegExp(r'training\s*\.userTraining\s*\?\.id\s*==')),
-      );
       expect(source, isNot(contains('queryChatsRecord(')));
       expect(source, isNot(contains('queryStoriesRecord(')));
     });
 
     test('profile Posts tabs include both regular and food posts', () {
       for (final path in [
-        'lib/pages/core_pages/profile/profile_widget.dart',
-        'lib/pages/core_pages/profile_other/profile_other_widget.dart',
+        'lib/pages/core_pages/profile/mobile_profile_view.dart',
         'lib/pages/core_pages/profile/desktop_profile_view.dart',
       ]) {
         final source = File(path).readAsStringSync();

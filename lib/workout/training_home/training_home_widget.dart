@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '/ai_workout/coach_home/coach_section_switcher.dart';
+import '/ai_workout/coach_events/event_details_sheet.dart';
 import '/ai_workout/starter_plan/starter_plan_service.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/supabase/repositories/training_repository.dart';
@@ -930,7 +931,12 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
             ),
           ),
           OutlinedButton(
-            onPressed: () => context.pushNamed(JoinTrainingWidget.routeName),
+            onPressed: () => showGymFeedEventDetails(
+              context,
+              training,
+              initiallyJoined: true,
+              onJoinedChanged: (_) => _refresh(),
+            ),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: _border),
               shape: RoundedRectangleBorder(

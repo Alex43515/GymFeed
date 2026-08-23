@@ -27,12 +27,14 @@ class FeedVideoPlayer extends StatefulWidget {
     this.thumbnailUrl,
     this.onTap,
     this.borderRadius = 16.0,
+    this.fit = BoxFit.cover,
   });
 
   final String videoUrl;
   final String? thumbnailUrl;
   final VoidCallback? onTap;
   final double borderRadius;
+  final BoxFit fit;
 
   @override
   State<FeedVideoPlayer> createState() => _FeedVideoPlayerState();
@@ -180,7 +182,7 @@ class _FeedVideoPlayerState extends State<FeedVideoPlayer> {
                 looping: true,
                 muted: _muted,
                 showControls: true,
-                fit: BoxFit.cover,
+                fit: widget.fit,
               ),
             )
           : ClipRRect(
@@ -195,7 +197,7 @@ class _FeedVideoPlayerState extends State<FeedVideoPlayer> {
                       CachedNetworkImage(
                         imageUrl: widget.thumbnailUrl!,
                         httpHeaders: gymFeedMediaHeaders(widget.thumbnailUrl!),
-                        fit: BoxFit.cover,
+                        fit: widget.fit,
                         placeholder: (_, __) =>
                             Container(color: Colors.black12),
                         errorWidget: (_, __, ___) =>
@@ -228,7 +230,7 @@ class _FeedVideoPlayerState extends State<FeedVideoPlayer> {
                       ),
                     if (_initialized && _controller != null)
                       FittedBox(
-                        fit: BoxFit.cover,
+                        fit: widget.fit,
                         clipBehavior: Clip.hardEdge,
                         child: SizedBox(
                           width: _controller!.value.size.width,
