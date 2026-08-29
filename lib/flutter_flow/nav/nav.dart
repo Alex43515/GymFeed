@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -877,7 +878,8 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
       ].map((r) => r.toRoute(appStateNotifier)).toList(),
       observers: [
         routeObserver,
-        FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+        if (!kIsWeb)
+          FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
       ],
     );
 

@@ -21,6 +21,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080808">
 
+  <!-- GA4 web collection. Flutter's browser-history navigation is measured by
+       the web stream's Enhanced measurement setting. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WSF2K1B6ZZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-WSF2K1B6ZZ');
+  </script>
+
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">

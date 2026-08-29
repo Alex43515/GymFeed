@@ -10,8 +10,7 @@ Future initFirebase() async {
             projectId: "gym-feed-official-27tdk3",
             storageBucket: "gym-feed-official-27tdk3.appspot.com",
             messagingSenderId: "756667012146",
-            appId: "1:756667012146:web:2c927c6e8f9273207ad82b",
-            measurementId: "G-WSF2K1B6ZZ"));
+            appId: "1:756667012146:web:2c927c6e8f9273207ad82b"));
   } else {
     await Firebase.initializeApp();
   }
