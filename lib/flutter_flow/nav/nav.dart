@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:provider/provider.dart';
 import '/backend/backend.dart';
 import '/backend/supabase/supabase.dart';
@@ -874,7 +875,10 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           ].map((r) => r.toRoute(appStateNotifier)).toList(),
         ),
       ].map((r) => r.toRoute(appStateNotifier)).toList(),
-      observers: [routeObserver],
+      observers: [
+        routeObserver,
+        FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+      ],
     );
 
 extension NavParamExtensions on Map<String, String?> {
@@ -1081,6 +1085,7 @@ class FFRoute {
           return transitionInfo.hasTransition
               ? CustomTransitionPage(
                   key: state.pageKey,
+                  name: state.name,
                   child: child,
                   transitionDuration: transitionInfo.duration,
                   transitionsBuilder:
@@ -1098,7 +1103,11 @@ class FFRoute {
                     child,
                   ),
                 )
-              : MaterialPage(key: state.pageKey, child: child);
+              : MaterialPage(
+                  key: state.pageKey,
+                  name: state.name,
+                  child: child,
+                );
         },
         routes: routes,
       );

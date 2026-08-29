@@ -52,6 +52,7 @@ dependencies:
   firebase_auth: 5.3.3
   firebase_auth_platform_interface: 7.4.9
   firebase_auth_web: 5.13.4
+  firebase_analytics: 11.3.5
   firebase_core: 3.8.0
   firebase_core_platform_interface: 5.3.0
   firebase_core_web: 2.18.1
