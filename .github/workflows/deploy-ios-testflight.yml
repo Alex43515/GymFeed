@@ -30,6 +30,9 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
+  # App Store Connect already contains GymFeed 2.3.0 (300). Keep Android's
+  # independent version untouched while opening a newer iOS TestFlight train.
+  IOS_MARKETING_VERSION: 2.3.1
 
 jobs:
   validate-ios:
@@ -96,7 +99,9 @@ jobs:
   publish-testflight:
     name: Build signed IPA and upload to TestFlight
     needs: validate-ios
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to_testflight }}
+    # Relevant pushes to main publish automatically after validation. Manual
+    # runs remain available for an intentional re-upload/test.
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_to_testflight) }}
     runs-on: macos-26
     environment: app-store-connect
     timeout-minutes: 90
@@ -211,6 +216,7 @@ jobs:
           flutter build ipa \
             --release \
             --no-pub \
+            --build-name "$IOS_MARKETING_VERSION" \
             --build-number "$ios_build_number" \
             --export-options-plist="$HOME/export_options.plist"
 

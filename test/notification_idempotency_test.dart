@@ -41,5 +41,7 @@ void main() {
     expect(sql, contains('new.comment_id is null'));
     expect(client, contains('_shownForegroundPushes'));
     expect(client, contains('notificationKey.hashCode'));
+    expect(client, contains('getAPNSToken'));
+    expect(client, contains('_waitForApnsToken'));
   });
 }

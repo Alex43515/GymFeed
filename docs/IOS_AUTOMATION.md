@@ -11,17 +11,20 @@ The workflow is stored at:
 
 ## Workflow behavior
 
-- Every push to `main` that changes the Flutter or iOS application runs tests
-  and creates an unsigned iOS Simulator build on GitHub's `macos-26` runner.
-- A signed App Store IPA and TestFlight upload only run when the workflow is
-  started manually with **publish_to_testflight** enabled.
+- Every push to `main` that changes the Flutter or iOS application runs tests,
+  creates an iOS Simulator build, builds a signed IPA, and uploads it to
+  TestFlight on GitHub's `macos-26` runner.
+- A manual run with **publish_to_testflight** enabled is also available when a
+  build needs to be re-run without a new commit.
 - The signed job is protected by the GitHub environment
   `app-store-connect`.
 - Both GymFeed targets receive App Store profiles:
   - `com.flutterflow.gymfeedofficial`
   - `com.flutterflow.gymfeedofficial.ImageNotification`
-- The workflow uses an UTC timestamp as the App Store build number, uploads the
-  IPA as a GitHub artifact, and then sends it to App Store Connect.
+- The iOS marketing version is `2.3.1`, following the existing App Store
+  Connect build `2.3.0 (300)`. The workflow uses a UTC timestamp as the unique
+  App Store build number, uploads the IPA as a GitHub artifact, and then sends
+  it to App Store Connect.
 
 ## Apple prerequisites
 
@@ -69,8 +72,8 @@ In GitHub open **Settings -> Environments -> New environment** and create:
 app-store-connect
 ```
 
-Adding a required reviewer is recommended so a TestFlight upload cannot start
-accidentally.
+Do not add a required reviewer if pushes to `main` must publish without manual
+approval. Restrict the environment deployment branch to `main` instead.
 
 Add these environment secrets:
 
@@ -100,8 +103,9 @@ an encrypted backup exists.
 
 ## Run validation
 
-After this workflow is committed and pushed to `main`, validation runs
-automatically for relevant changes. It can also be run manually:
+After this workflow is committed and pushed to `main`, validation and TestFlight
+publishing run automatically for relevant changes. Validation can also be run
+without publishing from a manual run:
 
 1. Open GitHub **Actions**.
 2. Select **Validate GymFeed iOS and publish to TestFlight**.
@@ -113,7 +117,8 @@ Simulator and cannot be installed on a physical iPhone or submitted to Apple.
 
 ## Upload to TestFlight
 
-After the membership, App IDs and GitHub secrets are ready:
+After the membership, App IDs and GitHub secrets are ready, every relevant push
+to `main` uploads a new uniquely numbered build. To upload manually instead:
 
 1. Open the same workflow under GitHub Actions.
 2. Select **Run workflow**.

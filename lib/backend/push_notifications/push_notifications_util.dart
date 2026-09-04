@@ -155,6 +155,23 @@ Future<void> _showForegroundAndroidNotification(RemoteMessage message) async {
 bool get _supportsMobilePush =>
     !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
+/// APNs registration completes asynchronously after iOS notification
+/// permission is granted. Firebase requires that token before requesting an
+/// FCM token; waiting here prevents first-login registrations from being lost
+/// on physical iPhones.
+Future<bool> _waitForApnsToken() async {
+  if (!Platform.isIOS) return true;
+
+  for (var attempt = 0; attempt < 40; attempt++) {
+    final token = await FirebaseMessaging.instance.getAPNSToken();
+    if (token != null && token.isNotEmpty) return true;
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+
+  debugPrint('APNs token was not available before FCM registration.');
+  return false;
+}
+
 /// Requests alert/badge/sound permission, obtains the device FCM token, and
 /// atomically associates it with the signed-in Supabase user.
 Future<bool> registerCurrentDeviceForPush({String? refreshedToken}) async {
@@ -177,6 +194,8 @@ Future<bool> registerCurrentDeviceForPush({String? refreshedToken}) async {
       debugPrint('Push notification permission is not enabled.');
       return false;
     }
+
+    if (refreshedToken == null && !await _waitForApnsToken()) return false;
 
     final token = refreshedToken ?? await FirebaseMessaging.instance.getToken();
     if (token == null || token.isEmpty) return false;
