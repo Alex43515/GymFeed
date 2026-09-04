@@ -57,6 +57,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 
 	<key>NSCameraUsageDescription</key>
     <string>Our app requires access to your camera to allow you to capture photos and videos directly within the app. This feature enables you to create and share new content with your friends and followers on our social network. For example, you can take a selfie or record a video message to post on your profile.</string>
