@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build-number discovery and Google Play internal-track publishing.
+"""Build-number discovery and Google Play track publishing.
 
 The script uses a short-lived Google Play edit. It never logs credentials and
 deletes an uncommitted edit if any upload or track update fails.

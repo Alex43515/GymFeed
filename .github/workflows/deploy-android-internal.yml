@@ -1,9 +1,10 @@
-name: Deploy GymFeed Android to internal testing
+name: Deploy GymFeed Android
 
 on:
   push:
     branches:
       - main
+      - release/**
     paths:
       - .github/workflows/deploy-android-internal.yml
       - android/**
@@ -13,12 +14,21 @@ on:
       - pubspec.yaml
       - scripts/google_play_release.py
   workflow_dispatch:
+    inputs:
+      destination:
+        description: Google Play destination
+        required: true
+        default: testing
+        type: choice
+        options:
+          - testing
+          - production
 
 permissions:
   contents: read
 
 concurrency:
-  group: gymfeed-google-play-internal
+  group: gymfeed-google-play-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -31,12 +41,53 @@ jobs:
   build-test-and-publish:
     name: Build, test, and publish signed AAB
     runs-on: ubuntu-24.04
+    # This existing environment owns the protected Google Play and signing
+    # credentials used for both tracks. The selected Play track is resolved
+    # from the branch below.
     environment: google-play-internal
     timeout-minutes: 45
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Resolve release version and Google Play destination
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          app_version="$(awk '/^version:/{split($2, value, "+"); print value[1]; exit}' pubspec.yaml)"
+          if [[ -z "$app_version" ]]; then
+            echo "::error::Could not read the app version from pubspec.yaml"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            destination="${{ inputs.destination }}"
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            destination="production"
+          else
+            destination="testing"
+          fi
+
+          if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
+            branch_version="${GITHUB_REF_NAME#release/}"
+            if [[ "$branch_version" != "$app_version" ]]; then
+              echo "::error::Release branch $GITHUB_REF_NAME must match pubspec version $app_version"
+              exit 1
+            fi
+          fi
+
+          case "$destination" in
+            testing) play_track="internal" ;;
+            production) play_track="production" ;;
+            *) echo "::error::Unsupported destination: $destination"; exit 1 ;;
+          esac
+
+          echo "APP_MARKETING_VERSION=$app_version" >> "$GITHUB_ENV"
+          echo "DEPLOY_DESTINATION=$destination" >> "$GITHUB_ENV"
+          echo "PLAY_TRACK=$play_track" >> "$GITHUB_ENV"
+          echo "Deploying GymFeed $app_version to Google Play $play_track"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -140,12 +191,12 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gymfeed-android-${{ env.PLAY_VERSION_CODE }}
+          name: gymfeed-android-${{ env.APP_MARKETING_VERSION }}-${{ env.PLAY_TRACK }}-${{ env.PLAY_VERSION_CODE }}
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish to Google Play internal testing
+      - name: Publish to selected Google Play track
         shell: bash
         run: |
           set -euo pipefail
@@ -154,5 +205,5 @@ jobs:
             --package "$PACKAGE_NAME" \
             publish \
             --bundle build/app/outputs/bundle/release/app-release.aab \
-            --track internal \
-            --release-name "GymFeed internal $PLAY_VERSION_CODE"
+            --track "$PLAY_TRACK" \
+            --release-name "GymFeed $APP_MARKETING_VERSION $PLAY_TRACK $PLAY_VERSION_CODE"

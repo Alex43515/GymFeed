@@ -1,9 +1,10 @@
-name: Validate GymFeed iOS and publish to TestFlight
+name: Deploy GymFeed iOS
 
 on:
   push:
     branches:
       - main
+      - release/**
     paths:
       - .github/workflows/deploy-ios-testflight.yml
       - assets/**
@@ -13,11 +14,14 @@ on:
       - pubspec.yaml
   workflow_dispatch:
     inputs:
-      publish_to_testflight:
-        description: Build a signed IPA and upload it to TestFlight
+      destination:
+        description: Apple deployment destination
         required: true
-        default: false
-        type: boolean
+        default: testflight
+        type: choice
+        options:
+          - testflight
+          - app-store
 
 permissions:
   contents: read
@@ -30,9 +34,7 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  # App Store Connect already contains GymFeed 2.3.0 (300). Keep Android's
-  # independent version untouched while opening a newer iOS TestFlight train.
-  IOS_MARKETING_VERSION: 2.3.1
+  APP_STORE_WHATS_NEW: GymFeed 2.2.3 includes reliability improvements, refreshed social and workout experiences, and important account-flow fixes.
 
 jobs:
   validate-ios:
@@ -96,12 +98,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  publish-testflight:
-    name: Build signed IPA and upload to TestFlight
+  publish-ios:
+    name: Build signed IPA and deploy to Apple
     needs: validate-ios
-    # Relevant pushes to main publish automatically after validation. Manual
-    # runs remain available for an intentional re-upload/test.
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_to_testflight) }}
     runs-on: macos-26
     environment: app-store-connect
     timeout-minutes: 90
@@ -109,6 +108,42 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Resolve release version and Apple destination
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          app_version="$(awk '/^version:/{split($2, value, "+"); print value[1]; exit}' pubspec.yaml)"
+          if [[ -z "$app_version" ]]; then
+            echo "::error::Could not read the app version from pubspec.yaml"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            destination="${{ inputs.destination }}"
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            destination="app-store"
+          else
+            destination="testflight"
+          fi
+
+          if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
+            branch_version="${GITHUB_REF_NAME#release/}"
+            if [[ "$branch_version" != "$app_version" ]]; then
+              echo "::error::Release branch $GITHUB_REF_NAME must match pubspec version $app_version"
+              exit 1
+            fi
+          fi
+
+          case "$destination" in
+            testflight|app-store) ;;
+            *) echo "::error::Unsupported destination: $destination"; exit 1 ;;
+          esac
+
+          echo "IOS_MARKETING_VERSION=$app_version" >> "$GITHUB_ENV"
+          echo "DEPLOY_DESTINATION=$destination" >> "$GITHUB_ENV"
+          echo "Deploying GymFeed $app_version to Apple $destination"
 
       - name: Verify current Xcode toolchain
         shell: bash
@@ -237,12 +272,12 @@ jobs:
       - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gymfeed-ios-${{ env.IOS_BUILD_NUMBER }}
+          name: gymfeed-ios-${{ env.IOS_MARKETING_VERSION }}-${{ env.DEPLOY_DESTINATION }}-${{ env.IOS_BUILD_NUMBER }}
           path: ${{ steps.build-ipa.outputs.ipa_path }}
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish build to App Store Connect
+      - name: Publish to selected Apple destination
         shell: bash
         env:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -252,7 +287,24 @@ jobs:
           set -euo pipefail
           export APP_STORE_CONNECT_PRIVATE_KEY
           APP_STORE_CONNECT_PRIVATE_KEY="$(cat "$RUNNER_TEMP/app-store-connect-key.p8")"
-          app-store-connect publish --path "$IPA_PATH"
+
+          if [[ "$DEPLOY_DESTINATION" == "app-store" ]]; then
+            # Apple still performs App Review. AFTER_APPROVAL makes the
+            # approved version release automatically without another action.
+            app-store-connect publish \
+              --path "$IPA_PATH" \
+              --app-store \
+              --platform IOS \
+              --version-string "$IOS_MARKETING_VERSION" \
+              --release-type AFTER_APPROVAL \
+              --copyright GymFeed \
+              --locale en-US \
+              --whats-new "$APP_STORE_WHATS_NEW"
+          else
+            # Internal TestFlight group "testers" has access to all builds,
+            # so a valid processed upload becomes available automatically.
+            app-store-connect publish --path "$IPA_PATH"
+          fi
 
       - name: Restore keychain and remove temporary credentials
         if: ${{ always() }}
