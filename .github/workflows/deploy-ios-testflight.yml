@@ -34,7 +34,7 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  APP_STORE_WHATS_NEW: GymFeed 2.3.1 includes reliability improvements, refreshed social and workout experiences, and important account-flow fixes.
+  APP_STORE_WHATS_NEW: GymFeed 3.0.0 is a major GymFeed release with refreshed social, workout, nutrition, onboarding, and account experiences.
 
 jobs:
   validate-ios:
