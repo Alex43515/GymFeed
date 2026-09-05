@@ -11,7 +11,7 @@ GymFeed uses one versioned release branch for Android and iOS.
    - Android to Google Play Internal testing.
    - iOS to TestFlight. The internal `testers` group has access to all builds.
 
-For the current release, use `release/2.2.3` and `version: 2.2.3+206`.
+For the current release, use `release/2.3.1` and `version: 2.3.1+206`.
 
 ## Production
 
