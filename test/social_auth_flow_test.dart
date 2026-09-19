@@ -20,7 +20,7 @@ void main() {
         web: false,
         nextPath: socialAuthSignupDestination,
       ),
-      'com.flutterflow.gymfeedofficial:/authCallback?next=%2FallMostDone',
+      'com.flutterflow.gymfeedofficial://authcallback?next=%2FallMostDone',
     );
   });
 
@@ -37,11 +37,21 @@ void main() {
 
   test('native callback is converted into the matching app route', () {
     final uri = Uri.parse(
-      'com.flutterflow.gymfeedofficial:/authCallback?next=%2FallMostDone&code=abc',
+      'com.flutterflow.gymfeedofficial://authcallback?next=%2FallMostDone&code=abc',
     );
     expect(
       appLocationFromIncomingLink(uri),
       '/authCallback?next=%2FallMostDone&code=abc',
+    );
+  });
+
+  test('legacy single-slash native callbacks remain supported', () {
+    final uri = Uri.parse(
+      'com.flutterflow.gymfeedofficial:/authCallback?next=%2Ffeed&code=abc',
+    );
+    expect(
+      appLocationFromIncomingLink(uri),
+      '/authCallback?next=%2Ffeed&code=abc',
     );
   });
 

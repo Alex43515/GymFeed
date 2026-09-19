@@ -5,6 +5,7 @@ const socialAuthLoginDestination = '/feed';
 const socialAuthSignupDestination = '/allMostDone';
 
 const _nativeAuthScheme = 'com.flutterflow.gymfeedofficial';
+const _nativeAuthCallbackHost = 'authCallback';
 
 /// Only destinations owned by the authentication flow may be restored after
 /// OAuth. Keeping this list closed prevents an untrusted `next` query value
@@ -30,9 +31,13 @@ String socialAuthRedirectUrl({
   final destination = normalizeSocialAuthDestination(nextPath);
   final useWeb = web ?? kIsWeb;
   if (!useWeb) {
+    // Use the standard scheme://host form. Supabase's configured native
+    // redirect allow-list is `com.flutterflow.gymfeedofficial://**`; the old
+    // scheme:/path form did not match it, so GoTrue fell back to site_url and
+    // left native users signed in on gymfeed.io instead of reopening the app.
     return Uri(
       scheme: _nativeAuthScheme,
-      path: socialAuthCallbackPath,
+      host: _nativeAuthCallbackHost,
       queryParameters: {'next': destination},
     ).toString();
   }
