@@ -97,6 +97,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's legacy default also requests the retired `tools`
+          # package, which now makes sdkmanager fail before Flutter starts.
+          packages: platform-tools
 
       - name: Install pinned Flutter SDK
         shell: bash
