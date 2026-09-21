@@ -40,6 +40,7 @@ services:
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
       N8N_RUNNERS_ENABLED: "true"
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      EXECUTIONS_TIMEOUT_MAX: 21660
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/New_York}
       TZ: ${GENERIC_TIMEZONE:-America/New_York}
       MARKETING_INTERNAL_TOKEN: ${MARKETING_INTERNAL_TOKEN}
@@ -58,6 +59,8 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env
+    volumes:
+      - ../secrets/ga4-service-account.json:/run/secrets/ga4-service-account.json:ro
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:

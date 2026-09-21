@@ -1,0 +1,6 @@
+services:
+  marketing-worker:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/ga4-service-account.json
+    volumes:
+      - ../secrets/ga4-service-account.json:/run/secrets/ga4-service-account.json:ro

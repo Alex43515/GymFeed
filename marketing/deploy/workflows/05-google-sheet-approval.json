@@ -1,0 +1,171 @@
+{
+  "id": "GFReviewSheet001",
+  "name": "GymFeed 05 - Google Sheet Decision Dispatcher",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "5a000001-0000-4000-8000-000000000001",
+      "name": "Check Sheets every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "5a000001-0000-4000-8000-000000000005",
+      "name": "Check decisions manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        220
+      ],
+      "parameters": {}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://marketing-worker:3000/v1/cmo/decisions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-marketing-token",
+              "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "5a000001-0000-4000-8000-000000000002",
+      "name": "Read pending idea and asset decisions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nif (!Array.isArray(response.actions)) throw new Error('CMO decision endpoint must return an actions array');\nreturn response.actions.map((item) => {\n  if (!['idea_decision', 'asset_decision'].includes(item.action) || !item.entry) {\n    throw new Error('Dispatcher accepts only explicit idea_decision or asset_decision entries');\n  }\n  return { json: { action: item.action, entry: item.entry } };\n});"
+      },
+      "id": "5a000001-0000-4000-8000-000000000003",
+      "name": "Route exact decisions without replanning",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "GFMainCMOOrchestrator001",
+          "mode": "list",
+          "cachedResultName": "GymFeed 00 - Main CMO Orchestrator"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "5a000001-0000-4000-8000-000000000004",
+      "name": "Run main CMO and wait for decision completion",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        780,
+        100
+      ]
+    },
+    {
+      "id": "5a000001-0000-4000-8000-000000000006",
+      "name": "What this dispatcher does",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -410
+      ],
+      "parameters": {
+        "content": "## Human-decision dispatcher only\nChecks **Idea Review** and **Content Review** every five minutes, or manually. No new campaign planning and no automatic next-week generation.\n\nEach decision carries its stable idea/content ID, version and instructions into the main CMO. This execution waits for that decision to complete. The worker deduplicates processed decisions; changed instructions remain a new decision.\n\nKeep separate idea and finished-asset approvals. Reject needs specific instructions. Use Main CMO **start_batch** / **release_batch** explicitly for production and Buffer release.",
+        "height": 330,
+        "width": 890,
+        "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Check Sheets every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Read pending idea and asset decisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check decisions manually": {
+      "main": [
+        [
+          {
+            "node": "Read pending idea and asset decisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read pending idea and asset decisions": {
+      "main": [
+        [
+          {
+            "node": "Route exact decisions without replanning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route exact decisions without replanning": {
+      "main": [
+        [
+          {
+            "node": "Run main CMO and wait for decision completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "executionTimeout": 21720
+  },
+  "versionId": "0527a71e-e6f1-4cff-bf5b-c1ec58b97576",
+  "meta": {},
+  "pinData": {},
+  "tags": []
+}

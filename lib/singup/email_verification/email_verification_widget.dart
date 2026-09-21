@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '/auth/firebase_auth/auth_util.dart';
@@ -22,6 +23,7 @@ class EmailVerificationWidget extends StatefulWidget {
   const EmailVerificationWidget({
     super.key,
     this.verificationChecker,
+    this.codeVerificationAction,
     this.resendAction,
     this.onboardingCompleter,
     this.verifiedOpener,
@@ -35,6 +37,7 @@ class EmailVerificationWidget extends StatefulWidget {
 
   /// Test seams also keep the UI independent from a particular auth SDK.
   final Future<bool> Function()? verificationChecker;
+  final Future<void> Function(String code)? codeVerificationAction;
   final Future<void> Function()? resendAction;
   final Future<void> Function()? onboardingCompleter;
   final VoidCallback? verifiedOpener;
@@ -52,6 +55,7 @@ class _EmailVerificationWidgetState extends State<EmailVerificationWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   StreamSubscription<bool>? _verificationSubscription;
   Timer? _cooldownTimer;
+  final TextEditingController _codeController = TextEditingController();
   int _cooldownSeconds = 0;
   bool _checking = false;
   bool _resending = false;
@@ -118,6 +122,7 @@ class _EmailVerificationWidgetState extends State<EmailVerificationWidget> {
   void dispose() {
     _verificationSubscription?.cancel();
     _cooldownTimer?.cancel();
+    _codeController.dispose();
     _model.dispose();
     super.dispose();
   }
@@ -201,27 +206,85 @@ class _EmailVerificationWidgetState extends State<EmailVerificationWidget> {
       setState(() {
         _message = 'A new verification email was sent to $_email.';
         _messageIsError = false;
-        _cooldownSeconds = widget.resendCooldown.inSeconds;
       });
-      _cooldownTimer?.cancel();
-      _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) return timer.cancel();
-        setState(() {
-          _cooldownSeconds -= 1;
-          if (_cooldownSeconds <= 0) timer.cancel();
-        });
-      });
+      _startResendCooldown();
     } catch (error) {
       if (!mounted) return;
       final rateLimited = error.toString().toLowerCase().contains('rate');
+      debugPrint('Verification resend failed: $error');
       setState(() {
         _message = rateLimited
-            ? 'Please wait a minute before requesting another email.'
-            : 'We could not resend the email. Check the address and try again.';
+            ? 'Supabase is protecting this address from repeated sends. Try again when the countdown finishes.'
+            : 'We could not resend the email: ${_friendlyAuthError(error)}';
+        _messageIsError = true;
+      });
+      if (rateLimited) _startResendCooldown();
+    } finally {
+      if (mounted) setState(() => _resending = false);
+    }
+  }
+
+  void _startResendCooldown() {
+    if (!mounted) return;
+    setState(() => _cooldownSeconds = widget.resendCooldown.inSeconds);
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return timer.cancel();
+      setState(() {
+        _cooldownSeconds -= 1;
+        if (_cooldownSeconds <= 0) timer.cancel();
+      });
+    });
+  }
+
+  String _friendlyAuthError(Object error) {
+    if (error is AuthException) return error.message;
+    final text = error.toString().replaceFirst('Exception: ', '').trim();
+    return text.isEmpty ? 'check the address and try again.' : text;
+  }
+
+  Future<void> _verifyCode() async {
+    if (_checking || _completing) return;
+    final code = _codeController.text.replaceAll(RegExp(r'\D'), '');
+    if (code.length < 6) {
+      setState(() {
+        _message = 'Enter the complete code from the newest GymFeed email.';
+        _messageIsError = true;
+      });
+      return;
+    }
+    if (_email.isEmpty) {
+      setState(() {
+        _message =
+            'We lost the pending email address. Go back and sign up again.';
+        _messageIsError = true;
+      });
+      return;
+    }
+
+    setState(() {
+      _checking = true;
+      _message = null;
+    });
+    try {
+      await (widget.codeVerificationAction?.call(code) ??
+          verifySignupEmailCode(email: _email, code: code));
+      if (!mounted) return;
+      await _finishVerification();
+    } catch (error) {
+      debugPrint('Verification code failed: $error');
+      if (!mounted) return;
+      final lower = error.toString().toLowerCase();
+      setState(() {
+        _message = lower.contains('expired')
+            ? 'That code has expired. Request a new email and use its newest code.'
+            : lower.contains('invalid') || lower.contains('token')
+                ? 'That code is not valid. Use the code from the newest GymFeed email.'
+                : 'We could not verify that code: ${_friendlyAuthError(error)}';
         _messageIsError = true;
       });
     } finally {
-      if (mounted) setState(() => _resending = false);
+      if (mounted && !_completing) setState(() => _checking = false);
     }
   }
 
@@ -324,11 +387,71 @@ class _EmailVerificationWidgetState extends State<EmailVerificationWidget> {
                               style: _text(size: 18, weight: FontWeight.w700)),
                           const SizedBox(height: 7),
                           Text(
-                            'Tap Verify email in the newest message. The link opens GymFeed, then you can answer the questions for your personalized meal and training plans.',
+                            'Enter the verification code from the newest GymFeed email. Older link-based emails still work, but the code is safer and works in every mail app.',
                             textAlign: TextAlign.center,
                             style: _text(size: 12, color: _muted, height: 1.55),
                           ),
                           const SizedBox(height: 18),
+                          TextField(
+                            key: const ValueKey('verification-code'),
+                            controller: _codeController,
+                            enabled: !busy,
+                            keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.done,
+                            autofillHints: const [AutofillHints.oneTimeCode],
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(8),
+                            ],
+                            onSubmitted: (_) => _verifyCode(),
+                            textAlign: TextAlign.center,
+                            style: _text(
+                              size: 24,
+                              color: Colors.white,
+                              weight: FontWeight.w700,
+                            ).copyWith(letterSpacing: 7),
+                            decoration: InputDecoration(
+                              hintText: '00000000',
+                              hintStyle: _text(size: 20, color: _muted)
+                                  .copyWith(letterSpacing: 5),
+                              counterText: '',
+                              filled: true,
+                              fillColor: _background,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 15),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(15),
+                                borderSide: const BorderSide(color: _border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(15),
+                                borderSide:
+                                    const BorderSide(color: _green, width: 1.5),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            key: const ValueKey('verify-code'),
+                            onPressed: busy ? null : _verifyCode,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _green,
+                              disabledBackgroundColor: const Color(0xFF215F3B),
+                              foregroundColor: _background,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15)),
+                            ),
+                            child: Text(
+                              _checking ? 'Verifying…' : 'Verify code',
+                              style: _text(
+                                size: 13,
+                                color: _background,
+                                weight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           OutlinedButton.icon(
                             key: const ValueKey('open-email-app'),
                             onPressed: () => launchUrl(Uri(scheme: 'mailto')),
@@ -435,7 +558,7 @@ class _EmailVerificationWidgetState extends State<EmailVerificationWidget> {
                         ? 'Finishing setup…'
                         : _checking
                             ? 'Checking…'
-                            : 'I verified my email — continue',
+                            : 'Already used the link? Check status',
                     style: _text(
                         size: 14, color: _background, weight: FontWeight.w700),
                   ),

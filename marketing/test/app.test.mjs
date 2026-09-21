@@ -25,6 +25,51 @@ test("health is public and internal routes require the worker token", async (t) 
   });
   assert.equal(response.statusCode, 200);
   assert.equal(response.json().method, "runDaily");
+
+  const batch = await app.inject({
+    method: "POST",
+    url: "/v1/runs/daily-batch",
+    headers: { "x-marketing-token": config.MARKETING_INTERNAL_TOKEN },
+    payload: { start_date: "2026-09-18", days: 3, revision: 2 },
+  });
+  assert.equal(batch.statusCode, 200);
+  assert.equal(batch.json().method, "runDailyBatch");
+  assert.equal(batch.json().args[1].days, 3);
+
+  const sheetSync = await app.inject({
+    method: "POST",
+    url: "/v1/reviews/sync",
+    headers: { "x-marketing-token": config.MARKETING_INTERNAL_TOKEN },
+  });
+  assert.equal(sheetSync.statusCode, 200);
+  assert.equal(sheetSync.json().method, "syncApprovalSheet");
+
+  const processContent = await app.inject({
+    method: "POST",
+    url: "/v1/content/campaign-content-1/process",
+    headers: { "x-marketing-token": config.MARKETING_INTERNAL_TOKEN },
+  });
+  assert.equal(processContent.statusCode, 200);
+  assert.equal(processContent.json().method, "processContentToReview");
+  assert.deepEqual(processContent.json().args, ["campaign-content-1"]);
+
+  const claimed = await app.inject({
+    method: "POST",
+    url: "/v1/reviews/claim",
+    headers: { "x-marketing-token": config.MARKETING_INTERNAL_TOKEN },
+  });
+  assert.equal(claimed.statusCode, 200);
+  assert.equal(claimed.json().method, "claimApprovalSheetDecisions");
+
+  const prepared = await app.inject({
+    method: "POST",
+    url: "/v1/reviews/prepare",
+    headers: { "x-marketing-token": config.MARKETING_INTERNAL_TOKEN },
+    payload: { reviewId: "review-1", rowNumber: 2 },
+  });
+  assert.equal(prepared.statusCode, 200);
+  assert.equal(prepared.json().method, "prepareClaimedReview");
+  assert.deepEqual(prepared.json().args, [{ reviewId: "review-1", rowNumber: 2 }]);
 });
 
 test("approval uses a separate token", async (t) => {

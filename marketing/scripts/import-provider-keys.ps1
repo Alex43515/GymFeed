@@ -48,6 +48,14 @@ foreach ($line in Get-Content -LiteralPath $KeysPath) {
       }
       break
     }
+    { $_ -in @("FAL_KEY", "FAL_API_KEY") } {
+      $providerKeys["FAL_KEY"] = $value
+      break
+    }
+    { $_ -in @("BUFFER_KEY", "BUFFER_API_KEY") } {
+      $providerKeys["BUFFER_API_KEY"] = $value
+      break
+    }
     default {
       throw "Unrecognized credential label: $($Matches.name.Trim())"
     }
@@ -58,14 +66,28 @@ if ($legacyServiceRoleFound) {
   throw "A legacy Supabase service-role JWT was found. Revoke it and replace it with a new sb_secret_ key before importing."
 }
 
-if (-not $providerKeys.ContainsKey("OPENAI_API_KEY") -or
+if ($providerKeys.ContainsKey("OPENAI_API_KEY") -and
     -not $providerKeys["OPENAI_API_KEY"].StartsWith("sk-")) {
-  throw "OPENAI_API_KEY is missing or is not a valid OpenAI key format."
+  throw "OPENAI_API_KEY is not a valid OpenAI key format."
 }
 
-if (-not $providerKeys.ContainsKey("SUPABASE_SERVICE_ROLE_KEY") -or
+if ($providerKeys.ContainsKey("SUPABASE_SERVICE_ROLE_KEY") -and
     -not $providerKeys["SUPABASE_SERVICE_ROLE_KEY"].StartsWith("sb_secret_")) {
-  throw "SUPABASE_SERVICE_ROLE_KEY is missing or is not a new sb_secret_ key."
+  throw "SUPABASE_SERVICE_ROLE_KEY is not a new sb_secret_ key."
+}
+
+if ($providerKeys.ContainsKey("FAL_KEY") -and
+    $providerKeys["FAL_KEY"] -notmatch "^[^:\s]+:[^:\s]+$") {
+  throw "FAL_KEY is not in the expected key_id:key_secret format."
+}
+
+if ($providerKeys.ContainsKey("BUFFER_API_KEY") -and
+    $providerKeys["BUFFER_API_KEY"].Length -lt 20) {
+  throw "BUFFER_API_KEY is too short to be valid."
+}
+
+if ($providerKeys.Count -eq 0) {
+  throw "No recognized provider credentials were found."
 }
 
 $content = Get-Content -Raw -LiteralPath $EnvPath
@@ -89,4 +111,4 @@ try {
   }
 }
 
-Write-Output "Imported the rotated OpenAI and Supabase credentials into the local environment file without displaying them."
+Write-Output "Imported the provider credentials into the local environment file without displaying them."

@@ -3,6 +3,14 @@
 !marketing/**
 marketing/node_modules/
 marketing/.env
+marketing/artifacts/
+!docs/
+!docs/GYMFEED_MARKETING_PRODUCT_BRIEF.md
+!docs/marketing/
+!docs/marketing/screenshots/
+!docs/marketing/screenshots/**
+!docs/marketing/reference-screens/
+!docs/marketing/reference-screens/**
 !assets/
 !assets/fonts/
 !assets/fonts/Poppins-Regular.ttf

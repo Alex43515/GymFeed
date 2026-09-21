@@ -35,9 +35,8 @@ $values = @{
   "SUPABASE_SERVICE_ROLE_KEY" = ""
   "REVENUECAT_WEBHOOK_AUTH" = New-RandomSecret
   "OPENAI_API_KEY" = ""
-  "GEMINI_API_KEY" = ""
-  "BYTEPLUS_API_KEY" = ""
-  "BLOTATO_API_KEY" = ""
+  "FAL_KEY" = ""
+  "BUFFER_API_KEY" = ""
 }
 
 $content = Get-Content -Raw -LiteralPath $examplePath

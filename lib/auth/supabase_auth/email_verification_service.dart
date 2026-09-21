@@ -145,3 +145,32 @@ Future<void> completeVerifiedOnboarding() async {
   }));
   state.pendingVerificationEmail = '';
 }
+
+/// Confirms a pending email/password signup with the one-time code from the
+/// GymFeed email. A code is intentionally supported in addition to the legacy
+/// deep link because mail clients and security scanners can pre-open and
+/// consume single-use confirmation URLs.
+Future<void> verifySignupEmailCode({
+  required String email,
+  required String code,
+}) async {
+  final normalizedEmail = email.trim();
+  final normalizedCode = code.replaceAll(RegExp(r'\D'), '');
+  if (normalizedEmail.isEmpty) {
+    throw StateError('Enter your email again to verify this account.');
+  }
+  if (normalizedCode.length < 6) {
+    throw StateError('Enter the complete verification code from your email.');
+  }
+
+  final response = await supabase.auth.verifyOTP(
+    type: OtpType.signup,
+    email: normalizedEmail,
+    token: normalizedCode,
+  );
+  if (response.session == null ||
+      response.user == null ||
+      response.user!.emailConfirmedAt == null) {
+    throw StateError('Supabase did not confirm this verification code.');
+  }
+}

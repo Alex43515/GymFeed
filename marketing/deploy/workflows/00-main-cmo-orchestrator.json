@@ -1,0 +1,134 @@
+{
+  "id": "GFMainCMOOrchestrator001",
+  "name": "GymFeed 00 - Main CMO Orchestrator",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "0a000001-0000-4000-8000-000000000001",
+      "name": "Run campaign manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -80
+      ]
+    },
+    {
+      "id": "0a000001-0000-4000-8000-000000000004",
+      "name": "Campaign settings - edit action here",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -340,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "// EDIT BEFORE RUNNING. Default only plans ideas; no media generation or publishing.\nconst action = 'plan_campaign'; // plan_campaign | start_batch | resume_batch | release_batch | status\nconst name = 'GymFeed 28-day campaign';\nconst timezone = 'America/New_York';\nconst startDate = $now.setZone(timezone).plus({ days: 7 }).toFormat('yyyy-MM-dd'); // Replace with a fixed YYYY-MM-DD before first run.\nconst days = 28;\nconst campaignId = ''; // Copy from planning result.\nconst batchId = ''; // Copy from batch result for resume/release.\nconst batchNumber = 1; // Advance only after previous seven-day batch approval.\nconst requestKey = ''; // Optional override. Keep unchanged when retrying the same operation.\n\nif (action === 'plan_campaign') {\n  return [{ json: { action, name, startDate, days, timezone, requestKey: requestKey || `campaign:${name}:${startDate}:${days}:${timezone}` } }];\n}\nif (!campaignId) throw new Error('Set campaignId from the existing campaign result; do not create a new campaign to resume one.');\nif (action === 'start_batch') {\n  return [{ json: { action, campaignId, batchNumber, requestKey: requestKey || `campaign:${campaignId}:batch:${batchNumber}` } }];\n}\nif (action === 'resume_batch' || action === 'release_batch') {\n  if (!batchId) throw new Error('Set batchId from the batch result.');\n  return [{ json: { action, campaignId, batchId } }];\n}\nif (action === 'status') return [{ json: { action, campaignId } }];\nthrow new Error(`Unsupported manual action: ${action}`);"
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "0a000001-0000-4000-8000-000000000003",
+      "name": "Exact decision from Sheet dispatcher",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -340,
+        160
+      ]
+    },
+    {
+      "id": "0a000001-0000-4000-8000-000000000020",
+      "name": "Run CMO phase through QA and Sheet handoff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        20
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://marketing-worker:3000/v1/cmo/execute",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-marketing-token",
+              "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 21600000
+        }
+      }
+    },
+    {
+      "id": "0a000001-0000-4000-8000-000000000021",
+      "name": "How to run the approval gates",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -660
+      ],
+      "parameters": {
+        "content": "## Main CMO: approval-gated campaign\n1. Edit **Campaign settings**, set a fixed startDate, then run **plan_campaign**. Writes ideas and evidence to Idea Review; no fal media or Buffer release.\n2. Approve/reject each current idea version in Idea Review. Rejection instructions revise that idea only.\n3. After all ideas are approved, set **start_batch**, campaignId and batchNumber=1. Only seven days are generated. Run waits for production, QA and Content Review handoff.\n4. Review finished assets in Content Review. The dispatcher sends decisions here; rejected assets are handled individually.\n5. Use **release_batch** with campaignId/batchId only when all batch assets are approved. **start_batch** with the next batchNumber is always explicit.\n\n**resume_batch** continues a stored batch after interruption. **status** is read-only. Reuse requestKey when retrying; do not start a new campaign to resume work.\n\nHuman approval is a phase boundary: execution ends after the appropriate Sheet handoff, not while media jobs are still in progress. Only the Sheet dispatcher recurs.",
+        "height": 510,
+        "width": 800,
+        "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Run campaign manually": {
+      "main": [
+        [
+          {
+            "node": "Campaign settings - edit action here",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaign settings - edit action here": {
+      "main": [
+        [
+          {
+            "node": "Run CMO phase through QA and Sheet handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exact decision from Sheet dispatcher": {
+      "main": [
+        [
+          {
+            "node": "Run CMO phase through QA and Sheet handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "executionTimeout": 21660
+  },
+  "versionId": "67f75a89-bae5-47b3-8110-335842127103",
+  "meta": {},
+  "pinData": {},
+  "tags": []
+}

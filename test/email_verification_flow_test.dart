@@ -142,4 +142,37 @@ void main() {
     expect(find.text('Resend email'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('verification code completes signup and opens questions once',
+      (tester) async {
+    String? submittedCode;
+    var completions = 0;
+    var opened = 0;
+
+    await tester.pumpWidget(MaterialApp(
+      home: EmailVerificationWidget(
+        email: 'athlete@example.com',
+        verificationEvents: const Stream<bool>.empty(),
+        verificationChecker: () async => false,
+        codeVerificationAction: (code) async => submittedCode = code,
+        onboardingCompleter: () async => completions += 1,
+        verifiedOpener: () => opened += 1,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('verification-code')),
+      '12345678',
+    );
+    final verifyButton = find.byKey(const ValueKey('verify-code'));
+    await tester.ensureVisible(verifyButton);
+    await tester.tap(verifyButton);
+    await tester.pumpAndSettle();
+
+    expect(submittedCode, '12345678');
+    expect(completions, 1);
+    expect(opened, 1);
+    expect(tester.takeException(), isNull);
+  });
 }

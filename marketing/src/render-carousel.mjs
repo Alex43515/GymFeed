@@ -1,11 +1,4 @@
-import { readFile } from "node:fs/promises";
 import sharp from "sharp";
-
-const regularFontUrl = new URL("../../assets/fonts/Poppins-Regular.ttf", import.meta.url);
-const semiboldFontUrl = new URL("../../assets/fonts/Poppins-SemiBold.ttf", import.meta.url);
-const boldFontUrl = new URL("../../assets/fonts/Poppins-Bold.ttf", import.meta.url);
-
-let fontCssPromise;
 
 function escapeXml(value) {
   return String(value)
@@ -33,27 +26,11 @@ function wrapText(text, maxChars) {
   return lines;
 }
 
-async function embeddedFontCss() {
-  if (!fontCssPromise) {
-    fontCssPromise = Promise.all([
-      readFile(regularFontUrl),
-      readFile(semiboldFontUrl),
-      readFile(boldFontUrl),
-    ]).then(([regular, semibold, bold]) => `
-      @font-face { font-family: Poppins; src: url(data:font/ttf;base64,${regular.toString("base64")}); font-weight: 400; }
-      @font-face { font-family: Poppins; src: url(data:font/ttf;base64,${semibold.toString("base64")}); font-weight: 600; }
-      @font-face { font-family: Poppins; src: url(data:font/ttf;base64,${bold.toString("base64")}); font-weight: 700; }
-    `);
-  }
-  return fontCssPromise;
-}
-
 export async function renderCarouselSlide({ background, headline, body, index, total }) {
   const headlineLines = wrapText(headline, 22).slice(0, 4);
   const bodyLines = wrapText(body, 44).slice(0, 6);
   const headlineStart = 690 - Math.max(0, headlineLines.length - 2) * 45;
   const bodyStart = headlineStart + headlineLines.length * 92 + 32;
-  const fonts = await embeddedFontCss();
   const svg = `
     <svg width="1080" height="1350" viewBox="0 0 1080 1350" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -62,7 +39,7 @@ export async function renderCarouselSlide({ background, headline, body, index, t
           <stop offset="0.44" stop-color="#000" stop-opacity="0.18"/>
           <stop offset="1" stop-color="#000" stop-opacity="0.94"/>
         </linearGradient>
-        <style>${fonts}
+        <style>
           .brand { font-family: Poppins; font-size: 34px; font-weight: 700; fill: #fff; letter-spacing: 1px; }
           .headline { font-family: Poppins; font-size: 76px; font-weight: 700; fill: #fff; }
           .body { font-family: Poppins; font-size: 34px; font-weight: 400; fill: #f2f2f2; }

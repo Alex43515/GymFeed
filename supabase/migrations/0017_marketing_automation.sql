@@ -292,7 +292,7 @@ create table if not exists public.marketing_budgets (
 insert into public.marketing_budgets (month, provider_limits, total_limit)
 values (
   date_trunc('month', now())::date,
-  '{"openai":25,"gemini":15,"byteplus":100,"blotato":29,"infrastructure":10}'::jsonb,
+  '{"openai":25,"fal":25,"buffer":18,"infrastructure":10}'::jsonb,
   180
 )
 on conflict (month) do nothing;
@@ -657,7 +657,7 @@ alter table public.marketing_learnings enable row level security;
 alter table public.marketing_budgets enable row level security;
 alter table public.marketing_cost_ledger enable row level security;
 
--- Public URLs are required by Blotato and the direct social publishing APIs.
+-- Public URLs are required by fal.ai and Buffer's publishing API.
 -- Only the service-role marketing worker can write because no object policies
 -- grant client inserts/updates/deletes.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

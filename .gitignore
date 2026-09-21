@@ -82,6 +82,13 @@ migrate_working_dir/
 *.env
 **/serviceAccountKey*.json
 **/service-account*.json
+marketing/secrets/*.json
+marketing/secrets/
+marketing/artifacts/
+marketing/output/
+marketing/marketing/
+marketing/LOCAL_APPDATA_FONTCONFIG_CACHE/
+outputs/
 supabase/.temp/
 firebase/functions/node_modules/
 marketing/node_modules/
