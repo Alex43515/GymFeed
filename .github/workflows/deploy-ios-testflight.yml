@@ -293,6 +293,7 @@ jobs:
             # approved version release automatically without another action.
             app-store-connect publish \
               --path "$IPA_PATH" \
+              --max-find-build-wait 30 \
               --app-store \
               --platform IOS \
               --version-string "$IOS_MARKETING_VERSION" \
