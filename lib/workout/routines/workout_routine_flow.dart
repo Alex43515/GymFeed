@@ -1060,7 +1060,11 @@ class _RoutineDetailWidgetState extends State<RoutineDetailWidget> {
 }
 
 class _EditableSet {
-  _EditableSet({required double weight, required int reps})
+  _EditableSet({
+    required double weight,
+    required int reps,
+    this.completed = false,
+  })
       : weightController = TextEditingController(
             text: weight == 0
                 ? '0'
@@ -1069,7 +1073,7 @@ class _EditableSet {
 
   final TextEditingController weightController;
   final TextEditingController repsController;
-  bool completed = false;
+  bool completed;
 
   void dispose() {
     weightController.dispose();
@@ -1104,8 +1108,13 @@ class ActiveWorkoutWidget extends StatefulWidget {
 }
 
 class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
-  late final DateTime _startedAt;
+  late DateTime _startedAt;
   late final List<_ActiveExercise> _exercises;
+  late String _historyId;
+  Future<void> _pendingSave = Future<void>.value();
+  bool _loading = true;
+  bool _dirty = false;
+  bool _completedWorkout = false;
   Timer? _elapsedTimer;
   Timer? _restTimer;
   int _elapsedSeconds = 0;
@@ -1116,9 +1125,11 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
   void initState() {
     super.initState();
     _startedAt = DateTime.now();
+    _historyId = 'workout-${_startedAt.microsecondsSinceEpoch}';
     _exercises = widget.routine.exercises
         .map((exercise) => _ActiveExercise(exercise))
         .toList();
+    unawaited(_loadProgress());
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsedSeconds += 1);
     });
@@ -1128,10 +1139,84 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
   void dispose() {
     _elapsedTimer?.cancel();
     _restTimer?.cancel();
+    if (_dirty && !_completedWorkout) _queueSave();
     for (final exercise in _exercises) {
       exercise.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadProgress() async {
+    final saved = await WorkoutRoutineStore.loadWorkoutProgress(
+        widget.routine.id, _startedAt);
+    if (!mounted) return;
+    if (saved != null) {
+      _startedAt = saved.startedAt;
+      _historyId = saved.id;
+      final remaining = List<CompletedExercise>.from(saved.exercises);
+      for (final active in _exercises) {
+        final index = remaining.indexWhere(
+            (item) => item.name == active.exercise.name);
+        if (index < 0) continue;
+        final completed = remaining.removeAt(index);
+        if (completed.sets.isEmpty) continue;
+        for (final set in active.sets) {
+          set.dispose();
+        }
+        active.sets
+          ..clear()
+          ..addAll(completed.sets.map((set) => _EditableSet(
+              weight: set.weightKg,
+              reps: set.reps,
+              completed: set.completed)));
+      }
+      for (final completed in remaining) {
+        if (completed.sets.isEmpty) continue;
+        final active = _ActiveExercise(RoutineExercise(
+            name: completed.name, setCount: completed.sets.length));
+        for (final set in active.sets) {
+          set.dispose();
+        }
+        active.sets
+          ..clear()
+          ..addAll(completed.sets.map((set) => _EditableSet(
+              weight: set.weightKg,
+              reps: set.reps,
+              completed: set.completed)));
+        _exercises.add(active);
+      }
+      _elapsedSeconds = saved.durationSeconds;
+    }
+    setState(() => _loading = false);
+  }
+
+  WorkoutHistoryItem _snapshot() => WorkoutHistoryItem(
+        id: _historyId,
+        routineId: widget.routine.id,
+        name: widget.routine.name,
+        startedAt: _startedAt,
+        durationSeconds: _elapsedSeconds,
+        exercises: _exercises
+            .map((exercise) => CompletedExercise(
+                  name: exercise.exercise.name,
+                  sets: exercise.sets
+                      .map((set) => CompletedSet(
+                            weightKg:
+                                double.tryParse(set.weightController.text) ?? 0,
+                            reps: int.tryParse(set.repsController.text) ?? 0,
+                            completed: set.completed,
+                          ))
+                      .toList(),
+                ))
+            .toList(),
+      );
+
+  void _queueSave() {
+    _dirty = true;
+    final progress = _snapshot();
+    _pendingSave = _pendingSave
+        .catchError((_) {})
+        .then((_) => WorkoutRoutineStore.saveWorkoutProgress(progress));
   }
 
   void _startRest() {
@@ -1150,6 +1235,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
 
   void _toggleSet(_EditableSet set) {
     setState(() => set.completed = !set.completed);
+    _queueSave();
     if (set.completed) _startRest();
   }
 
@@ -1163,31 +1249,13 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
     final removed = exercise.sets.removeAt(index);
     removed.dispose();
     setState(() {});
+    _queueSave();
   }
 
-  Future<void> _discard() async {
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: _routineSurface,
-        title: Text('Discard workout?',
-            style: _routineText(size: 18, weight: FontWeight.w700)),
-        content: Text('Your completed sets will not be saved.',
-            style: _routineText(size: 13, color: _routineMuted)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep training'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Discard',
-                style: TextStyle(color: Color(0xFFFF6B6B))),
-          ),
-        ],
-      ),
-    );
-    if (discard == true && mounted) Navigator.pop(context, false);
+  Future<void> _closeWorkout() async {
+    await _pendingSave;
+    _dirty = false;
+    if (mounted) Navigator.pop(context, false);
   }
 
   Future<void> _addExercise() async {
@@ -1198,33 +1266,18 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
     if (selected == null || !mounted) return;
     setState(() => _exercises
         .add(_ActiveExercise(RoutineExercise(name: selected, setCount: 3))));
+    _queueSave();
   }
 
   Future<void> _finish() async {
     if (_finishing) return;
     setState(() => _finishing = true);
-    final completedExercises = _exercises
-        .map((exercise) => CompletedExercise(
-              name: exercise.exercise.name,
-              sets: exercise.sets
-                  .map((set) => CompletedSet(
-                        weightKg:
-                            double.tryParse(set.weightController.text) ?? 0,
-                        reps: int.tryParse(set.repsController.text) ?? 0,
-                        completed: set.completed,
-                      ))
-                  .toList(),
-            ))
-        .toList();
-    final history = WorkoutHistoryItem(
-      id: 'workout-${DateTime.now().microsecondsSinceEpoch}',
-      routineId: widget.routine.id,
-      name: widget.routine.name,
-      startedAt: _startedAt,
-      durationSeconds: _elapsedSeconds,
-      exercises: completedExercises,
-    );
+    await _pendingSave;
+    final history = _snapshot();
     await WorkoutRoutineStore.saveHistory(history);
+    await WorkoutRoutineStore.clearWorkoutProgress(widget.routine.id);
+    _dirty = false;
+    _completedWorkout = true;
     if (!mounted) return;
     final done = await Navigator.of(context).push<bool>(MaterialPageRoute(
       settings: const RouteSettings(name: 'workout-summary'),
@@ -1245,6 +1298,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
       child: TextField(
         key: fieldKey,
         controller: controller,
+        onChanged: (_) => _queueSave(),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.center,
         style: _routineText(size: 13, weight: FontWeight.w700),
@@ -1427,6 +1481,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                 final lastTarget = exercise.plannedSets.last;
                 setState(() => activeExercise.sets.add(_EditableSet(
                     weight: lastTarget.weightKg, reps: lastTarget.reps)));
+                _queueSave();
               },
               style: TextButton.styleFrom(
                 backgroundColor: const Color(0xFF191919),
@@ -1532,8 +1587,8 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                 child: Row(
                   children: [
                     IconButton(
-                      tooltip: 'Discard',
-                      onPressed: _discard,
+                      tooltip: 'Save and close',
+                      onPressed: _closeWorkout,
                       icon: const Icon(Icons.close_rounded,
                           color: Colors.white, size: 25),
                     ),
@@ -1559,7 +1614,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                       padding: const EdgeInsets.only(right: 9),
                       child: FilledButton(
                         key: const ValueKey('finish-workout'),
-                        onPressed: _finishing ? null : _finish,
+                        onPressed: _loading || _finishing ? null : _finish,
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF1D4A30),
                           disabledBackgroundColor: const Color(0xFF1A2F22),
@@ -1579,29 +1634,32 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
               Expanded(
                 child: Stack(
                   children: [
-                    ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 105),
-                      children: [
-                        ..._exercises.map(_exerciseCard),
-                        OutlinedButton.icon(
-                          key: const ValueKey('active-add-exercise'),
-                          onPressed: _addExercise,
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            side: const BorderSide(color: _routineBorder),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15)),
+                    if (_loading)
+                      const Center(child: CircularProgressIndicator())
+                    else
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 105),
+                        children: [
+                          ..._exercises.map(_exerciseCard),
+                          OutlinedButton.icon(
+                            key: const ValueKey('active-add-exercise'),
+                            onPressed: _addExercise,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              side: const BorderSide(color: _routineBorder),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15)),
+                            ),
+                            icon: const Icon(Icons.add_rounded,
+                                color: _routineGreen, size: 18),
+                            label: Text('Add exercise',
+                                style: _routineText(
+                                    size: 12,
+                                    color: _routineGreen,
+                                    weight: FontWeight.w700)),
                           ),
-                          icon: const Icon(Icons.add_rounded,
-                              color: _routineGreen, size: 18),
-                          label: Text('Add exercise',
-                              style: _routineText(
-                                  size: 12,
-                                  color: _routineGreen,
-                                  weight: FontWeight.w700)),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                     if (_restSeconds > 0) _restBar(),
                   ],
                 ),

@@ -217,7 +217,7 @@ void main() {
     final routine = WorkoutRoutineStore.defaultRoutines().first;
 
     await tester.pumpWidget(phoneApp(ActiveWorkoutWidget(routine: routine)));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('complete-Bench Press-1')));
     await tester.pump();
@@ -241,6 +241,76 @@ void main() {
     expect(history.single.name, 'Push Day A');
     expect(history.single.setsDone, 1);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('checked sets survive closing and reopening a workout',
+      (tester) async {
+    configurePhone(tester);
+    final routine = WorkoutRoutineStore.defaultRoutines().first;
+
+    await tester.pumpWidget(phoneApp(Builder(
+      builder: (context) => Scaffold(
+        body: FilledButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<bool>(
+            builder: (_) => ActiveWorkoutWidget(routine: routine),
+          )),
+          child: const Text('Open workout'),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('Open workout'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('active-set-weight-Bench Press-1')), '72.5');
+    await tester.tap(find.byKey(const ValueKey('complete-Bench Press-1')));
+    await tester.pumpAndSettle();
+
+    final progress = await WorkoutRoutineStore.loadWorkoutProgress(
+        routine.id, DateTime.now());
+    expect(progress?.exercises.first.sets.first.completed, isTrue);
+    expect(progress?.exercises.first.sets.first.weightKg, 72.5);
+
+    await tester.tap(find.byTooltip('Save and close'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open workout'));
+    await tester.pumpAndSettle();
+
+    final complete = tester.widget<IconButton>(
+        find.byKey(const ValueKey('complete-Bench Press-1')));
+    expect(complete.tooltip, 'Set complete');
+    final weight = tester.widget<TextField>(
+        find.byKey(const ValueKey('active-set-weight-Bench Press-1')));
+    expect(weight.controller?.text, '72.5');
+    expect(tester.takeException(), isNull);
+  });
+
+  test('a workout finished today can be reopened without duplicating history',
+      () async {
+    final startedAt = DateTime.now();
+    final workout = WorkoutHistoryItem(
+      id: 'today-workout',
+      routineId: 'default-push-day-a',
+      name: 'Push Day A',
+      startedAt: startedAt,
+      durationSeconds: 45,
+      exercises: const [
+        CompletedExercise(name: 'Bench Press', sets: [
+          CompletedSet(weightKg: 60, reps: 10, completed: true),
+        ]),
+      ],
+    );
+    await WorkoutRoutineStore.saveHistory(workout);
+
+    final restored = await WorkoutRoutineStore.loadWorkoutProgress(
+        workout.routineId, startedAt);
+    expect(restored?.id, workout.id);
+    expect(restored?.setsDone, 1);
+    await WorkoutRoutineStore.saveHistory(restored!);
+    expect(await WorkoutRoutineStore.loadHistory(), hasLength(1));
+    expect(
+        await WorkoutRoutineStore.loadWorkoutProgress(
+            workout.routineId, startedAt.add(const Duration(days: 1))),
+        isNull);
   });
 
   testWidgets('saved routine exercise opens its set editor and persists edits',
@@ -299,7 +369,7 @@ void main() {
     );
 
     await tester.pumpWidget(phoneApp(ActiveWorkoutWidget(routine: routine)));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     TextField field(String key) =>
         tester.widget<TextField>(find.byKey(ValueKey(key)));

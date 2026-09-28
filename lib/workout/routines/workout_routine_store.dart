@@ -10,6 +10,8 @@ class WorkoutRoutineStore {
   static String get _scope => currentUserUid.isEmpty ? 'guest' : currentUserUid;
   static String get _routineKey => 'gymfeed_routines_v1_$_scope';
   static String get _historyKey => 'gymfeed_workout_history_v1_$_scope';
+  static String _progressKey(String routineId) =>
+      'gymfeed_workout_progress_v1_${_scope}_${base64Url.encode(utf8.encode(routineId))}';
   static String get _scheduleKey => 'gymfeed_workout_schedule_v1_$_scope';
   static String get _starterPlanSyncKey =>
       'gymfeed_starter_plan_sync_v1_$_scope';
@@ -138,6 +140,45 @@ class WorkoutRoutineStore {
     await preferences.setString(_historyKey,
         jsonEncode(history.map((entry) => entry.toJson()).toList()));
     await markRoutinePerformed(item.routineId, item.startedAt);
+  }
+
+  /// An unfinished workout is kept separately from completed history.
+  /// Reopening a workout completed earlier today also shows its logged sets.
+  static Future<WorkoutHistoryItem?> loadWorkoutProgress(
+      String routineId, DateTime day) async {
+    final preferences = await SharedPreferences.getInstance();
+    final encoded = preferences.getString(_progressKey(routineId));
+    if (encoded != null) {
+      try {
+        final item = WorkoutHistoryItem.fromJson(
+            (jsonDecode(encoded) as Map).cast<String, dynamic>());
+        if (item.routineId == routineId) {
+          return item;
+        }
+      } catch (_) {
+        // A damaged draft must not prevent the routine from opening.
+      }
+      await preferences.remove(_progressKey(routineId));
+    }
+    final history = await loadHistory();
+    for (final item in history) {
+      if (item.routineId == routineId &&
+          dateKey(item.startedAt) == dateKey(day)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  static Future<void> saveWorkoutProgress(WorkoutHistoryItem item) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_progressKey(item.routineId),
+        jsonEncode(item.toJson()));
+  }
+
+  static Future<void> clearWorkoutProgress(String routineId) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_progressKey(routineId));
   }
 
   static Future<Map<String, List<String>>> loadSchedule() async {
