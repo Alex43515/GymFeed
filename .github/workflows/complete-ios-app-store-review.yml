@@ -1,0 +1,83 @@
+name: Complete GymFeed iOS App Store review
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_id:
+        description: Existing App Store version resource ID
+        required: true
+        type: string
+      submission_id:
+        description: Existing ready review submission resource ID
+        required: true
+        type: string
+      advertising:
+        description: App contains advertising
+        required: true
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      age_assurance:
+        description: App verifies age for content access
+        required: true
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+permissions:
+  contents: read
+
+jobs:
+  complete-review:
+    name: Complete age rating and submit existing build
+    runs-on: ubuntu-24.04
+    environment: app-store-connect
+    timeout-minutes: 15
+    env:
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+      APP_STORE_VERSION_ID: ${{ inputs.version_id }}
+      REVIEW_SUBMISSION_ID: ${{ inputs.submission_id }}
+      GYMFEED_ADVERTISING: ${{ inputs.advertising }}
+      GYMFEED_AGE_ASSURANCE: ${{ inputs.age_assurance }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install App Store Connect tools
+        run: python3 -m pip install --disable-pip-version-check codemagic-cli-tools
+
+      - name: Prepare protected Apple API key
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$APP_STORE_CONNECT_ISSUER_ID"
+          test -n "$APP_STORE_CONNECT_KEY_IDENTIFIER"
+          test -n "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64"
+          printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/app-store-connect-key.p8"
+          chmod 600 "$RUNNER_TEMP/app-store-connect-key.p8"
+          echo "APP_STORE_CONNECT_PRIVATE_KEY=@file:$RUNNER_TEMP/app-store-connect-key.p8" >> "$GITHUB_ENV"
+
+      - name: Complete GymFeed age rating declaration
+        shell: bash
+        run: |
+          python3 scripts/ios_age_rating_release.py \
+            --version-id "$APP_STORE_VERSION_ID" \
+            --advertising "$GYMFEED_ADVERTISING" \
+            --age-assurance "$GYMFEED_AGE_ASSURANCE"
+
+      - name: Submit existing version for App Review
+        shell: bash
+        run: |
+          set -euo pipefail
+          app-store-connect review-submission-items create \
+            "$REVIEW_SUBMISSION_ID" \
+            --version-id "$APP_STORE_VERSION_ID"
+          app-store-connect review-submissions confirm "$REVIEW_SUBMISSION_ID"
+          app-store-connect review-submissions get "$REVIEW_SUBMISSION_ID"
+
+      - name: Remove temporary Apple API key
+        if: ${{ always() }}
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/app-store-connect-key.p8"
