@@ -103,6 +103,29 @@ test("generation and publication use database gates, never cached Sheet decision
   assert.deepEqual(calls.map((call) => call.action), ["assert_generation", "assert_publication"]);
 });
 
+test("reviewer planned dates use the atomic reschedule RPC payload", async () => {
+  const calls = [];
+  const repository = {
+    campaignCommand: async () => ({}),
+    rescheduleCampaignIdea: async (payload) => { calls.push(payload); return payload; },
+  };
+  const engine = new MarketingCampaigns({ repository });
+  await engine.rescheduleIdea({ campaignId: "campaign", contentId: "content", revision: 2, date: "2026-10-09" });
+  assert.deepEqual(calls, [{ campaign_id: "campaign", content_id: "content", revision: 2, publication_date: "2026-10-09" }]);
+  assert.throws(() => engine.rescheduleIdea({ campaignId: "campaign", contentId: "content", revision: 2, date: "09/10/2026" }), /YYYY-MM-DD/);
+});
+
+test("single approved items use the dedicated atomic production RPC", async () => {
+  const calls = [];
+  const repository = {
+    campaignCommand: async () => {},
+    startCampaignItem: async (payload) => { calls.push(payload); return { batch: { id: "b" } }; },
+  };
+  const engine = new MarketingCampaigns({ repository });
+  assert.equal((await engine.startItem({ campaignId: "c", contentId: "v", requestKey: "item:v:1" })).batch.id, "b");
+  assert.deepEqual(calls, [{ campaign_id: "c", content_id: "v", request_key: "item:v:1" }]);
+});
+
 test("duplicate work does not execute; ambiguous errors are held for reconciliation", async () => {
   const duplicate = fake(() => ({ acquired: false, reused: false, reason: "work_needs_completion_or_reconciliation" }));
   const skipped = await duplicate.engine.withWork("v1", "generate", async () => { throw new Error("Must not run"); });
@@ -138,6 +161,9 @@ test("PostgreSQL campaign state gates and exact version manifests", {
       qa jsonb not null default '{}', failure_reason text, approved_by uuid, approved_at timestamptz,
       scheduled_at timestamptz, published_at timestamptz, created_at timestamptz default now(), updated_at timestamptz default now());`);
   sql(readFileSync(new URL("../../supabase/migrations/0032_marketing_campaign_batches.sql", import.meta.url), "utf8"));
+  sql(readFileSync(new URL("../../supabase/migrations/0033_marketing_single_item_generation.sql", import.meta.url), "utf8"));
+  sql(readFileSync(new URL("../../supabase/migrations/0034_marketing_independent_idea_approval.sql", import.meta.url), "utf8"));
+  sql(readFileSync(new URL("../../supabase/migrations/0035_marketing_editable_publication_date.sql", import.meta.url), "utf8"));
   const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
   const rpc = (action, payload) => JSON.parse(sql(`select public.marketing_campaign_command(${quote(action)}, ${quote(JSON.stringify(payload))}::jsonb);`));
   const snapshot = rpc("create", { name: "Test campaign", start_date: "2026-10-01", days: 9, timezone: "Europe/Belgrade", request_key: "test-campaign" });
@@ -177,8 +203,8 @@ test("PostgreSQL campaign state gates and exact version manifests", {
   assert.throws(() => rpc("assert_generation", { content_id: target }), /Command failed/);
   sql(`update public.marketing_content set decision=jsonb_set(decision,'{content,hook}','"Now what?"') where id=${quote(target)};`);
   decide(target, 1, "reject", "Show real Train use");
-  assert.throws(() => rpc("assert_generation", { content_id: first.content_ids[1] }), /Command failed/);
-  assert.throws(() => rpc("acquire_work", { content_id: first.content_ids[1], operation: "produce", request_key: "unapproved-race" }), /Command failed/);
+  assert.equal(rpc("assert_generation", { content_id: first.content_ids[1] }).allowed, true);
+  assert.equal(rpc("acquire_work", { content_id: first.content_ids[1], operation: "produce", request_key: "approved-independent-item" }).acquired, true);
   const claim = rpc("claim_revision", { campaign_id: campaignId, content_id: target, revision: 1 });
   assert.equal(claim.claimed, true);
   assert.equal(rpc("claim_revision", { campaign_id: campaignId, content_id: target, revision: 1 }).claimed, false);
@@ -205,6 +231,23 @@ test("PostgreSQL campaign state gates and exact version manifests", {
   assert.equal(second.batch.end_date, "2026-10-09");
   sql(`update public.marketing_content set status='approved', approved_at=now() where id in (${second.content_ids.map(quote).join(",")});`);
   assert.equal(rpc("start_batch", { campaign_id: campaignId, request_key: "batch-three" }).complete, true);
+  const single = rpc("create", { name: "Single item", start_date: "2026-11-01", days: 1, timezone: "Europe/Belgrade", request_key: "single-item-campaign" });
+  sql(`insert into public.marketing_content(content_key,content_type,topic,concept,hook,decision) values
+    ('single-video','video','Train','Real tracking','Start now','{"content":{"topic":"Train","concept":"Real tracking","hook":"Start now"}}'),
+    ('single-carousel','carousel','Train','Workout tips','Keep moving','{"content":{"topic":"Train","concept":"Workout tips","hook":"Keep moving"}}');`);
+  const singleIds = JSON.parse(sql("select jsonb_agg(id order by content_key desc) from public.marketing_content where content_key like 'single-%';"));
+  rpc("register_day", { campaign_id: single.campaign.id, date: "2026-11-01", content_ids: singleIds });
+  rpc("submit", { campaign_id: single.campaign.id });
+  const singleVideo = JSON.parse(sql("select to_jsonb(i) from public.marketing_campaign_ideas i join public.marketing_content c on c.id=i.content_id where i.campaign_id=" + quote(single.campaign.id) + " and c.content_type='video';"));
+  rpc("decide_idea", { campaign_id: single.campaign.id, content_id: singleVideo.content_id, revision: 1, decision: "approve", instructions: "", request_key: "single-video-approve", reviewer: "test" });
+  const item = JSON.parse(sql(`select public.marketing_campaign_start_item(${quote(JSON.stringify({ campaign_id: single.campaign.id, content_id: singleVideo.content_id, request_key: "item:single-video:1" }))}::jsonb);`));
+  assert.equal(item.content_ids.length, 1);
+  assert.equal(rpc("assert_generation", { content_id: singleVideo.content_id }).allowed, true);
+  sql(readFileSync(new URL("../../supabase/migrations/20260926181823_marketing_independent_asset_release.sql", import.meta.url), "utf8"));
+  const peer = first.content_ids.find((id) => id !== target);
+  sql(`update public.marketing_content set status='qa_failed', approved_at=null where id=${quote(peer)};`);
+  assert.equal(rpc("assert_publication", { content_id: target }).allowed, true);
+  assert.throws(() => rpc("assert_publication", { content_id: peer }), /Command failed/);
   // The RPC is not callable by normal app accounts.
   assert.equal(sql("select has_function_privilege('authenticated','public.marketing_campaign_command(text,jsonb)','execute');"), "f");
 });

@@ -61,6 +61,8 @@ services:
       - ../.env
     volumes:
       - ../secrets/ga4-service-account.json:/run/secrets/ga4-service-account.json:ro
+      - ../../docs/marketing/app-captures:/app/docs/marketing/app-captures
+      - ../../docs/marketing/screenshots:/app/docs/marketing/screenshots
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:

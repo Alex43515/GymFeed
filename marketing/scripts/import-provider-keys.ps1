@@ -1,6 +1,7 @@
 param(
   [string]$KeysPath = (Join-Path ([Environment]::GetFolderPath("Desktop")) "keys.txt"),
-  [string]$EnvPath = (Join-Path (Split-Path -Parent $PSScriptRoot) ".env")
+  [string]$EnvPath = (Join-Path (Split-Path -Parent $PSScriptRoot) ".env"),
+  [switch]$IgnoreUnknown
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +24,9 @@ foreach ($line in Get-Content -LiteralPath $KeysPath) {
   }
 
   if ($trimmed -notmatch "^(?<name>[^=:]+?)\s*[=:]\s*(?<value>.+)$") {
+    if ($IgnoreUnknown) {
+      continue
+    }
     throw "Invalid keys file format. Use KEY=value, one credential per line."
   }
 
@@ -56,7 +60,14 @@ foreach ($line in Get-Content -LiteralPath $KeysPath) {
       $providerKeys["BUFFER_API_KEY"] = $value
       break
     }
+    { $_ -in @("BUFFER_BASE_URL", "BUFFER_SHARE_MODE", "BUFFER_INSTAGRAM_CHANNEL_ID", "BUFFER_TIKTOK_CHANNEL_ID", "BUFFER_YOUTUBE_CHANNEL_ID", "BUFFER_YOUTUBE_PRIVACY") } {
+      $providerKeys[$name] = $value
+      break
+    }
     default {
+      if ($IgnoreUnknown) {
+        continue
+      }
       throw "Unrecognized credential label: $($Matches.name.Trim())"
     }
   }
@@ -84,6 +95,21 @@ if ($providerKeys.ContainsKey("FAL_KEY") -and
 if ($providerKeys.ContainsKey("BUFFER_API_KEY") -and
     $providerKeys["BUFFER_API_KEY"].Length -lt 20) {
   throw "BUFFER_API_KEY is too short to be valid."
+}
+
+if ($providerKeys.ContainsKey("BUFFER_BASE_URL") -and
+    $providerKeys["BUFFER_BASE_URL"] -notmatch '^https://') {
+  throw "BUFFER_BASE_URL must be an HTTPS URL."
+}
+
+if ($providerKeys.ContainsKey("BUFFER_SHARE_MODE") -and
+    $providerKeys["BUFFER_SHARE_MODE"] -notin @("addToQueue", "shareNext", "shareNow")) {
+  throw "BUFFER_SHARE_MODE is invalid."
+}
+
+if ($providerKeys.ContainsKey("BUFFER_YOUTUBE_PRIVACY") -and
+    $providerKeys["BUFFER_YOUTUBE_PRIVACY"] -notin @("private", "unlisted", "public")) {
+  throw "BUFFER_YOUTUBE_PRIVACY is invalid."
 }
 
 if ($providerKeys.Count -eq 0) {

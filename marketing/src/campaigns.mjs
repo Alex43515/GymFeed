@@ -57,7 +57,8 @@ export function campaignIdeaCard(idea) {
     success_metric: decision.selected_strategy?.primary_success_metric ?? decision.experiment?.success_metric ?? "",
     creative_treatment: treatment,
     shots_or_slides: plan.scenes ?? plan.slides ?? [],
-    dialogue: plan.voiceover_script || (plan.scenes ?? []).map((scene) => scene.spoken_dialogue).filter(Boolean).join("\n"),
+    dialogue: (plan.scenes ?? []).filter((scene) => scene.spoken_dialogue || scene.voiceover_text)
+      .map((scene) => `${scene.speaker_id || "Narrator"}: ${scene.spoken_dialogue || scene.voiceover_text}`).join("\n") || plan.voiceover_script,
     caption: plan.caption ?? plan.platform_copy?.instagram_caption ?? "",
     platform_copy: plan.platform_copy ?? {},
     cta: plan.cta ?? "",
@@ -162,6 +163,23 @@ export class MarketingCampaigns {
   startBatch({ campaignId, requestKey }) {
     return this.command("start_batch", {
       campaign_id: nonempty(campaignId, "Campaign ID"), request_key: nonempty(requestKey, "Batch request key"),
+    });
+  }
+
+  rescheduleIdea({ campaignId, contentId, revision, date }) {
+    return this.repository.rescheduleCampaignIdea({
+      campaign_id: nonempty(campaignId, "Campaign ID"),
+      content_id: nonempty(contentId, "Content ID"),
+      revision: revisionNumber(revision),
+      publication_date: campaignDate(date),
+    });
+  }
+
+  startItem({ campaignId, contentId, requestKey }) {
+    return this.repository.startCampaignItem({
+      campaign_id: nonempty(campaignId, "Campaign ID"),
+      content_id: nonempty(contentId, "Content ID"),
+      request_key: nonempty(requestKey, "Item request key"),
     });
   }
 

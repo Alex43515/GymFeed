@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MarketingOrchestrator, referenceImagePrompt, videoScenePrompt } from "../src/orchestrator.mjs";
+import { MarketingOrchestrator, referenceImagePrompt, safeBackgroundPrompt, settleOrReleaseOpenAiReservation, videoScenePrompt } from "../src/orchestrator.mjs";
 
 test("Gemini creator prompt is a timed cinematic production brief", () => {
   const content = {
@@ -72,6 +72,33 @@ test("daily run is idempotent when a run already exists", async () => {
   assert.deepEqual(await orchestrator.runDaily(new Date("2026-08-12T10:00:00Z")), { reused: true, run: existing });
 });
 
+test("carousel background prompts cannot request pseudo UI", () => {
+  const prompt = safeBackgroundPrompt({
+    visual_type: "branded_graphic",
+    visual_prompt: "Layered rounded cards with feature labels and line icons",
+  });
+  assert.match(prompt, /Background imagery only/);
+  assert.match(prompt, /Do not render.*cards, panels.*anything resembling an app interface/);
+  assert.match(prompt, /copy-safe space/);
+});
+
+test("billed OpenAI validation failures settle usage instead of releasing it", async () => {
+  const calls = [];
+  const repository = {
+    settleCost: async (...args) => calls.push(["settle", ...args]),
+    releaseCost: async (...args) => calls.push(["release", ...args]),
+  };
+  await settleOrReleaseOpenAiReservation(repository, "reservation-1", {
+    openaiCostUsd: 0.42,
+    openaiResponseId: "resp-1,resp-2",
+  });
+  await settleOrReleaseOpenAiReservation(repository, "reservation-2", new Error("network failed before a response"));
+  assert.deepEqual(calls, [
+    ["settle", "reservation-1", 0.42, "resp-1,resp-2"],
+    ["release", "reservation-2"],
+  ]);
+});
+
 test("three-day test batch creates three dated campaigns and six exact content IDs", async () => {
   const orchestrator = new MarketingOrchestrator({ config: {} });
   const dates = [];
@@ -103,12 +130,14 @@ test("decision context includes GA4 traffic without replacing first-party outcom
     analyticsReporter: { summary: async () => ({ status: "ok", last_7_days: { sessions: 12 } }) },
   });
 
-  assert.deepEqual(await orchestrator.decisionContext(), {
+  const context = await orchestrator.decisionContext();
+  assert.deepEqual({ ...context, app_captures: undefined }, {
     events_7d: [{ event_name: "signup" }],
     ga4: { status: "ok", last_7_days: { sessions: 12 } },
     buffer: { status: "not_configured" },
-    app_captures: [],
+    app_captures: undefined,
   });
+  assert.equal(context.app_captures.some((capture) => capture.id === "requested:train-start-track-complete-set"), true);
 });
 
 test("decision context includes first-party Buffer post performance", async () => {
@@ -118,12 +147,14 @@ test("decision context includes first-party Buffer post performance", async () =
     publisher: { performanceSummary: async () => ({ status: "ok", posts_analyzed: 42 }) },
   });
 
-  assert.deepEqual(await orchestrator.decisionContext(), {
+  const context = await orchestrator.decisionContext();
+  assert.deepEqual({ ...context, app_captures: undefined }, {
     events_7d: [],
     ga4: { status: "not_configured" },
     buffer: { status: "ok", posts_analyzed: 42 },
-    app_captures: [],
+    app_captures: undefined,
   });
+  assert.equal(context.app_captures.some((capture) => capture.id === "requested:train-start-track-complete-set"), true);
 });
 
 test("video generation creates one locked reference and queues every human scene", async () => {
@@ -498,6 +529,82 @@ test("main orchestrator does not regenerate content already waiting for approval
   assert.equal(result.skipped, true);
   assert.equal(result.pending, false);
   assert.match(result.reason, /already reached awaiting_approval/);
+});
+
+test("a failed video with saved QA-rejected clips renders the existing scenes for review", async () => {
+  const scenes = [{ scene_id: "s01", asset_type: "generated_video", status: "qa_failed", attempt: 2, asset_url: "raw.mp4" }];
+  const content = { id: "v", content_type: "video", status: "failed", decision: { content: { production_version: 1, scenes: [] }, generation: { scenes } } };
+  const orchestrator = new MarketingOrchestrator({ config: { GENERATE_ASSETS: true }, repository: { contentById: async () => content } });
+  let rendered = false;
+  orchestrator.finishVideoGeneration = async (item, saved) => {
+    rendered = true;
+    assert.equal(item.id, "v");
+    assert.deepEqual(saved, scenes);
+    return { content: { ...item, status: "generated", asset_urls: ["review.mp4"] } };
+  };
+  orchestrator.generateVideo = async () => { throw new Error("must not submit another video task"); };
+  const result = await orchestrator.generateContent("v");
+  assert.equal(rendered, true);
+  assert.equal(result.content.asset_urls[0], "review.mp4");
+});
+
+test("a completed master keeps scene QA findings even when final model QA likes it", async () => {
+  let content = { id: "v", content_type: "video", status: "generated", thumbnail_url: "thumb.jpg", decision: { content: { production_version: 1 }, generation: { scenes: [{ scene_id: "s05", status: "qa_failed", qa: { defects: ["Generated UI"] } }] } } };
+  const repository = {
+    contentById: async () => content,
+    reserveCost: async () => "reservation",
+    settleCost: async () => {},
+    brandConfig: async () => ({ minimum_qa_score: 85 }),
+    updateContent: async (_id, patch) => (content = { ...content, ...patch }),
+  };
+  const brain = { qualityReview: async () => ({ data: { publish: true, scores: { brand_safety: 95, product_accuracy: 95, visual_quality: 95, copy_quality: 95 }, critical_issues: [], required_fixes: [] }, costUsd: 0, responseId: "qa" }) };
+  const orchestrator = new MarketingOrchestrator({ config: {}, repository, brain });
+  const result = await orchestrator.reviewContent("v");
+  assert.equal(result.content.status, "qa_failed");
+  assert.match(result.content.failure_reason, /s05: Generated UI/);
+  assert.equal(result.content.qa.publish, false);
+});
+
+test("a saved preview reaches human review when the monthly final-QA budget is exhausted", async () => {
+  let content = { id: "v", content_type: "video", status: "generated", asset_urls: ["review.mp4"], thumbnail_url: "thumb.jpg", decision: { content: { production_version: 3 }, generation: { final_technical: { final_dialogue_match: false, duration_matches_plan: true }, scenes: [{ scene_id: "s05", status: "qa_failed", qa_score: 63, qa: { defects: ["Generated UI"] } }] } } };
+  const repository = {
+    contentById: async () => content,
+    reserveCost: async () => { throw new Error("reserve openai cost: openai provider budget exceeded"); },
+    updateContent: async (_id, patch) => (content = { ...content, ...patch }),
+  };
+  const orchestrator = new MarketingOrchestrator({ config: {}, repository });
+  const result = await orchestrator.reviewContent("v");
+  assert.equal(result.content.status, "qa_failed");
+  assert.deepEqual(result.content.asset_urls, ["review.mp4"]);
+  assert.equal(result.content.qa_score, 63);
+  assert.match(result.content.failure_reason, /Generated UI/);
+  assert.match(result.content.failure_reason, /budget reached/);
+});
+
+test("main orchestrator resumes QA for a downloaded generated scene without an active provider task", async () => {
+  let content = {
+    id: "campaign-content-resume",
+    status: "generating",
+    provider_task_id: null,
+    decision: { generation: { scenes: [{ scene_id: "S1", asset_type: "generated_video", status: "generated" }] } },
+  };
+  const calls = [];
+  const orchestrator = new MarketingOrchestrator({ config: {}, repository: { contentById: async () => content } });
+  orchestrator.refreshContent = async (id) => {
+    calls.push(["refresh", id]);
+    content = { ...content, status: "generated" };
+    return { skipped: false, pending: false, content };
+  };
+  orchestrator.reviewContent = async (id) => {
+    calls.push(["qa", id]);
+    content = { ...content, status: "awaiting_approval" };
+    return { skipped: false, passed: true, content };
+  };
+
+  const result = await orchestrator.processContentToReview(content.id, { pollIntervalMs: 0 });
+
+  assert.deepEqual(calls, [["refresh", content.id], ["qa", content.id]]);
+  assert.equal(result.content.status, "awaiting_approval");
 });
 
 test("sheet approval records the decision but does not call Buffer while auto publish is disabled", async () => {

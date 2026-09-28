@@ -1,6 +1,7 @@
 const modules = [
   "../src/config.mjs",
   "../src/contracts.mjs",
+  "../src/video-story.mjs",
   "../src/prompts.mjs",
   "../src/repository.mjs",
   "../src/brain.mjs",

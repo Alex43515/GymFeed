@@ -4,6 +4,46 @@
   "nodes": [
     {
       "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "5a000001-0000-4000-8000-000000000007",
+              "leftValue": "={{ $json.action === 'idea_decision' && String($json.entry.decision).toLowerCase() === 'approve' }}",
+              "rightValue": "",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5a000001-0000-4000-8000-000000000007",
+      "name": "Is this an idea approval?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [760, 100]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "GFCaptureIntake001",
+          "mode": "list",
+          "cachedResultName": "GymFeed 06 - Import Capture and Start Approved Item"
+        },
+        "mode": "each",
+        "options": { "waitForSubWorkflow": false }
+      },
+      "id": "5a000001-0000-4000-8000-000000000008",
+      "name": "Run automatic Drive intake and generation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1040, 20]
+    },
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
@@ -83,17 +123,14 @@
         },
         "mode": "each",
         "options": {
-          "waitForSubWorkflow": true
+          "waitForSubWorkflow": false
         }
       },
       "id": "5a000001-0000-4000-8000-000000000004",
       "name": "Run main CMO and wait for decision completion",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [
-        780,
-        100
-      ]
+      "position": [1040, 200]
     },
     {
       "id": "5a000001-0000-4000-8000-000000000006",
@@ -105,7 +142,7 @@
         -410
       ],
       "parameters": {
-        "content": "## Human-decision dispatcher only\nChecks **Idea Review** and **Content Review** every five minutes, or manually. No new campaign planning and no automatic next-week generation.\n\nEach decision carries its stable idea/content ID, version and instructions into the main CMO. This execution waits for that decision to complete. The worker deduplicates processed decisions; changed instructions remain a new decision.\n\nKeep separate idea and finished-asset approvals. Reject needs specific instructions. Use Main CMO **start_batch** / **release_batch** explicitly for production and Buffer release.",
+        "content": "## Human-decision dispatcher\nChecks **Idea Review** and **Content Review** every five minutes, or manually. Each row is independent.\n\nIdea Approve automatically runs workflow 06: Drive intake, local verification, generation and QA for only that item. A missing or invalid required file leaves the idea approved but changes Current status to **Approved - Blocked** with the exact reason. Blocked approvals are retried every five minutes.\n\nIdea Reject revises the same row and resets it to Pending. Content Reject regenerates only that finished asset, replaces links in the same row and resets it to Pending.",
         "height": 330,
         "width": 890,
         "color": 4
@@ -150,6 +187,24 @@
       "main": [
         [
           {
+            "node": "Is this an idea approval?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is this an idea approval?": {
+      "main": [
+        [
+          {
+            "node": "Run automatic Drive intake and generation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Run main CMO and wait for decision completion",
             "type": "main",
             "index": 0
@@ -164,7 +219,7 @@
     "timezone": "America/New_York",
     "executionTimeout": 21720
   },
-  "versionId": "0527a71e-e6f1-4cff-bf5b-c1ec58b97576",
+  "versionId": "058a2ef4-9d63-47ae-9cab-0e9fb3e29a64",
   "meta": {},
   "pinData": {},
   "tags": []

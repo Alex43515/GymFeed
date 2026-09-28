@@ -1,12 +1,17 @@
 import { GoogleAuth } from "google-auth-library";
 import { createHash } from "node:crypto";
 
-export const IDEA_REVIEW_HEADERS = [
+const LEGACY_IDEA_REVIEW_HEADERS = [
   "Idea decision", "Revision instructions", "Campaign ID", "Planned date", "Content type",
   "Version", "Current status", "Title", "Hook", "Audience", "GymFeed feature", "Objective",
   "Description", "Storyboard / slide outline", "Dialogue", "Caption", "CTA", "Evidence and metrics",
   "Reasoning and limitations", "Production requirements", "Approved version", "Processing result",
   "Processed at", "Idea ID", "Updated at", "Processed decision fingerprint",
+];
+export const IDEA_REVIEW_HEADERS = [
+  ...LEGACY_IDEA_REVIEW_HEADERS.slice(0, 13),
+  "Generation prompt",
+  ...LEGACY_IDEA_REVIEW_HEADERS.slice(13),
 ];
 const IDEA_COLUMN = Object.fromEntries(IDEA_REVIEW_HEADERS.map((name, index) => [name, index]));
 
@@ -16,9 +21,54 @@ function cellText(value) {
   return text.length > 48000 ? `${text.slice(0, 48000)}\n[Display truncated; see the stored idea brief.]` : text;
 }
 
+function productionRequirementsText(requirements) {
+  if (!requirements || typeof requirements !== "object" || Array.isArray(requirements)) {
+    return cellText(requirements);
+  }
+
+  const requested = [];
+  const addRequested = (value) => {
+    const text = String(value ?? "").trim();
+    if (text && !requested.includes(text)) requested.push(text);
+  };
+  const brief = Array.isArray(requirements.brief) ? requirements.brief : [];
+  const assets = Array.isArray(requirements.assets) ? requirements.assets : [];
+  brief.forEach(addRequested);
+  assets.forEach(addRequested);
+  for (const ref of requirements.captures ?? []) {
+    if (String(ref).startsWith("requested:")) {
+      const filename = `${String(ref).slice("requested:".length)}.mp4`;
+      addRequested(`Required video recording: ${ref}`);
+      addRequested(`UPLOAD WITH THIS EXACT FILE NAME: ${filename}`);
+    }
+  }
+
+  const availableCaptures = (requirements.captures ?? []).filter((ref) => !String(ref).startsWith("requested:"));
+  const screenshots = requirements.screenshots ?? [];
+  const lines = requested.length
+    ? ["ACTION REQUIRED FROM YOU BEFORE GENERATION", ...requested.map((item) => `- ${item}`), "", "STATUS: Generation is blocked until the required files are supplied and verified."]
+    : ["NO NEW FILE REQUIRED FROM YOU", "The currently listed production assets are available."];
+
+  if (requirements.upload_folder_url) {
+    lines.push("", "UPLOAD THE REQUIRED FILE HERE", requirements.upload_folder_url);
+  }
+
+  if (availableCaptures.length || screenshots.length) {
+    lines.push("", "ALREADY AVAILABLE");
+    availableCaptures.forEach((ref) => lines.push(`- App recording: ${ref}`));
+    screenshots.forEach((ref) => lines.push(`- GymFeed image: ${ref}`));
+  }
+  if (requirements.estimated_video_cost_usd_per_attempt != null) {
+    lines.push("", `Estimated generated-video cost per attempt: $${requirements.estimated_video_cost_usd_per_attempt}`);
+  }
+  if (requirements.cost_note) lines.push(requirements.cost_note);
+  return cellText(lines.join("\n"));
+}
+
 function ideaFingerprint(entry) {
   return createHash("sha256").update(JSON.stringify([
     entry.ideaId, Number(entry.version), normalizedDecision(entry.decision), String(entry.instructions ?? "").trim(),
+    String(entry.plannedDate ?? "").trim(),
   ])).digest("hex");
 }
 
@@ -35,13 +85,22 @@ function latestRowsById(rows, idColumn, versionColumn) {
 
 function ideaRow(idea) {
   const brief = idea.brief ?? {};
+  const approved = ["approved", "approved - blocked"].includes(String(idea.status ?? "").toLowerCase())
+    && Number(idea.approved_version) === Number(idea.version);
+  const processingResult = idea.production_block_reason
+    ? `Approved - Blocked: ${idea.production_block_reason}`
+    : Number(idea.version) > 1 && String(idea.instructions ?? "").trim()
+    ? approved
+      ? `Rejected version ${Number(idea.version) - 1}: ${String(idea.instructions).trim()}\nRevised version ${idea.version} is approved for replacement production.`
+      : `Rejected version ${Number(idea.version) - 1}: ${String(idea.instructions).trim()}\nRevised version ${idea.version} is pending approval.`
+    : "New idea version; approve this idea before production";
   return [
-    "Pending", "", idea.campaign_id, idea.planned_date ?? "", idea.content_type,
+    approved ? "Approve" : "Pending", "", idea.campaign_id, idea.planned_date ?? "", idea.content_type,
     idea.version, idea.status, brief.title ?? "", brief.hook ?? "", cellText(brief.audience),
-    cellText(brief.feature), cellText(brief.objective), cellText(brief.description), cellText(brief.storyboard),
+    cellText(brief.feature), cellText(brief.objective), cellText(brief.description), cellText(brief.generation_prompt), cellText(brief.storyboard),
     cellText(brief.dialogue), cellText(brief.caption), cellText(brief.cta), cellText(brief.evidence),
-    cellText(brief.rationale), cellText(brief.production_requirements), idea.approved_version ?? "",
-    "New idea version; approve this idea before production", "", idea.id, idea.updated_at ?? "", "",
+    cellText(brief.rationale), productionRequirementsText(brief.production_requirements), idea.approved_version ?? "",
+    processingResult, "", idea.id, idea.updated_at ?? "", "",
   ];
 }
 
@@ -105,6 +164,7 @@ const COLUMN = Object.fromEntries(APPROVAL_SHEET_HEADERS.map((name, index) => [n
 const LEGACY_COLUMN = Object.fromEntries(LEGACY_APPROVAL_SHEET_HEADERS.map((name, index) => [name, index]));
 const LAST_COLUMN = "Z";
 const LEGACY_LAST_COLUMN = "X";
+const IDEA_LAST_COLUMN = "AA";
 
 function normalizedDecision(value) {
   const text = String(value ?? "").trim().toLowerCase();
@@ -149,18 +209,23 @@ function migrateLegacyRow(row) {
   ];
 }
 
-function rowForContent(content, existing = null) {
+function rowForContent(content, existing = null, { freshReview = false } = {}) {
   const assets = [...(content.asset_urls ?? [])].slice(0, 7);
   while (assets.length < 7) assets.push("");
   const revision = reviewRevision(content);
   const sameRevision = existing && Number(existing[COLUMN.Revision] ?? 1) === revision;
+  const previousRevision = existing ? Number(existing[COLUMN.Revision] || 1) : null;
   const fields = reviewFields(content.content_type);
   const needsRevisionDecision = ["failed", "qa_failed"].includes(content.status);
-  const decision = sameRevision ? normalizedDecision(existing[COLUMN[fields.decision]]) : "Pending";
-  const instructions = sameRevision ? (existing[COLUMN[fields.instructions]] ?? "") : "";
+  const decision = sameRevision && !freshReview ? normalizedDecision(existing[COLUMN[fields.decision]]) : "Pending";
+  const instructions = sameRevision && !freshReview ? (existing[COLUMN[fields.instructions]] ?? "") : "";
   const processingResult = needsRevisionDecision
     ? `ERROR: ${content.failure_reason ?? "Content failed quality review"}`
-    : "New revision ready for review";
+    : freshReview
+      ? "New media is ready for review; the previous decision was cleared"
+    : previousRevision != null && previousRevision !== revision
+      ? `Rejected revision ${previousRevision}; replacement revision ${revision} is ready for review`
+      : "New revision ready for review";
   const video = reviewKind(content.content_type) === "video";
   return [
     video ? decision : "",
@@ -179,8 +244,8 @@ function rowForContent(content, existing = null) {
     captionFor(content),
     content.qa_score ?? "",
     content.qa?.summary ?? content.failure_reason ?? "",
-    needsRevisionDecision ? processingResult : (sameRevision ? (existing[COLUMN["Processing result"]] ?? "") : processingResult),
-    needsRevisionDecision ? "" : (sameRevision ? (existing[COLUMN["Processed at"]] ?? "") : ""),
+    needsRevisionDecision || freshReview ? processingResult : (sameRevision ? (existing[COLUMN["Processing result"]] ?? "") : processingResult),
+    needsRevisionDecision || freshReview ? "" : (sameRevision ? (existing[COLUMN["Processed at"]] ?? "") : ""),
     content.id,
     content.updated_at ?? "",
   ];
@@ -238,9 +303,26 @@ export class GoogleSheetsApprovalQueue {
     });
   }
 
+  async updateRanges(updates, sheetName = this.sheetName) {
+    if (!updates.length) return null;
+    const escapedSheet = sheetName.replaceAll("'", "''");
+    return this.request("/values:batchUpdate", {
+      method: "POST",
+      body: {
+        valueInputOption: "RAW",
+        data: updates.map(({ range, values }) => ({
+          range: `'${escapedSheet}'!${range}`,
+          majorDimension: "ROWS",
+          values,
+        })),
+      },
+    });
+  }
+
   async appendRows(values, sheetName = this.sheetName) {
     if (!values.length) return null;
-    return this.request(`${this.valuesPath(`A:${LAST_COLUMN}`, sheetName)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+    const lastColumn = sheetName === this.ideaSheetName ? IDEA_LAST_COLUMN : LAST_COLUMN;
+    return this.request(`${this.valuesPath(`A:${lastColumn}`, sheetName)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
       method: "POST",
       body: { majorDimension: "ROWS", values },
     });
@@ -353,29 +435,39 @@ export class GoogleSheetsApprovalQueue {
 
   async syncContent(contents) {
     const rows = await this.readRows();
-    const byContentRevision = new Map();
-    rows.forEach((row, index) => {
-      const id = row[COLUMN["Content ID"]];
-      if (id) byContentRevision.set(`${id}:${Number(row[COLUMN.Revision] || 1)}`, { row, rowNumber: index + 2 });
-    });
+    const byContent = latestRowsById(rows, COLUMN["Content ID"], COLUMN.Revision);
 
     const append = [];
+    const updates = [];
+    let updated = 0;
     for (const content of contents) {
-      const key = `${content.id}:${reviewRevision(content)}`;
-      const existing = byContentRevision.get(key);
-      const next = rowForContent(content, existing?.row);
+      const existing = byContent.get(content.id);
+      let next = rowForContent(content, existing?.row);
       if (existing?.rowNumber) {
-        // A:D belong to the reviewer; W:X belong to the decision dispatcher.
-        // Never write them during sync, even if the status is failed or QA-failed.
-        await this.updateRange(`E${existing.rowNumber}:V${existing.rowNumber}`, [next.slice(4, 22)]);
-        await this.updateRange(`Y${existing.rowNumber}:Z${existing.rowNumber}`, [next.slice(24)]);
+        const sameRevision = existing.version === reviewRevision(content);
+        const mediaChanged = next.slice(COLUMN.Preview, COLUMN["Content key"])
+          .some((value, index) => String(value ?? "") !== String(existing.row[COLUMN.Preview + index] ?? ""));
+        const becameReviewable = content.status === "awaiting_approval"
+          && existing.row[COLUMN["Current status"]] !== "awaiting_approval";
+        const freshReview = sameRevision && content.status === "awaiting_approval" && (mediaChanged || becameReviewable);
+        if (freshReview) next = rowForContent(content, existing.row, { freshReview: true });
+        if (sameRevision && !freshReview) {
+          // A:D belong to the reviewer; W:X belong to the decision dispatcher.
+          updates.push({ range: `E${existing.rowNumber}:V${existing.rowNumber}`, values: [next.slice(4, 22)] });
+          updates.push({ range: `Y${existing.rowNumber}:Z${existing.rowNumber}`, values: [next.slice(24)] });
+        } else {
+          // New media remains on the stable row, but always requires a fresh review.
+          updates.push({ range: `A${existing.rowNumber}:Z${existing.rowNumber}`, values: [next] });
+        }
+        updated += 1;
       } else if (!existing) {
         append.push(next);
-        byContentRevision.set(key, { row: next });
+        byContent.set(content.id, { row: next, version: reviewRevision(content) });
       }
     }
+    await this.updateRanges(updates);
     await this.appendRows(append);
-    return { updated: contents.length - append.length, appended: append.length };
+    return { updated, appended: append.length };
   }
 
   async pendingDecisions() {
@@ -394,6 +486,9 @@ export class GoogleSheetsApprovalQueue {
         revision: Number(row[COLUMN.Revision] ?? 1),
         decision,
         instructions: String(row[COLUMN[fields.instructions]] ?? "").trim(),
+        currentStatus: String(row[COLUMN["Current status"]] ?? ""),
+        contentUpdatedAt: String(row[COLUMN["Updated at"]] ?? ""),
+        processingResult: String(row[COLUMN["Processing result"]] ?? ""),
       }];
     });
   }
@@ -407,8 +502,9 @@ export class GoogleSheetsApprovalQueue {
     const latest = latestRowsById(rows, COLUMN["Content ID"], COLUMN.Revision).get(entry.contentId);
     if (!latest || latest.rowNumber !== entry.rowNumber || latest.version !== entry.revision) return { marked: false, reason: "Row or revision moved" };
     const type = latest.row[COLUMN["Content type"]];
-    const decisionColumn = type === "video" ? COLUMN["Video decision"] : COLUMN["Carousel decision"];
-    const instructionsColumn = type === "video" ? COLUMN["Video instructions"] : COLUMN["Carousel instructions"];
+    const fields = reviewFields(type);
+    const decisionColumn = COLUMN[fields.decision];
+    const instructionsColumn = COLUMN[fields.instructions];
     if (normalizedDecision(latest.row[decisionColumn]) !== entry.decision || String(latest.row[instructionsColumn] ?? "").trim() !== entry.instructions) return { marked: false, reason: "Reviewer input changed" };
     await this.setProcessingResult(entry.rowNumber, result, processedAt);
     return { marked: true };
@@ -424,11 +520,24 @@ export class GoogleSheetsApprovalQueue {
       sheet = created.replies?.[0]?.addSheet;
     }
     const sheetId = sheet.properties?.sheetId;
-    const headerResult = await this.request(this.valuesPath("A1:Z1", this.ideaSheetName));
+    const headerResult = await this.request(this.valuesPath(`A1:${IDEA_LAST_COLUMN}1`, this.ideaSheetName));
     const headers = headerResult.values?.[0] ?? [];
     if (IDEA_REVIEW_HEADERS.every((header, index) => headers[index] === header)) return sheetId;
-    if (headers.some((value) => value !== "")) throw new Error(`Refusing to overwrite unfamiliar columns in ${this.ideaSheetName}`);
-    await this.updateRange("A1:Z1", [IDEA_REVIEW_HEADERS], this.ideaSheetName);
+    const hasLegacyHeaders = LEGACY_IDEA_REVIEW_HEADERS.every((header, index) => headers[index] === header);
+    if (!hasLegacyHeaders && headers.some((value) => value !== "")) throw new Error(`Refusing to overwrite unfamiliar columns in ${this.ideaSheetName}`);
+    const columnCount = Number(sheet.properties?.gridProperties?.columnCount ?? 0);
+    if (columnCount < IDEA_REVIEW_HEADERS.length) {
+      await this.request(":batchUpdate", {
+        method: "POST",
+        body: { requests: [{ appendDimension: { sheetId, dimension: "COLUMNS", length: IDEA_REVIEW_HEADERS.length - columnCount } }] },
+      });
+    }
+    if (hasLegacyHeaders) {
+      const legacyRows = await this.request(this.valuesPath("A2:Z1000", this.ideaSheetName));
+      const migratedRows = (legacyRows.values ?? []).map((row) => [...row.slice(0, 13), "", ...row.slice(13)]);
+      if (migratedRows.length) await this.updateRange(`A2:${IDEA_LAST_COLUMN}${migratedRows.length + 1}`, migratedRows, this.ideaSheetName);
+    }
+    await this.updateRange(`A1:${IDEA_LAST_COLUMN}1`, [IDEA_REVIEW_HEADERS], this.ideaSheetName);
     await this.request(":batchUpdate", {
       method: "POST",
       body: { requests: [
@@ -437,7 +546,7 @@ export class GoogleSheetsApprovalQueue {
           fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
         } },
         { repeatCell: {
-          range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 26 },
+          range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: IDEA_REVIEW_HEADERS.length },
           cell: { userEnteredFormat: {
             backgroundColor: { red: 0.05, green: 0.08, blue: 0.07 },
             textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true }, wrapStrategy: "WRAP",
@@ -456,11 +565,33 @@ export class GoogleSheetsApprovalQueue {
           },
         } },
         { updateDimensionProperties: {
-          range: { sheetId, dimension: "COLUMNS", startIndex: 0, endIndex: 26 },
+          range: { sheetId, dimension: "COLUMNS", startIndex: 0, endIndex: IDEA_REVIEW_HEADERS.length },
           properties: { pixelSize: 220 }, fields: "pixelSize",
         } },
         { updateDimensionProperties: {
-          range: { sheetId, dimension: "COLUMNS", startIndex: 25, endIndex: 26 },
+          range: { sheetId, dimension: "COLUMNS", startIndex: IDEA_COLUMN["Production requirements"], endIndex: IDEA_COLUMN["Production requirements"] + 1 },
+          properties: { pixelSize: 420 }, fields: "pixelSize",
+        } },
+        { updateDimensionProperties: {
+          range: { sheetId, dimension: "COLUMNS", startIndex: IDEA_COLUMN["Generation prompt"], endIndex: IDEA_COLUMN["Generation prompt"] + 1 },
+          properties: { pixelSize: 520 }, fields: "pixelSize",
+        } },
+        { repeatCell: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 1000, startColumnIndex: IDEA_COLUMN["Production requirements"], endColumnIndex: IDEA_COLUMN["Production requirements"] + 1 },
+          cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 0.96, blue: 0.76 }, verticalAlignment: "TOP", wrapStrategy: "WRAP" } },
+          fields: "userEnteredFormat",
+        } },
+        { repeatCell: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 1000, startColumnIndex: IDEA_COLUMN["Generation prompt"], endColumnIndex: IDEA_COLUMN["Generation prompt"] + 1 },
+          cell: { userEnteredFormat: { verticalAlignment: "TOP", wrapStrategy: "WRAP" } },
+          fields: "userEnteredFormat.verticalAlignment,userEnteredFormat.wrapStrategy",
+        } },
+        { updateDimensionProperties: {
+          range: { sheetId, dimension: "COLUMNS", startIndex: IDEA_COLUMN["Updated at"], endIndex: IDEA_COLUMN["Updated at"] + 1 },
+          properties: { hiddenByUser: false }, fields: "hiddenByUser",
+        } },
+        { updateDimensionProperties: {
+          range: { sheetId, dimension: "COLUMNS", startIndex: IDEA_COLUMN["Processed decision fingerprint"], endIndex: IDEA_COLUMN["Processed decision fingerprint"] + 1 },
           properties: { hiddenByUser: true }, fields: "hiddenByUser",
         } },
       ] },
@@ -470,37 +601,40 @@ export class GoogleSheetsApprovalQueue {
 
   async readIdeaRows() {
     await this.ensureIdeaSheet();
-    const result = await this.request(this.valuesPath("A2:Z", this.ideaSheetName));
+    const result = await this.request(this.valuesPath(`A2:${IDEA_LAST_COLUMN}`, this.ideaSheetName));
     return result.values ?? [];
   }
 
   async syncIdeas(ideas) {
     const rows = await this.readIdeaRows();
-    const byVersion = new Map();
-    rows.forEach((row, index) => {
-      const id = row[IDEA_COLUMN["Idea ID"]];
-      if (id) byVersion.set(`${id}:${Number(row[IDEA_COLUMN.Version])}`, { row, rowNumber: index + 2 });
-    });
+    const byIdea = latestRowsById(rows, IDEA_COLUMN["Idea ID"], IDEA_COLUMN.Version);
     const append = [];
+    const updates = [];
     let updated = 0;
     for (const idea of ideas) {
       if (!idea.id || !idea.campaign_id || !Number.isInteger(Number(idea.version)) || Number(idea.version) < 1) {
         throw new Error("Each idea requires a stable id, campaign_id, and positive integer version");
       }
-      const key = `${idea.id}:${Number(idea.version)}`;
-      const existing = byVersion.get(key);
+      const existing = byIdea.get(idea.id);
       const next = ideaRow(idea);
       if (existing?.rowNumber) {
         const rowNumber = existing.rowNumber;
-        // A:B are human-owned; V:W and Z are dispatcher-owned acknowledgments.
-        await this.updateRange(`C${rowNumber}:U${rowNumber}`, [next.slice(2, 21)], this.ideaSheetName);
-        await this.updateRange(`X${rowNumber}:Y${rowNumber}`, [next.slice(23, 25)], this.ideaSheetName);
+        if (existing.version === Number(idea.version)) {
+          // A:B and Planned date (D) are human-owned; W:X and AA are dispatcher-owned acknowledgments.
+          updates.push({ range: `C${rowNumber}:C${rowNumber}`, values: [next.slice(2, 3)] });
+          updates.push({ range: `E${rowNumber}:V${rowNumber}`, values: [next.slice(4, 22)] });
+          updates.push({ range: `Y${rowNumber}:Z${rowNumber}`, values: [next.slice(24, 26)] });
+        } else {
+          next[IDEA_COLUMN["Planned date"]] = existing.row[IDEA_COLUMN["Planned date"]] || next[IDEA_COLUMN["Planned date"]];
+          updates.push({ range: `A${rowNumber}:${IDEA_LAST_COLUMN}${rowNumber}`, values: [next] });
+        }
         updated += 1;
       } else if (!existing) {
         append.push(next);
-        byVersion.set(key, { row: next });
+        byIdea.set(idea.id, { row: next, version: Number(idea.version) });
       }
     }
+    await this.updateRanges(updates, this.ideaSheetName);
     await this.appendRows(append, this.ideaSheetName);
     return { updated, appended: append.length };
   }
@@ -510,13 +644,18 @@ export class GoogleSheetsApprovalQueue {
     const latest = latestRowsById(rows, IDEA_COLUMN["Idea ID"], IDEA_COLUMN.Version);
     return [...latest.values()].flatMap(({ row, rowNumber, version }) => {
       const decision = normalizedDecision(row[IDEA_COLUMN["Idea decision"]]);
+      const currentStatus = String(row[IDEA_COLUMN["Current status"]] ?? "").toLowerCase();
       if (decision === "Pending" || !Number.isInteger(version) || version < 1) return [];
+      if (decision === "Approve" && currentStatus === "approved"
+        && Number(row[IDEA_COLUMN["Approved version"]]) === version) return [];
       const entry = {
         rowNumber, ideaId: row[IDEA_COLUMN["Idea ID"]], campaignId: row[IDEA_COLUMN["Campaign ID"]],
         version, decision, instructions: String(row[IDEA_COLUMN["Revision instructions"]] ?? "").trim(),
+        plannedDate: String(row[IDEA_COLUMN["Planned date"]] ?? "").trim(),
       };
       entry.fingerprint = ideaFingerprint(entry);
-      if (entry.fingerprint === row[IDEA_COLUMN["Processed decision fingerprint"]]) return [];
+      if (entry.fingerprint === row[IDEA_COLUMN["Processed decision fingerprint"]]
+        && currentStatus !== "approved - blocked") return [];
       return [entry];
     });
   }
@@ -532,13 +671,16 @@ export class GoogleSheetsApprovalQueue {
       ideaId: entry.ideaId, version: latest.version,
       decision: latest.row[IDEA_COLUMN["Idea decision"]],
       instructions: latest.row[IDEA_COLUMN["Revision instructions"]],
+      plannedDate: latest.row[IDEA_COLUMN["Planned date"]],
     };
     const fingerprint = ideaFingerprint(entry);
     if (ideaFingerprint(current) !== fingerprint || (entry.fingerprint && entry.fingerprint !== fingerprint)) {
       return { marked: false, reason: "Reviewer input changed; the new input remains pending" };
     }
-    await this.updateRange(`V${entry.rowNumber}:W${entry.rowNumber}`, [[result, processedAt]], this.ideaSheetName);
-    await this.updateRange(`Z${entry.rowNumber}:Z${entry.rowNumber}`, [[fingerprint]], this.ideaSheetName);
+    await this.updateRanges([
+      { range: `W${entry.rowNumber}:X${entry.rowNumber}`, values: [[result, processedAt]] },
+      { range: `AA${entry.rowNumber}:AA${entry.rowNumber}`, values: [[fingerprint]] },
+    ], this.ideaSheetName);
     return { marked: true, fingerprint };
   }
 }

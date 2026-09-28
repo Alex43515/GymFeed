@@ -119,8 +119,36 @@ const ReviewBriefSchema = z.object({
   production_requirements: z.array(z.string().min(5).max(300)).max(12),
 });
 
+export const StoryReviewSchema = z.object({
+  accept: z.boolean(),
+  scores: z.object({
+    hook: z.number().int().min(0).max(100),
+    natural_dialogue: z.number().int().min(0).max(100),
+    product_causality: z.number().int().min(0).max(100),
+    payoff: z.number().int().min(0).max(100),
+    filmability: z.number().int().min(0).max(100),
+  }),
+  summary: z.string(),
+  required_fixes: z.array(z.string()).max(8),
+});
+
 export const VideoPlanSchema = z.object({
-  production_version: z.literal(2),
+  production_version: z.literal(3),
+  narrative: z.object({
+    format: z.enum(["dialogue_story", "solo_story", "explicit_tutorial"]),
+    exception_reason: z.string(),
+    situation: z.string().min(10),
+    tension: z.string().min(10),
+    product_turn: z.string().min(10),
+    payoff: z.string().min(10),
+  }),
+  cast: z.array(z.object({
+    character_id: z.string().regex(/^[a-z][a-z0-9_]{0,29}$/),
+    role: z.string().min(3),
+    appearance: z.string().min(10),
+    wardrobe: z.string().min(3),
+    voice_direction: z.string().min(10),
+  })).max(3),
   review_brief: ReviewBriefSchema,
   product_feature: GymFeedFeatureSchema,
   feature_sequence: z.array(GymFeedFeatureSchema).min(1).max(4),
@@ -147,6 +175,8 @@ export const VideoPlanSchema = z.object({
   }),
   scenes: z.array(z.object({
     scene_id: z.string().min(2).max(30),
+    character_ids: z.array(z.string()).max(3),
+    speaker_id: z.string(),
     asset_type: z.enum(["generated_video", "gymfeed_screen", "app_capture"]),
     purpose: z.enum(["hook", "problem", "action", "product_proof", "payoff", "cta"]),
     source_duration_seconds: z.number().min(0).max(300),

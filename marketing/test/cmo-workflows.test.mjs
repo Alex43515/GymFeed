@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 const workflow = (filename) => JSON.parse(readFileSync(new URL(`../deploy/workflows/${filename}`, import.meta.url), "utf8"));
 const main = workflow("00-main-cmo-orchestrator.json");
 const dispatcher = workflow("05-google-sheet-approval.json");
+const weekly = workflow("03-weekly-cmo.json");
+const captureIntake = workflow("06-import-capture-and-start.json");
 const type = (flow, suffix) => flow.nodes.filter((node) => node.type === `n8n-nodes-base.${suffix}`);
 
 function next(flow, name) {
@@ -19,9 +21,9 @@ function executeCode(node, input, overrides = {}) {
   const now = {
     setZone: (zone) => {
       assert.equal(zone, "America/New_York");
-      return { plus: ({ days }) => {
-        assert.equal(days, 7);
-        return { toFormat: (format) => { assert.equal(format, "yyyy-MM-dd"); return "2026-09-27"; } };
+      return { weekday: 7, plus: ({ days }) => {
+        assert.equal(days, 1);
+        return { toFormat: (format) => { assert.equal(format, "yyyy-MM-dd"); return "2026-09-28"; } };
       } };
     },
   };
@@ -41,17 +43,34 @@ test("CMO workflow retains its public identity and has no recurring generation t
   assert.deepEqual(next(main, type(main, "executeWorkflowTrigger")[0].name), [execute.name]);
 });
 
-test("manual default only plans a 28-day campaign with a stable retry key", () => {
+test("manual default plans one seven-day review campaign with a stable retry key", () => {
   const settings = type(main, "code")[0];
   const first = executeCode(settings, {})[0].json;
   assert.equal(first.action, "plan_campaign");
-  assert.equal(first.days, 28);
-  assert.equal(first.startDate, "2026-09-27");
+  assert.equal(first.days, 7);
+  assert.equal(first.startDate, "2026-09-28");
+  assert.equal(first.name, "GymFeed weekly ideas 2026-09-28");
   assert.equal(first.timezone, "America/New_York");
   assert.equal(first.requestKey, executeCode(settings, {})[0].json.requestKey);
   assert.equal(first.campaignId, undefined);
   assert.equal(first.batchId, undefined);
-  assert.match(settings.parameters.jsCode, /fixed YYYY-MM-DD/);
+  assert.match(settings.parameters.jsCode, /daysUntilMonday/);
+});
+
+test("weekly workflow plans exactly the next Monday through Sunday after refreshing learnings", () => {
+  assert.equal(weekly.id, "l1TIPNfnv19Wj9QU");
+  assert.equal(type(weekly, "scheduleTrigger").length, 1);
+  const learning = type(weekly, "httpRequest").find((node) => node.parameters.url.endsWith("/v1/runs/weekly"));
+  const prepare = type(weekly, "code")[0];
+  const planning = type(weekly, "httpRequest").find((node) => node.parameters.url.endsWith("/v1/cmo/execute"));
+  const payload = executeCode(prepare, {})[0].json;
+  assert.deepEqual(next(weekly, type(weekly, "scheduleTrigger")[0].name), [learning.name]);
+  assert.deepEqual(next(weekly, learning.name), [prepare.name]);
+  assert.deepEqual(next(weekly, prepare.name), [planning.name]);
+  assert.equal(payload.startDate, "2026-09-28");
+  assert.equal(payload.days, 7);
+  assert.equal(payload.action, "plan_campaign");
+  assert.match(payload.requestKey, /2026-09-28:7:America\/New_York$/);
 });
 
 test("manual batch actions require the existing campaign and batch identifiers", () => {
@@ -66,6 +85,8 @@ test("manual batch actions require the existing campaign and batch identifiers",
   }
   assert.deepEqual(executeCode(settings, {}, { action: "status", campaignId: "campaign-1" })[0].json,
     { action: "status", campaignId: "campaign-1" });
+  assert.deepEqual(executeCode(settings, {}, { action: "sync", campaignId: "campaign-1" })[0].json,
+    { action: "sync", campaignId: "campaign-1" });
 });
 
 test("CMO waits synchronously for its action with six-hour HTTP timeout and no automatic request retries", () => {
@@ -82,23 +103,28 @@ test("CMO waits synchronously for its action with six-hour HTTP timeout and no a
   assert.equal(request.parameters.headerParameters.parameters[0].value, "={{ $env.MARKETING_INTERNAL_TOKEN }}");
 });
 
-test("Sheet dispatcher runs every five minutes or manually and waits for the existing main CMO", () => {
+test("Sheet dispatcher runs every five minutes and routes approvals through automatic Drive intake", () => {
   assert.equal(dispatcher.id, "GFReviewSheet001");
   assert.equal(dispatcher.name, "GymFeed 05 - Google Sheet Decision Dispatcher");
   const schedule = type(dispatcher, "scheduleTrigger")[0];
   const manual = type(dispatcher, "manualTrigger")[0];
   const read = type(dispatcher, "httpRequest")[0];
   const split = type(dispatcher, "code")[0];
-  const execute = type(dispatcher, "executeWorkflow")[0];
+  const branch = type(dispatcher, "if")[0];
+  const executions = type(dispatcher, "executeWorkflow");
+  const mainExecution = executions.find((node) => node.parameters.workflowId.value === main.id);
+  const intakeExecution = executions.find((node) => node.parameters.workflowId.value === captureIntake.id);
   assert.deepEqual(schedule.parameters.rule.interval, [{ field: "minutes", minutesInterval: 5 }]);
   assert.equal(read.parameters.url, "http://marketing-worker:3000/v1/cmo/decisions");
   assert.deepEqual(next(dispatcher, schedule.name), [read.name]);
   assert.deepEqual(next(dispatcher, manual.name), [read.name]);
   assert.deepEqual(next(dispatcher, read.name), [split.name]);
-  assert.deepEqual(next(dispatcher, split.name), [execute.name]);
-  assert.equal(execute.parameters.workflowId.value, main.id);
-  assert.equal(execute.parameters.mode, "each");
-  assert.equal(execute.parameters.options.waitForSubWorkflow, true);
+  assert.deepEqual(next(dispatcher, split.name), [branch.name]);
+  assert.deepEqual(next(dispatcher, branch.name), [intakeExecution.name, mainExecution.name]);
+  for (const execute of executions) {
+    assert.equal(execute.parameters.mode, "each");
+    assert.equal(execute.parameters.options.waitForSubWorkflow, false);
+  }
 });
 
 test("dispatcher forwards exact idea/asset decisions but cannot auto-plan, start or release batches", () => {
@@ -113,6 +139,19 @@ test("dispatcher forwards exact idea/asset decisions but cannot auto-plan, start
   for (const action of ["plan_campaign", "start_batch", "release_batch"]) {
     assert.throws(() => executeCode(split, { actions: [{ action, entry: {} }] }), /only explicit/);
   }
+});
+
+test("capture intake downloads the approved Drive video and screenshots before starting one item", () => {
+  assert.equal(captureIntake.id, "GFCaptureIntake001");
+  assert.equal(type(captureIntake, "manualTrigger").length, 1);
+  const trigger = type(captureIntake, "executeWorkflowTrigger")[0];
+  const request = type(captureIntake, "httpRequest")[0];
+  assert.equal(trigger.parameters.inputSource, "passthrough");
+  assert.equal(request.parameters.url, "http://marketing-worker:3000/v1/cmo/approve-import-and-start");
+  assert.equal(request.parameters.options.timeout, 6 * 60 * 60 * 1000);
+  assert.equal(request.parameters.jsonBody, "={{ $json }}");
+  assert.deepEqual(next(captureIntake, trigger.name), [request.name]);
+  assert.equal(captureIntake.active, true);
 });
 
 test("workflow references resolve and no workflow embeds secrets or old immediate-generation endpoints", () => {

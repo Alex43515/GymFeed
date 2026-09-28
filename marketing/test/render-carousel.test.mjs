@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import sharp from "sharp";
+import { readFile } from "node:fs/promises";
 import { renderCarouselSlide } from "../src/render-carousel.mjs";
 import { renderProductSlide } from "../src/render-product-slide.mjs";
 
@@ -36,4 +37,11 @@ test("product renderer combines fal.ai background imagery with exact GymFeed bra
   assert.equal(metadata.width, 1080);
   assert.equal(metadata.height, 1350);
   assert.equal(metadata.format, "png");
+});
+
+test("product renderer reserves the CTA for the final carousel slide", async () => {
+  const source = await readFile(new URL("../src/render-product-slide.mjs", import.meta.url), "utf8");
+  assert.match(source, /isFinalSlide \? `<rect/);
+  assert.match(source, /const showUrl = isFinalSlide/);
+  assert.doesNotMatch(source, /\(!hasScreenshot \|\| index === total - 1\)/);
 });

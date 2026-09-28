@@ -78,12 +78,12 @@ export class FalMediaProvider {
 
   async generateReferenceImage(prompt) {
     this.ensureConfigured();
-    const fullPrompt = `${prompt}\n\nNON-NEGOTIABLE VEO START-FRAME RULES:
-- Show exactly one fictional adult in the requested production composition, with natural proportions and realistic hands, face, skin, and clothing.
+    const fullPrompt = `${prompt}\n\nNON-NEGOTIABLE CAST REFERENCE RULES:
+- Follow the requested cast count and composition. Individual identity references contain only their named fictional adult. Preserve natural proportions and realistic hands, face, skin, and clothing.
 - Preserve the exact requested location, counter or equipment, meal and physical props in one coherent frame. Do not replace a meal with a can, bottle, appliance, or different object.
 - If a phone is required, show only its plain unbranded back or edge. The display must face away from the camera and contain no UI.
 - Use plain unbranded clothing and an unbranded environment.
-- No text, letters, numbers, labels, logos, watermarks, readable screens, or additional people.
+- No text, letters, numbers, labels, logos, watermarks, readable screens, or unrequested extras.
 - Photorealistic candid creator footage, not glossy advertising or a posed stock photo.`;
     const input = this.imageModel === "fal-ai/nano-banana-2"
       ? {
@@ -116,6 +116,9 @@ export class FalMediaProvider {
   async createTask({ prompt, durationSeconds, generateAudio, referenceImageUrls = [] }) {
     this.ensureConfigured();
     const model = referenceImageUrls.length ? this.referenceVideoModel : this.videoModel;
+    if (referenceImageUrls.length > 1 && model.includes("image-to-video")) {
+      throw new Error("This image-to-video adapter accepts one start image, not multiple cast references. Use the configured Gemini reference-to-video adapter for multi-character scenes.");
+    }
     const isVeo31 = model.includes("veo3.1");
     const isGeminiOmni11 = model.includes("gemini-omni-flash/v1.1");
     const numericDuration = isVeo31

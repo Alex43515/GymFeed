@@ -16,7 +16,16 @@ test("safe execution switches default to false", () => {
   const config = loadConfig(requiredEnv());
   assert.equal(config.GENERATE_ASSETS, false);
   assert.equal(config.AUTO_PUBLISH, false);
-  assert.equal(config.OPENAI_DAILY_MODEL, "gpt-5.6-terra");
+  assert.equal(config.OPENAI_RESEARCH_MODEL, "gpt-6-luna");
+  assert.equal(config.OPENAI_DAILY_MODEL, "gpt-6-luna");
+  assert.equal(config.OPENAI_FALLBACK_MODEL, "gpt-6-sol");
+  assert.equal(config.OPENAI_QA_MODEL, "gpt-6-luna");
+  assert.equal(config.OPENAI_WEEKLY_MODEL, "gpt-6-sol");
+  assert.equal(config.OPENAI_RESEARCH_REASONING_EFFORT, "low");
+  assert.equal(config.OPENAI_REASONING_EFFORT, "medium");
+  assert.equal(config.OPENAI_QA_REASONING_EFFORT, "low");
+  assert.equal(config.OPENAI_WEEKLY_REASONING_EFFORT, "medium");
+  assert.equal(config.OPENAI_CACHE_WRITE_USD_PER_MILLION, 0.125);
   assert.equal(config.FAL_IMAGE_MODEL, "fal-ai/nano-banana-2");
   assert.equal(config.FAL_VIDEO_MODEL, "google/gemini-omni-flash/v1.1/text-to-video");
   assert.equal(config.FAL_REFERENCE_VIDEO_MODEL, "google/gemini-omni-flash/v1.1/reference-to-video");

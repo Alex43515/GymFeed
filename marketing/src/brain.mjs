@@ -1,31 +1,186 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import { CreativeDecisionSchema, InstagramPlanSchema, QualityReviewSchema, SceneQualityReviewSchema, TrendResearchSchema, VideoPlanSchema, WeeklyReviewSchema } from "./contracts.mjs";
-import { CONTENT_REVISION_PROMPT, DAILY_BRAIN_PROMPT, QA_PROMPT, SCENE_QA_PROMPT, TREND_RESEARCH_PROMPT, WEEKLY_CMO_PROMPT } from "./prompts.mjs";
+import { CreativeDecisionSchema, InstagramPlanSchema, QualityReviewSchema, SceneQualityReviewSchema, StoryReviewSchema, TrendResearchSchema, VideoPlanSchema, WeeklyReviewSchema } from "./contracts.mjs";
+import { CONTENT_REVISION_PROMPT, DAILY_BRAIN_PROMPT, QA_PROMPT, SCENE_QA_PROMPT, STORY_REVIEW_PROMPT, VIDEO_PRODUCTION_DIRECTION, TREND_RESEARCH_PROMPT, WEEKLY_CMO_PROMPT } from "./prompts.mjs";
+import { validateVideoStory } from "./video-story.mjs";
 import { loadProductBrief, referenceScreenshotCatalog, verifiedScreenshotManifest } from "./product-brief.mjs";
 
-function compactContext(context) {
-  return JSON.stringify(context, (_key, value) => {
-    if (typeof value === "string" && value.length > 3000) return `${value.slice(0, 3000)}…`;
-    return value;
-  });
+function compactValue(value, depth = 0, { arrayLimit = 12, stringLimit = 1200, depthLimit = 5 } = {}) {
+  if (typeof value === "string") return value.length > stringLimit ? `${value.slice(0, stringLimit)}...` : value;
+  if (value === null || typeof value !== "object") return value;
+  if (depth >= depthLimit) return Array.isArray(value) ? `[${value.length} items]` : "[object omitted]";
+  if (Array.isArray(value)) return value.slice(0, arrayLimit).map((item) => compactValue(item, depth + 1, { arrayLimit, stringLimit, depthLimit }));
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !["raw", "buffer", "input", "output"].includes(key))
+    .map(([key, item]) => [key, compactValue(item, depth + 1, { arrayLimit, stringLimit, depthLimit })]));
+}
+
+function compactContext(context, maxChars = 30000) {
+  const compacted = JSON.stringify(compactValue(context)) ?? "null";
+  if (compacted.length <= maxChars) return compacted;
+  return JSON.stringify({ truncated: true, context_excerpt: compacted.slice(0, maxChars - 80) });
+}
+
+function eventSummary(events = []) {
+  const summary = new Map();
+  for (const event of events) {
+    const name = event.event_name ?? event.name ?? "unknown";
+    const current = summary.get(name) ?? { event_name: name, count: 0, latest_at: null };
+    current.count += Number(event.event_count ?? event.count ?? 1);
+    const occurredAt = event.occurred_at ?? event.created_at ?? null;
+    if (occurredAt && (!current.latest_at || occurredAt > current.latest_at)) current.latest_at = occurredAt;
+    summary.set(name, current);
+  }
+  return [...summary.values()].sort((left, right) => right.count - left.count).slice(0, 30);
+}
+
+function contentSnapshot(content) {
+  const plan = content.decision?.content ?? content.content ?? {};
+  return {
+    id: content.id,
+    content_key: content.content_key,
+    content_type: content.content_type,
+    status: content.status,
+    qa_score: content.qa_score,
+    created_at: content.created_at,
+    scheduled_for: content.scheduled_for,
+    published_at: content.published_at,
+    title: plan.title ?? plan.name,
+    hook: plan.hook,
+    objective: plan.objective,
+    caption: typeof plan.caption === "string" ? plan.caption.slice(0, 500) : undefined,
+    campaign: content.decision?.campaign ? compactValue(content.decision.campaign, 0, { arrayLimit: 5, stringLimit: 500, depthLimit: 3 }) : undefined,
+    failure_reason: content.failure_reason,
+  };
+}
+
+export function researchEvidenceForQa(content) {
+  const decision = content.decision ?? {};
+  const research = decision.research ?? {};
+  const selected = (decision.candidate_concepts ?? []).find(
+    (candidate) => candidate.name === decision.selected_strategy?.candidate_name,
+  );
+  const cited = new Set([
+    ...(selected?.evidence_ids ?? []),
+    ...(decision.content?.creative_treatment?.evidence_ids ?? []),
+    ...((JSON.stringify({
+      review_brief: decision.content?.review_brief,
+      rationale: decision.rationale,
+    }).match(/GFTR-[A-Z0-9-]+/g)) ?? []),
+  ]);
+  const evidence = (research.trends ?? []).filter((trend) => cited.has(trend.evidence_id));
+  const found = new Set(evidence.map((trend) => trend.evidence_id));
+  return {
+    summary: research.summary ?? "",
+    cited_evidence_ids: [...cited],
+    evidence,
+    missing_evidence_ids: [...cited].filter((id) => !found.has(id)),
+    limitations: research.gaps ?? [],
+  };
+}
+
+function costSummary(costs = []) {
+  const grouped = new Map();
+  for (const cost of costs) {
+    const key = `${cost.provider ?? "unknown"}:${cost.status ?? "unknown"}`;
+    const current = grouped.get(key) ?? { provider: cost.provider ?? "unknown", status: cost.status ?? "unknown", entries: 0, usd: 0 };
+    current.entries += 1;
+    current.usd += Number(cost.actual_cost_usd ?? cost.estimated_cost_usd ?? 0);
+    grouped.set(key, current);
+  }
+  return [...grouped.values()].map((item) => ({ ...item, usd: Number(item.usd.toFixed(4)) }));
+}
+
+export function buildAiDecisionContext(context, { weekly = false } = {}) {
+  return {
+    brand: compactValue(context.brand, 0, { arrayLimit: 8, stringLimit: 700, depthLimit: 4 }),
+    learnings: (context.learnings ?? []).slice(0, weekly ? 20 : 10).map((item) => compactValue(item, 0, { arrayLimit: 6, stringLimit: 700, depthLimit: 4 })),
+    recent_content: (context.content ?? []).slice(0, weekly ? 30 : 14).map(contentSnapshot),
+    recent_publications: (context.publications ?? []).slice(0, weekly ? 40 : 16).map((item) => compactValue(item, 0, { arrayLimit: 6, stringLimit: 500, depthLimit: 4 })),
+    events_30d: eventSummary(context.events_30d),
+    events_7d: eventSummary(context.events_7d),
+    costs: costSummary(context.costs),
+    ga4: compactValue(context.ga4, 0, { arrayLimit: weekly ? 20 : 10, stringLimit: 600, depthLimit: 5 }),
+    buffer: compactValue(context.buffer, 0, { arrayLimit: weekly ? 12 : 6, stringLimit: 600, depthLimit: 5 }),
+    campaign: compactValue(context.campaign, 0, { arrayLimit: 12, stringLimit: 700, depthLimit: 5 }),
+  };
+}
+
+function captureSnapshot(capture) {
+  return {
+    id: capture.id,
+    capture_ref: capture.capture_ref,
+    filename: capture.filename,
+    verified: capture.verified,
+    duration_seconds: capture.duration_seconds,
+    recorded_interactions: (capture.recorded_interactions ?? []).slice(0, 12),
+  };
+}
+
+function modelMatches(actual, configured) {
+  return Boolean(actual && configured && (actual === configured || actual.startsWith(`${configured}-`)));
+}
+
+function supportsExplicitCaching(model = "") {
+  return /^gpt-(?:6|[7-9])(?:[.-]|$)/.test(model) || /^gpt-5\.(?:[6-9]|\d{2,})(?:[.-]|$)/.test(model);
+}
+
+function cacheConfiguration(model) {
+  return supportsExplicitCaching(model) ? { prompt_cache_options: { mode: "explicit", ttl: "30m" } } : {};
+}
+
+function systemInstructions(prompt, stableReference = "", cache = false) {
+  const block = {
+    type: "input_text",
+    text: stableReference ? `${prompt}\n\nAUTHORITATIVE GYMFEED PRODUCT BRIEF:\n${stableReference}` : prompt,
+  };
+  if (cache) block.prompt_cache_breakpoint = { mode: "explicit" };
+  return { role: "system", content: [block] };
+}
+
+function attachBilledUsage(error, responses, config) {
+  const completed = responses.filter(Boolean);
+  if (!completed.length) return error;
+  error.openaiCostUsd = Number(completed.reduce((sum, response) => sum + responseCost(response, config), 0).toFixed(6));
+  error.openaiResponseId = completed.map((response) => response.id).filter(Boolean).join(",") || null;
+  return error;
 }
 
 export function responseCost(response, config) {
+  if (modelMatches(response.model, "gpt-6-astra")) {
+    config = { ...config, OPENAI_WEEKLY_MODEL: "gpt-6-astra", OPENAI_WEEKLY_INPUT_USD_PER_MILLION: 10,
+      OPENAI_WEEKLY_CACHED_INPUT_USD_PER_MILLION: 1, OPENAI_WEEKLY_CACHE_WRITE_USD_PER_MILLION: 12.5,
+      OPENAI_WEEKLY_OUTPUT_USD_PER_MILLION: 50 };
+  }
   const input = response.usage?.input_tokens ?? 0;
   const output = response.usage?.output_tokens ?? 0;
+  const details = response.usage?.input_tokens_details ?? {};
+  const cacheWrite = Math.min(input, details.cache_write_tokens ?? 0);
+  const cached = Math.min(input - cacheWrite, details.cached_tokens ?? 0);
+  const uncached = Math.max(0, input - cacheWrite - cached);
   const searches = response.output?.filter((item) => item.type === "web_search_call").length ?? 0;
-  const isWeeklyModel = response.model === config.OPENAI_WEEKLY_MODEL
-    || response.model?.startsWith(`${config.OPENAI_WEEKLY_MODEL}-`);
+  const isWeeklyModel = modelMatches(response.model, config.OPENAI_WEEKLY_MODEL)
+    || modelMatches(response.model, config.OPENAI_FALLBACK_MODEL);
   const inputRate = isWeeklyModel
     ? config.OPENAI_WEEKLY_INPUT_USD_PER_MILLION
     : config.OPENAI_INPUT_USD_PER_MILLION;
+  const cachedRate = isWeeklyModel
+    ? config.OPENAI_WEEKLY_CACHED_INPUT_USD_PER_MILLION ?? inputRate
+    : config.OPENAI_CACHED_INPUT_USD_PER_MILLION ?? inputRate;
+  const cacheWriteRate = isWeeklyModel
+    ? config.OPENAI_WEEKLY_CACHE_WRITE_USD_PER_MILLION ?? inputRate
+    : config.OPENAI_CACHE_WRITE_USD_PER_MILLION ?? inputRate;
   const outputRate = isWeeklyModel
     ? config.OPENAI_WEEKLY_OUTPUT_USD_PER_MILLION
     : config.OPENAI_OUTPUT_USD_PER_MILLION;
+  const longContext = input > (config.OPENAI_LONG_CONTEXT_THRESHOLD_TOKENS ?? 272000);
+  const inputMultiplier = longContext ? (config.OPENAI_LONG_CONTEXT_INPUT_MULTIPLIER ?? 2) : 1;
+  const outputMultiplier = longContext ? (config.OPENAI_LONG_CONTEXT_OUTPUT_MULTIPLIER ?? 1.5) : 1;
   return Number((
-    input * inputRate / 1_000_000
-    + output * outputRate / 1_000_000
+    uncached * inputRate * inputMultiplier / 1_000_000
+    + cached * cachedRate * inputMultiplier / 1_000_000
+    + cacheWrite * cacheWriteRate * inputMultiplier / 1_000_000
+    + output * outputRate * outputMultiplier / 1_000_000
     + searches * config.OPENAI_WEB_SEARCH_USD_PER_CALL
   ).toFixed(6));
 }
@@ -156,6 +311,7 @@ export function validateCreativeDecision(research, decision, { appCaptures } = {
 }
 
 export function validateVideoProductionPlan(plan, { appCaptures } = {}) {
+  validateVideoStory(plan);
   const productionV2 = Number(plan.production_version) >= 2;
   const sceneIds = new Set();
   let duration = 0;
@@ -281,6 +437,46 @@ export class MarketingBrain {
     if (!this.client) throw new Error("OpenAI is not configured");
   }
 
+  async draftVideo(brief, { model = this.config.OPENAI_CREATIVE_MODEL, appCaptures = [] } = {}) {
+    this.ensureConfigured();
+    const productBrief = await loadProductBrief();
+    const screenshots = await verifiedScreenshotManifest();
+    const response = await this.client.responses.parse({
+      model, reasoning: { effort: this.config.OPENAI_REASONING_EFFORT ?? "medium" },
+      input: [systemInstructions(VIDEO_PRODUCTION_DIRECTION, productBrief), { role: "user", content:
+        `Create ONE original video plan only. No campaign, no carousel, no web research. Treat this as a creative experiment, not validated performance. reviewer_instruction_map and evidence_ids must be empty.\nBRIEF:\n${brief}\nVERIFIED SCREENSHOTS:\n${compactContext(screenshots, 10000)}\nVERIFIED CAPTURES:\n${compactContext(appCaptures.map(captureSnapshot), 12000)}` }],
+      text: { format: zodTextFormat(VideoPlanSchema, "gymfeed_video_pilot") },
+      max_output_tokens: this.config.OPENAI_CREATIVE_MAX_OUTPUT_TOKENS ?? 12000,
+      ...cacheConfiguration(model),
+    });
+    try {
+      if (!response.output_parsed) throw new Error("OpenAI returned no parsed pilot script");
+      const plan = normalizeVideoPlan(response.output_parsed);
+      validateRevisedPlan(plan, "video", { appCaptures });
+      return { data: plan, model: response.model, usage: response.usage, costUsd: responseCost(response, this.config), responseId: response.id };
+    } catch (error) { throw attachBilledUsage(error, [response], this.config); }
+  }
+
+  async storyQualityReview(plan) {
+    this.ensureConfigured();
+    validateVideoProductionPlan(plan);
+    const model = this.config.OPENAI_QA_MODEL ?? this.config.OPENAI_DAILY_MODEL;
+    const response = await this.client.responses.parse({
+      model, reasoning: { effort: this.config.OPENAI_QA_REASONING_EFFORT ?? "low" },
+      input: [systemInstructions(STORY_REVIEW_PROMPT, await loadProductBrief()),
+        { role: "user", content: JSON.stringify({ deterministic_checks: {
+          valid: true, retained_total_seconds: plan.scenes.reduce((sum, scene) => sum + scene.duration_seconds, 0),
+          target_duration_seconds: plan.target_duration_seconds,
+          cuts_within_declared_sources: true, dialogue_speakers_valid: true,
+          stage: "script_only; capture visual verification and privacy treatment occur before final release",
+        }, plan }) }],
+      text: { format: zodTextFormat(StoryReviewSchema, "gymfeed_story_review") },
+      max_output_tokens: 2000, ...cacheConfiguration(model),
+    });
+    if (!response.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no story review"), [response], this.config);
+    return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
+  }
+
   async daily(context, campaignDate = new Date()) {
     this.ensureConfigured();
     const [productBrief, screenshots, referenceScreens] = await Promise.all([
@@ -290,18 +486,20 @@ export class MarketingBrain {
     ]);
     const planningTimestamp = new Date().toISOString();
     const publicationDate = campaignDate.toISOString().slice(0, 10);
-    const performanceThumbnails = topPerformanceThumbnails(context);
+    const aiContext = buildAiDecisionContext(context);
+    const performanceThumbnails = topPerformanceThumbnails(context, 3);
+    const researchModel = this.config.OPENAI_RESEARCH_MODEL ?? this.config.OPENAI_DAILY_MODEL;
     const researchResponse = await this.client.responses.parse({
-      model: this.config.OPENAI_DAILY_MODEL,
-      reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+      model: researchModel,
+      reasoning: { effort: this.config.OPENAI_RESEARCH_REASONING_EFFORT ?? "low" },
       tools: [{ type: "web_search" }],
       tool_choice: "auto",
       input: [
-        { role: "system", content: TREND_RESEARCH_PROMPT },
+        systemInstructions(TREND_RESEARCH_PROMPT, productBrief),
         {
           role: "user",
           content: [
-            { type: "input_text", text: `Planning timestamp: ${planningTimestamp}\nCampaign publication date: ${publicationDate}\n\nAUTHORITATIVE GYMFEED PRODUCT BRIEF:\n${productBrief}\n\nFIRST-PARTY GYMFEED PERFORMANCE CONTEXT:\n${compactContext(context)}\n\nThe attached images, when present, are thumbnails from the highest-ranked historical GymFeed posts in the Buffer context. Use them only to analyze transferable visual structure; do not reuse a person's likeness or copyrighted footage.` },
+            { type: "input_text", text: `Planning timestamp: ${planningTimestamp}\nCampaign publication date: ${publicationDate}\n\nBOUNDED FIRST-PARTY GYMFEED PERFORMANCE CONTEXT:\n${compactContext(aiContext, 24000)}\n\nThe attached images, when present, are thumbnails from the highest-ranked historical GymFeed posts in the Buffer context. Use them only to analyze transferable visual structure; do not reuse a person's likeness or copyrighted footage.` },
             ...performanceThumbnails.map((post) => ({
               type: "input_image",
               image_url: post.thumbnail_url,
@@ -311,24 +509,36 @@ export class MarketingBrain {
         },
       ],
       text: { format: zodTextFormat(TrendResearchSchema, "gymfeed_trend_research") },
+      max_output_tokens: this.config.OPENAI_RESEARCH_MAX_OUTPUT_TOKENS ?? 6000,
+      ...cacheConfiguration(researchModel),
     });
-    if (!researchResponse.output_parsed) throw new Error("OpenAI returned no parsed trend research");
+    if (!researchResponse.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no parsed trend research"), [researchResponse], this.config);
 
-    const decisionContext = `Planning timestamp: ${planningTimestamp}\nCampaign publication date: ${publicationDate}\n\nAUTHORITATIVE GYMFEED PRODUCT BRIEF:\n${productBrief}\n\nQUANTITATIVE TREND RESEARCH:\n${compactContext(researchResponse.output_parsed)}\n\nVERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${JSON.stringify(screenshots)}\n\nVERIFIED APP CAPTURE MANIFEST (recorded interactions only; an empty list means production assets are missing):\n${JSON.stringify(context.app_captures ?? [])}\n\nARCHIVE VISUAL REFERENCE FILENAMES (design reference only; never use as screenshot_refs or live-product proof):\n${JSON.stringify(referenceScreens)}\n\nFIRST-PARTY PERFORMANCE CONTEXT:\n${compactContext(context)}`;
+    const decisionContext = `Planning timestamp: ${planningTimestamp}\nCampaign publication date: ${publicationDate}\n\nQUANTITATIVE TREND RESEARCH:\n${compactContext(researchResponse.output_parsed, 12000)}\n\nVERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${compactContext(screenshots, 10000)}\n\nVERIFIED APP CAPTURE MANIFEST (recorded interactions only; an empty list means production assets are missing):\n${compactContext((context.app_captures ?? []).map(captureSnapshot), 10000)}\n\nARCHIVE VISUAL REFERENCE FILENAMES (design reference only; never use as screenshot_refs or live-product proof):\n${compactContext(referenceScreens, 5000)}\n\nBOUNDED FIRST-PARTY PERFORMANCE CONTEXT:\n${compactContext(aiContext, 24000)}`;
     const decisionResponses = [];
     let decision = null;
     let validationError = null;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const repairContext = attempt === 1 ? "" : `\n\nYOUR PREVIOUS PLAN WAS REJECTED BY DETERMINISTIC VALIDATION.\nReason: ${validationError.message}\n\nReturn a complete replacement plan, not commentary. Correct the exact violation under the production director requirements while preserving the evidence-backed campaign strategy. Keep the story meaningful, the source cuts valid, the audio timeline complete and the app_capture references real. Do not invent a missing asset or revert to the retired six-second talking-head template.\n\nREJECTED PLAN:\n${compactContext(decisionResponses.at(-1)?.output_parsed)}`;
-      const response = await this.client.responses.parse({
-        model: this.config.OPENAI_DAILY_MODEL,
-        reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
-        input: [
-          { role: "system", content: DAILY_BRAIN_PROMPT },
-          { role: "user", content: `${decisionContext}${repairContext}` },
-        ],
-        text: { format: zodTextFormat(CreativeDecisionSchema, "gymfeed_creative_decision") },
-      });
+      const model = attempt === 1
+        ? this.config.OPENAI_CREATIVE_MODEL ?? this.config.OPENAI_DAILY_MODEL
+        : this.config.OPENAI_FALLBACK_MODEL ?? this.config.OPENAI_DAILY_MODEL;
+      const repairContext = attempt === 1 ? "" : `\n\nYOUR PREVIOUS PLAN WAS REJECTED BY DETERMINISTIC VALIDATION.\nReason: ${validationError.message}\n\nReturn a complete replacement plan, not commentary. Correct the exact violation under the production director requirements while preserving the evidence-backed campaign strategy. Keep the story meaningful, the source cuts valid, the audio timeline complete and the app_capture references real. Do not invent a missing asset or revert to the retired six-second talking-head template.\n\nREJECTED PLAN:\n${compactContext(decisionResponses.at(-1)?.output_parsed, 12000)}`;
+      let response;
+      try {
+        response = await this.client.responses.parse({
+          model,
+          reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+          input: [
+            systemInstructions(DAILY_BRAIN_PROMPT, productBrief),
+            { role: "user", content: `${decisionContext}${repairContext}` },
+          ],
+          text: { format: zodTextFormat(CreativeDecisionSchema, "gymfeed_creative_decision") },
+          max_output_tokens: this.config.OPENAI_CREATIVE_MAX_OUTPUT_TOKENS ?? 12000,
+          ...cacheConfiguration(model),
+        });
+      } catch (error) {
+        throw attachBilledUsage(error, [researchResponse, ...decisionResponses], this.config);
+      }
       decisionResponses.push(response);
       try {
         if (!response.output_parsed) throw new Error("OpenAI returned no parsed creative decision");
@@ -343,7 +553,7 @@ export class MarketingBrain {
         validationError = error;
       }
     }
-    if (!decision) throw validationError;
+    if (!decision) throw attachBilledUsage(validationError, [researchResponse, ...decisionResponses], this.config);
     return {
       data: { ...researchResponse.output_parsed, ...decision },
       costUsd: Number((responseCost(researchResponse, this.config) + decisionResponses.reduce((sum, response) => sum + responseCost(response, this.config), 0)).toFixed(6)),
@@ -358,24 +568,27 @@ export class MarketingBrain {
       verifiedScreenshotManifest(),
       referenceScreenshotCatalog(),
     ]);
+    const model = this.config.OPENAI_QA_MODEL ?? this.config.OPENAI_DAILY_MODEL;
     const userContent = [
-      { type: "input_text", text: `AUTHORITATIVE GYMFEED PRODUCT BRIEF:\n${productBrief}\n\nVERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${JSON.stringify(screenshots)}\n\nARCHIVE VISUAL REFERENCE FILENAMES (not valid live-product proof):\n${JSON.stringify(referenceScreens)}\n\nCONTENT RECORD AND PLAN:\n${compactContext(content)}` },
+      { type: "input_text", text: `VERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${compactContext(screenshots, 10000)}\n\nARCHIVE VISUAL REFERENCE FILENAMES (not valid live-product proof):\n${compactContext(referenceScreens, 5000)}\n\nCONTENT RECORD AND PLAN:\n${compactContext(contentSnapshot(content), 10000)}\n\nAPPROVED CONTENT PLAN:\n${compactContext(content.decision?.content ?? {}, 18000)}\n\nFINAL AUDIO VERIFICATION:\n${compactContext({ final: content.decision?.generation?.final_technical, scenes: (content.decision?.generation?.scenes ?? []).map((scene) => ({ scene_id: scene.scene_id, technical: scene.technical })), caption_gaps: content.decision?.generation?.preview_caption_gaps }, 12000)}\n\nSAVED RESEARCH EVIDENCE PACKAGE:\n${compactContext(researchEvidenceForQa(content), 24000)}` },
       ...visualUrls.map((imageUrl) => ({ type: "input_image", image_url: imageUrl, detail: "high" })),
     ];
     const response = await this.client.responses.parse({
-      model: this.config.OPENAI_DAILY_MODEL,
-      reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+      model,
+      reasoning: { effort: this.config.OPENAI_QA_REASONING_EFFORT ?? "low" },
       input: [
-        { role: "system", content: QA_PROMPT },
+        systemInstructions(QA_PROMPT, productBrief, supportsExplicitCaching(model)),
         { role: "user", content: userContent },
       ],
       text: { format: zodTextFormat(QualityReviewSchema, "gymfeed_quality_review") },
+      max_output_tokens: this.config.OPENAI_QA_MAX_OUTPUT_TOKENS ?? 6000,
+      ...cacheConfiguration(model),
     });
-    if (!response.output_parsed) throw new Error("OpenAI returned no parsed quality review");
+    if (!response.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no parsed quality review"), [response], this.config);
     return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
   }
 
-  async reviseContent(content, instructions, { app_captures = [] } = {}) {
+  async reviseContent(content, instructions, { app_captures = [], captureVisuals = [] } = {}) {
     this.ensureConfigured();
     const [productBrief, screenshots] = await Promise.all([
       loadProductBrief(),
@@ -383,58 +596,93 @@ export class MarketingBrain {
     ]);
     const isVideo = content.content_type === "video";
     const schema = isVideo ? VideoPlanSchema : InstagramPlanSchema;
-    const response = await this.client.responses.parse({
-      model: this.config.OPENAI_DAILY_MODEL,
-      reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
-      input: [
-        { role: "system", content: CONTENT_REVISION_PROMPT },
-        {
-          role: "user",
-          content: `CONTENT TYPE: ${isVideo ? "video" : "instagram"}\n\nREVIEWER INSTRUCTIONS:\n${instructions}\n\nAUTHORITATIVE GYMFEED PRODUCT BRIEF:\n${productBrief}\n\nVERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${JSON.stringify(screenshots)}\n\nVERIFIED APP CAPTURE MANIFEST:\n${JSON.stringify(app_captures)}\n\nREJECTED CONTENT RECORD:\n${compactContext(content)}`,
-        },
-      ],
-      text: { format: zodTextFormat(schema, isVideo ? "gymfeed_video_revision" : "gymfeed_instagram_revision") },
-    });
-    if (!response.output_parsed) throw new Error("OpenAI returned no parsed content revision");
-    const normalized = isVideo ? normalizeVideoPlan(response.output_parsed) : response.output_parsed;
-    validateRevisedPlan(normalized, content.content_type, { appCaptures: app_captures });
-    if (isVideo && !normalized.reviewer_instruction_map?.length) throw new Error("Video revision must map the reviewer's instructions to concrete changed scenes");
-    return { data: normalized, costUsd: responseCost(response, this.config), responseId: response.id };
+    const revisionContext = `CONTENT TYPE: ${isVideo ? "video" : "instagram"}\n\nREVIEWER INSTRUCTIONS:\n${instructions}\n\nVERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${compactContext(screenshots, 10000)}\n\nVERIFIED APP CAPTURE MANIFEST:\n${compactContext(app_captures.map(captureSnapshot), 10000)}\n\nREJECTED CONTENT SUMMARY:\n${compactContext(contentSnapshot(content), 8000)}\n\nREJECTED CONTENT PLAN:\n${compactContext(content.decision?.content ?? {}, 18000)}`;
+    const responses = [];
+    let validationError = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const model = attempt === 1
+        ? this.config.OPENAI_CREATIVE_MODEL ?? this.config.OPENAI_DAILY_MODEL
+        : this.config.OPENAI_FALLBACK_MODEL ?? this.config.OPENAI_DAILY_MODEL;
+      const repair = attempt === 1 ? "" : `\n\nThe first revision failed deterministic validation: ${validationError.message}. Return a corrected complete replacement.`;
+      let response;
+      try {
+        response = await this.client.responses.parse({
+          model,
+          reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+          input: [
+            systemInstructions(CONTENT_REVISION_PROMPT, productBrief),
+            { role: "user", content: [
+              { type: "input_text", text: `${revisionContext}${repair}\nUse the source contact sheets to locate the actual action and result. Never infer timestamp positions from a filename or requested description. Keep unrelated screens out of retained ranges. Choose interior ranges with edit handles; keep capture-to-result order. Preserve people and dialogue unless the reviewer explicitly requests their removal.` },
+              ...captureVisuals.flatMap((capture) => [
+                { type: "input_text", text: `SOURCE ${capture.ref}: ${capture.duration} seconds; ${capture.frames} frames in row-major order, evenly sampled approximately every ${capture.duration / capture.frames} seconds. These are source frames, not the final edit.` },
+                { type: "input_image", image_url: capture.image, detail: "high" },
+              ]),
+            ] },
+          ],
+          text: { format: zodTextFormat(schema, isVideo ? "gymfeed_video_revision" : "gymfeed_instagram_revision") },
+          max_output_tokens: this.config.OPENAI_CREATIVE_MAX_OUTPUT_TOKENS ?? 12000,
+          ...cacheConfiguration(model),
+        });
+      } catch (error) {
+        throw attachBilledUsage(error, responses, this.config);
+      }
+      responses.push(response);
+      try {
+        if (!response.output_parsed) throw new Error("OpenAI returned no parsed content revision");
+        const normalized = isVideo ? normalizeVideoPlan(response.output_parsed) : response.output_parsed;
+        validateRevisedPlan(normalized, content.content_type, { appCaptures: app_captures });
+        if (isVideo && !normalized.reviewer_instruction_map?.length) throw new Error("Video revision must map the reviewer's instructions to concrete changed scenes");
+        return {
+          data: normalized,
+          costUsd: Number(responses.reduce((sum, item) => sum + responseCost(item, this.config), 0).toFixed(6)),
+          responseId: responses.map((item) => item.id).join(","),
+        };
+      } catch (error) {
+        validationError = error;
+      }
+    }
+    throw attachBilledUsage(validationError, responses, this.config);
   }
 
   async sceneQualityReview(content, scene, visualUrls = []) {
     this.ensureConfigured();
+    const model = this.config.OPENAI_QA_MODEL ?? this.config.OPENAI_DAILY_MODEL;
     const response = await this.client.responses.parse({
-      model: this.config.OPENAI_DAILY_MODEL,
-      reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+      model,
+      reasoning: { effort: this.config.OPENAI_QA_REASONING_EFFORT ?? "low" },
       input: [
-        { role: "system", content: SCENE_QA_PROMPT },
+        systemInstructions(SCENE_QA_PROMPT, "", supportsExplicitCaching(model)),
         {
           role: "user",
           content: [
-            { type: "input_text", text: `CAMPAIGN CONTEXT:\n${compactContext(content)}\n\nSCENE SPECIFICATION:\n${compactContext(scene)}` },
+            { type: "input_text", text: `CONTENT SUMMARY:\n${compactContext(contentSnapshot(content), 8000)}\n\nAPPROVED VISUAL CONTINUITY:\n${compactContext({ creative_treatment: content.decision?.content?.creative_treatment, character_reference: content.decision?.content?.character_reference, cast: content.decision?.content?.cast }, 8000)}\n\nSCENE SPECIFICATION:\n${compactContext(scene, 10000)}\n\nRETAINED AUDIO AND TECHNICAL EVIDENCE:\n${JSON.stringify(content.decision?.generation?.scenes?.find((item) => item.scene_id === scene.scene_id)?.technical ?? {})}\nThe FIRST image is the scene contact sheet. Subsequent images are cast identity references in character_ids order, not additional video frames. Compare actor identities to them. Transcription verifies words, not voice identity or lip synchronization; do not claim these are measured from stills.` },
             ...visualUrls.map((imageUrl) => ({ type: "input_image", image_url: imageUrl, detail: "high" })),
           ],
         },
       ],
       text: { format: zodTextFormat(SceneQualityReviewSchema, "gymfeed_scene_quality_review") },
+      max_output_tokens: this.config.OPENAI_QA_MAX_OUTPUT_TOKENS ?? 6000,
+      ...cacheConfiguration(model),
     });
-    if (!response.output_parsed) throw new Error("OpenAI returned no parsed scene quality review");
+    if (!response.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no parsed scene quality review"), [response], this.config);
     return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
   }
 
   async weekly(context) {
     this.ensureConfigured();
+    const model = this.config.OPENAI_WEEKLY_MODEL;
     const response = await this.client.responses.parse({
-      model: this.config.OPENAI_WEEKLY_MODEL,
-      reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+      model,
+      reasoning: { effort: this.config.OPENAI_WEEKLY_REASONING_EFFORT ?? this.config.OPENAI_REASONING_EFFORT },
       input: [
-        { role: "system", content: WEEKLY_CMO_PROMPT },
-        { role: "user", content: compactContext(context) },
+        systemInstructions(WEEKLY_CMO_PROMPT),
+        { role: "user", content: compactContext(buildAiDecisionContext(context, { weekly: true }), 40000) },
       ],
       text: { format: zodTextFormat(WeeklyReviewSchema, "gymfeed_weekly_review") },
+      max_output_tokens: this.config.OPENAI_WEEKLY_MAX_OUTPUT_TOKENS ?? 10000,
+      ...cacheConfiguration(model),
     });
-    if (!response.output_parsed) throw new Error("OpenAI returned no parsed weekly review");
+    if (!response.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no parsed weekly review"), [response], this.config);
     return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
   }
 }

@@ -1,12 +1,24 @@
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { overallQaScore } from "./contracts.mjs";
 import { renderCarouselSlide } from "./render-carousel.mjs";
 import { extractVideoAudio, extractVideoContactSheet, inspectVideo } from "./extract-video-frame.mjs";
 import { renderProductSlide } from "./render-product-slide.mjs";
-import { plannedVideoDuration, renderProductVideo } from "./render-product-video.mjs";
+import { plannedVideoDuration, renderProductVideo, verifiedSceneCaptions } from "./render-product-video.mjs";
 import { verifiedScreenshotUrl } from "./product-brief.mjs";
 import { appCaptureCatalog, preflightAppCaptures, resolveAppCapture } from "./app-captures.mjs";
 import { campaignSchedule } from "./campaign-schedule.mjs";
+import { sceneCast, sceneReferenceUrls, storyFingerprint, storyReviewPassed, validateVideoStory } from "./video-story.mjs";
+
+const execFileAsync = promisify(execFile);
+const openAiBudgetExceeded = (error) => /openai provider budget exceeded/i.test(error?.message ?? "");
+
+async function silentPreviewAudio(seconds) {
+  const duration = Math.max(0.25, Number(seconds) || 1);
+  const { stdout } = await execFileAsync(process.env.FFMPEG_PATH || "ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono", "-t", String(duration), "-q:a", "9", "-f", "mp3", "pipe:1"], { encoding: "buffer", maxBuffer: 5_000_000 });
+  return stdout;
+}
 
 function utcDateKey(now = new Date()) {
   return now.toISOString().slice(0, 10);
@@ -14,6 +26,19 @@ function utcDateKey(now = new Date()) {
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function settleOrReleaseOpenAiReservation(repository, reservationId, error) {
+  if (!reservationId) return;
+  try {
+    if (Number.isFinite(error?.openaiCostUsd) && error.openaiCostUsd > 0) {
+      await repository.settleCost(reservationId, error.openaiCostUsd, error.openaiResponseId ?? null);
+    } else {
+      await repository.releaseCost(reservationId);
+    }
+  } catch (_) {
+    // Preserve the provider or validation error that stopped the workflow.
+  }
 }
 
 function isoWeekKey(now = new Date()) {
@@ -24,29 +49,32 @@ function isoWeekKey(now = new Date()) {
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-export function referenceImagePrompt(content) {
+export function referenceImagePrompt(content, actor = null) {
   const plan = content.decision.content;
-  const shot = plan.scenes?.find((scene) => scene.asset_type === "generated_video");
+  const shot = plan.scenes?.find((scene) => scene.asset_type === "generated_video" && (!actor || scene.character_ids?.includes(actor.character_id)));
   const reference = plan.character_reference ?? {};
   return [
     "GYMFEED CAST, SET AND PROP CONTINUITY REFERENCE",
     "Photorealistic vertical 9:16 reference for an acted product story, not a poster. Show the starting state of the approved action.",
-    `Fictional adult: ${reference.description ?? shot?.subject ?? "adult trainee"}`,
-    `Wardrobe: ${reference.wardrobe ?? "plain unbranded training clothes"}`,
+    `Fictional adult: ${actor?.appearance ?? reference.description ?? shot?.subject ?? "adult trainee"}`,
+    actor ? `This is the individual identity reference for ${actor.character_id} (${actor.role}). Show ONLY this actor, not the other cast members. Chest-up face clearly visible. No reference-sheet grid.` : null,
+    `Wardrobe: ${actor?.wardrobe ?? reference.wardrobe ?? "plain unbranded training clothes"}`,
     `Location and background: ${reference.environment_anchor ?? shot?.environment}`,
-    `Starting action and physical props: ${shot?.action}`,
+    `Starting action and physical props: ${actor ? "Relaxed neutral pose in the shared set; no other people or handled props" : shot?.action}`,
     `Camera: ${shot?.camera}`,
     `Lighting: ${shot?.lighting}`,
     `Continuity: ${(reference.continuity_rules ?? []).join("; ")}`,
     "Props required by the action must exist from the start. A phone may show its unbranded back/edge only; the screen faces the actor.",
     "Natural adult anatomy, skin texture and safe physical action. No celebrity likeness or invented customer testimonial.",
     "No readable text, logos, watermark or fabricated GymFeed interface. Exact product footage and branding are composited later.",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export function videoScenePrompt(content, scene, retryInstructions = null) {
   const plan = content.decision.content;
   const reference = plan.character_reference ?? {};
+  const cast = sceneCast(plan, scene);
+  const speaker = cast.find((actor) => actor.character_id === scene.speaker_id);
   const start = Number(scene.source_start_seconds ?? 0);
   const end = start + scene.duration_seconds;
   return [
@@ -62,8 +90,11 @@ export function videoScenePrompt(content, scene, retryInstructions = null) {
     `Camera and movement: ${scene.camera}`,
     `Lighting: ${scene.lighting}`,
     `Look: ${scene.visual_style}`,
-    "<IMAGE_REF_0>, when supplied, is the cast/set/prop reference; preserve identity, clothes, room geometry and lighting. It is not a guaranteed first frame for reference-to-video.",
-    `Cast: ${reference.description ?? scene.subject}. Wardrobe: ${reference.wardrobe ?? "unbranded"}.`,
+    cast.length ? cast.map((actor, index) => `<IMAGE_REF_${index}> = ${actor.character_id}: ${actor.appearance}; wardrobe ${actor.wardrobe}. Preserve this specific identity, never merge or exchange actors.`).join("\n")
+      : "<IMAGE_REF_0>, when supplied, is the cast/set/prop reference; preserve identity, clothes, room geometry and lighting. It is not a guaranteed first frame for reference-to-video.",
+    cast.length ? `Visible cast ONLY: ${cast.map((actor) => actor.character_id).join(", ")}. Other actors remain off-camera. Reference images establish identity, not a mandatory pose; perform this shot's action.`
+      : `Cast: ${reference.description ?? scene.subject}. Wardrobe: ${reference.wardrobe ?? "unbranded"}.`,
+    speaker ? `ONLY SPEAKER: ${speaker.character_id}. Voice continuity: ${speaker.voice_direction}. Address the scene partner naturally, not the viewer. Others listen silently; no overlapping speech or voice swapping.` : null,
     `Continuity: ${scene.continuity_notes}; ${(reference.continuity_rules ?? []).join("; ")}`,
     "Establish every handled prop before contact; preserve its shape, position and grip through the action. No appearing weights, teleporting objects, impossible joints or duplicated limbs. Phone screen faces actor unless a separately planned tracked composite exists.",
     scene.spoken_dialogue ? `EXACT dialogue, spoken once with natural lip sync: "${scene.spoken_dialogue}". No extra words. Finish before the retained cut ends.` : "No spoken dialogue. Tell the beat through the specified physical action and expression.",
@@ -86,12 +117,44 @@ function sceneScore(review) {
 }
 
 
-function safeBackgroundPrompt(slide, reviewerInstructions = null) {
-  const riskyObjects = /phone|screen|calendar|planner|notebook|paper|sign|clock|log|checklist|shoe|text|label|writing/i;
-  const constraint = riskyObjects.test(slide.visual_prompt)
-    ? "Represent any written, screen, calendar, or interface idea through physical action and composition; do not render that object or any readable/pseudo text."
-    : "Do not add text, logos, watermarks, or fake interface elements.";
+export function safeBackgroundPrompt(slide, reviewerInstructions = null) {
+  const constraint = "Background imagery only. Do not render text, pseudo-text, logos, icons, labels, cards, panels, buttons, controls, device frames, screens, or anything resembling an app interface. Leave clean copy-safe space for the compositor.";
   return `${slide.visual_prompt}\nVisual role: ${slide.visual_type ?? "branded_graphic"}.\n${reviewerInstructions ? `Mandatory reviewer correction: ${reviewerInstructions}\n` : ""}${constraint}`;
+}
+
+export function generationPromptForContent(content) {
+  const plan = content.decision?.content ?? {};
+  if (content.content_type === "video") {
+    const generatedScenes = (plan.scenes ?? []).filter((scene) => scene.asset_type === "generated_video");
+    const captureScenes = (plan.scenes ?? []).filter((scene) => scene.asset_type === "app_capture");
+    const sections = [];
+    if (generatedScenes.length) {
+      if (plan.cast?.length) for (const actor of plan.cast) sections.push(`CAST REFERENCE ${actor.character_id}\n${referenceImagePrompt(content, actor)}`);
+      else sections.push(`REFERENCE IMAGE PROMPT\n${referenceImagePrompt(content)}`);
+    }
+    for (const scene of generatedScenes) {
+      sections.push(`VIDEO SCENE ${scene.scene_id}\n${videoScenePrompt(content, scene)}`);
+    }
+    for (const scene of captureScenes) {
+      const start = Number(scene.source_start_seconds ?? 0);
+      const end = start + Number(scene.duration_seconds ?? 0);
+      sections.push([
+        `NATIVE APP CAPTURE ${scene.scene_id}`,
+        `Use verified recording ${scene.capture_ref}.`,
+        `Retain ${start.toFixed(1)}-${end.toFixed(1)} seconds.`,
+        `Compositor overlay: ${scene.overlay_text ?? ""}`,
+        "Do not generate or simulate this app interaction.",
+      ].join("\n"));
+    }
+    return sections.join("\n\n---\n\n");
+  }
+
+  return (plan.slides ?? []).map((slide, index) => {
+    if (slide.screenshot_ref) {
+      return `SLIDE ${index + 1}\nUse verified GymFeed screenshot ${slide.screenshot_ref}; no image-model prompt is used.\nHeadline: ${slide.headline}\nBody: ${slide.body}`;
+    }
+    return `SLIDE ${index + 1}\n${safeBackgroundPrompt(slide, content.decision?.review_instructions)}\nCompositor headline: ${slide.headline}\nCompositor body: ${slide.body}`;
+  }).join("\n\n---\n\n");
 }
 
 function trackingUrl(base, platform, contentKey) {
@@ -130,10 +193,15 @@ export class MarketingOrchestrator {
     const buffers = [];
     for (const scene of content.decision.content.scenes ?? []) {
       if (scene.audio_strategy !== "voiceover" || !scene.voiceover_text?.trim()) continue;
-      const buffer = await this.createVoiceover({ ...content, decision: { ...content.decision, content: {
-        ...content.decision.content, audio_mode: "ai_voiceover", voiceover_script: scene.voiceover_text,
-      } } });
-      buffers.push({ sceneId: scene.scene_id, buffer });
+      try {
+        const buffer = await this.createVoiceover({ ...content, decision: { ...content.decision, content: {
+          ...content.decision.content, audio_mode: "ai_voiceover", voiceover_script: scene.voiceover_text,
+        } } });
+        buffers.push({ sceneId: scene.scene_id, buffer });
+      } catch (error) {
+        if (!openAiBudgetExceeded(error)) throw error;
+        buffers.push({ sceneId: scene.scene_id, buffer: await silentPreviewAudio(scene.duration_seconds), missingNarration: true });
+      }
     }
     return buffers;
   }
@@ -141,12 +209,18 @@ export class MarketingOrchestrator {
   async finalTechnical(content, buffer) {
     const technical = await inspectVideo(buffer);
     const plan = content.decision.content;
-    if (plan.production_version !== 2) return technical;
+    if (!(Number(plan.production_version) >= 2)) return technical;
     const expected = (plan.scenes ?? []).map((scene) => scene.audio_strategy === "voiceover" ? scene.voiceover_text : scene.audio_strategy === "native" ? scene.spoken_dialogue : "").filter(Boolean).join(" ");
     const durationOk = Math.abs(technical.duration_seconds - plannedVideoDuration(plan)) <= 0.3;
     if (!expected) return { ...technical, retained_audio_checked: true, final_dialogue_match: true, duration_matches_plan: durationOk };
     if (!technical.has_audio || !this.voiceProvider?.transcribe) return { ...technical, retained_audio_checked: false, final_dialogue_match: false, duration_matches_plan: durationOk };
-    const reservation = await this.repository.reserveCost("openai", this.config.OPENAI_ESTIMATED_TRANSCRIPTION_COST_USD ?? 0.01, { contentId: content.id, runId: content.run_id, metadata: { operation: "final-edit-audio-verification" } });
+    let reservation;
+    try {
+      reservation = await this.repository.reserveCost("openai", this.config.OPENAI_ESTIMATED_TRANSCRIPTION_COST_USD ?? 0.01, { contentId: content.id, runId: content.run_id, metadata: { operation: "final-edit-audio-verification" } });
+    } catch (error) {
+      if (!openAiBudgetExceeded(error)) throw error;
+      return { ...technical, retained_audio_checked: false, final_dialogue_match: false, duration_matches_plan: durationOk, verification_note: "Final audio verification unavailable: monthly OpenAI budget reached" };
+    }
     try {
       const audio = await extractVideoAudio(buffer);
       const transcript = await this.voiceProvider.transcribe({ buffer: audio });
@@ -193,13 +267,18 @@ export class MarketingOrchestrator {
     };
   }
 
-  async runDaily(now = new Date(), { revision = 1, campaignId = null } = {}) {
+  async runDaily(now = new Date(), { revision = 1, campaignId = null, retryFailed = false } = {}) {
     if (!Number.isInteger(revision) || revision < 1 || revision > 999) throw new Error("Daily revision must be an integer from 1 to 999");
     const dailyKey = revision === 1
       ? `daily:${utcDateKey(now)}`
       : `daily:${utcDateKey(now)}:r${String(revision).padStart(3, "0")}`;
     const idempotencyKey = campaignId ? `campaign:${campaignId}:${dailyKey}` : dailyKey;
-    const { run, reused } = await this.repository.startRun("daily-cmo", idempotencyKey, { now: now.toISOString(), revision });
+    const { run, reused } = await this.repository.startRun(
+      "daily-cmo",
+      idempotencyKey,
+      { now: now.toISOString(), revision },
+      { restartFailed: retryFailed },
+    );
     if (reused) return { reused: true, run };
 
     let reservationId;
@@ -220,16 +299,19 @@ export class MarketingOrchestrator {
       }, result.costUsd);
       return { reused: false, run: completed, content };
     } catch (error) {
-      if (reservationId) {
-        try { await this.repository.releaseCost(reservationId); } catch (_) { /* preserve root error */ }
-      }
-      await this.repository.finishRun(run.id, "failed", {}, null, error.message);
+      await settleOrReleaseOpenAiReservation(this.repository, reservationId, error);
+      await this.repository.finishRun(run.id, "failed", {}, error.openaiCostUsd ?? null, error.message);
       throw error;
     }
   }
 
-  async runWeekly(now = new Date()) {
-    const { run, reused } = await this.repository.startRun("weekly-cmo", `weekly:${isoWeekKey(now)}`, { now: now.toISOString() });
+  async runWeekly(now = new Date(), { retryFailed = false } = {}) {
+    const { run, reused } = await this.repository.startRun(
+      "weekly-cmo",
+      `weekly:${isoWeekKey(now)}`,
+      { now: now.toISOString() },
+      { restartFailed: retryFailed },
+    );
     if (reused) return { reused: true, run };
     let reservationId;
     try {
@@ -244,10 +326,8 @@ export class MarketingOrchestrator {
       const completed = await this.repository.finishRun(run.id, "succeeded", { review: result.data, learning_ids: learnings.map((item) => item.id) }, result.costUsd);
       return { reused: false, run: completed, learnings };
     } catch (error) {
-      if (reservationId) {
-        try { await this.repository.releaseCost(reservationId); } catch (_) { /* preserve root error */ }
-      }
-      await this.repository.finishRun(run.id, "failed", {}, null, error.message);
+      await settleOrReleaseOpenAiReservation(this.repository, reservationId, error);
+      await this.repository.finishRun(run.id, "failed", {}, error.openaiCostUsd ?? null, error.message);
       throw error;
     }
   }
@@ -261,6 +341,13 @@ export class MarketingOrchestrator {
     if (this.campaigns) await this.campaigns.assertGenerationAllowed(id);
     if (content.content_type === "video") await preflightAppCaptures(content.decision.content, this.appCaptureResolver);
     if (content.content_type === "video" && content.status === "failed") {
+      const scenes = content.decision?.generation?.scenes ?? [];
+      const generated = scenes.filter((scene) => scene.asset_type === "generated_video");
+      if (generated.length && generated.every((scene) => ["qa_passed", "qa_failed"].includes(scene.status) && scene.asset_url)
+        && generated.filter((scene) => scene.status === "qa_failed")
+          .every((scene) => Number(scene.attempt ?? 0) >= (this.config.FAL_SCENE_MAX_ATTEMPTS ?? 2))) {
+        return this.finishVideoGeneration(content, scenes, content.decision.generation);
+      }
       const resumed = await this.resumeFailedVideoScene(content);
       if (resumed) return resumed;
     }
@@ -404,7 +491,7 @@ export class MarketingOrchestrator {
         prompt: videoScenePrompt(content, scene, retryInstructions),
         durationSeconds: sourceDuration,
         generateAudio: ["native_audio", "ambient_plus_captions", "mixed"].includes(content.decision.content.audio_mode),
-        referenceImageUrls: referenceImageUrl ? [referenceImageUrl] : [],
+        referenceImageUrls: sceneReferenceUrls(content.decision.content, scene, referenceImageUrl),
       });
       return {
         scene_id: scene.scene_id,
@@ -434,6 +521,40 @@ export class MarketingOrchestrator {
     const plannedScenes = plan.scenes ?? [];
     const generatedSceneSpecs = plannedScenes.filter((scene) => (scene.asset_type ?? "generated_video") === "generated_video");
     try {
+      if (Number(plan.production_version) >= 3) {
+        validateVideoStory(plan);
+        const fingerprint = storyFingerprint(plan);
+        let review = content.decision.story_review;
+        if (review?.fingerprint !== fingerprint) {
+          let reservation;
+          try {
+            reservation = await this.repository.reserveCost("openai", this.config.OPENAI_ESTIMATED_QA_COST_USD ?? 0.05, {
+              contentId: content.id, runId: content.run_id, metadata: { operation: "preproduction-story-review" },
+            });
+          } catch (error) {
+            if (!openAiBudgetExceeded(error)) throw error;
+            review = { accept: false, fingerprint, review_status: "budget_blocked", summary: "Creative story QA unavailable: monthly OpenAI budget reached", required_fixes: [], scores: {} };
+          }
+          if (reservation) {
+            let result;
+            try {
+              result = await this.brain.storyQualityReview(plan);
+              await this.repository.settleCost(reservation, result.costUsd, result.responseId);
+            } catch (error) {
+              await settleOrReleaseOpenAiReservation(this.repository, reservation, error);
+              throw error;
+            }
+            review = { ...result.data, fingerprint, response_id: result.responseId };
+          }
+          content = await this.repository.updateContent(content.id, { decision: { ...content.decision, story_review: review } });
+        }
+        if (!storyReviewPassed(review) && content.decision?.workflow?.story_preview_authorized_fingerprint !== fingerprint) {
+          const error = new Error(`Creative story QA failed before media generation: ${review.required_fixes?.join("; ") || review.summary || "one or more story scores below 85"}`);
+          error.safeToRetry = true;
+          error.storyQaFailed = true;
+          throw error;
+        }
+      }
       if (!generatedSceneSpecs.length) {
         await this.repository.updateContent(content.id, {
           status: "generating",
@@ -441,8 +562,22 @@ export class MarketingOrchestrator {
           provider_task_id: null,
           failure_reason: null,
         });
-        const voiceoverBuffer = await this.createVoiceover(content);
-        const renderedVideo = await renderProductVideo(plan, { voiceoverBuffer, sceneVoiceoverBuffers: await this.sceneAudio(content), appCaptureResolver: this.appCaptureResolver });
+        let voiceoverBuffer = null;
+        let fullNarrationMissing = false;
+        if (Number(plan.production_version) < 2) {
+          try { voiceoverBuffer = await this.createVoiceover(content); }
+          catch (error) {
+            if (!openAiBudgetExceeded(error)) throw error;
+            voiceoverBuffer = await silentPreviewAudio(plannedVideoDuration(plan));
+            fullNarrationMissing = true;
+          }
+        }
+        const sceneVoiceoverBuffers = await this.sceneAudio(content);
+        const previewAudioGaps = sceneVoiceoverBuffers.filter((scene) => scene.missingNarration).map((scene) => scene.sceneId);
+        const sceneCaptions = Number(plan.production_version) >= 3
+          ? verifiedSceneCaptions(plan, [], previewAudioGaps)
+          : {};
+        const renderedVideo = await renderProductVideo(plan, { voiceoverBuffer, sceneVoiceoverBuffers, sceneCaptions, appCaptureResolver: this.appCaptureResolver });
         const version = randomUUID();
         const storedVideo = await this.repository.uploadAsset(`${content.content_key}/${version}/video.mp4`, renderedVideo, "video/mp4");
         const duration = plannedVideoDuration(plan);
@@ -455,7 +590,10 @@ export class MarketingOrchestrator {
           thumbnail_url: thumbnailUrl,
           decision: {
             ...content.decision,
-            generation: { mode: "product_led", scenes: [], final_technical: technical },
+            generation: { mode: "product_led", scenes: [], final_technical: technical, preview_caption_gaps: Number(plan.production_version) >= 3 ? previewAudioGaps : [], preview_audio_gaps: [
+              ...(fullNarrationMissing ? ["full_narration"] : []),
+              ...previewAudioGaps,
+            ] },
           },
         });
         return { skipped: false, pending: false, content: updated };
@@ -463,30 +601,34 @@ export class MarketingOrchestrator {
 
       const generationId = randomUUID();
       let referenceImageUrl = null;
+      const characterReferenceUrls = {};
       if (plan.character_reference?.required) {
-        const referenceReservationId = await this.repository.reserveCost("fal", this.config.FAL_ESTIMATED_IMAGE_COST_USD, {
-          contentId: content.id,
-          runId: content.run_id,
-          metadata: { operation: "campaign-character-reference" },
-        });
-        let reference;
-        try {
-          reference = await this.mediaProvider.generateReferenceImage(referenceImagePrompt(content));
-          await this.repository.settleCost(referenceReservationId, this.config.FAL_ESTIMATED_IMAGE_COST_USD, reference.raw?.requestId ?? null);
-        } catch (error) {
-          try { await this.repository.releaseCost(referenceReservationId); } catch (_) { /* preserve provider error */ }
-          throw error;
+        for (const actor of plan.cast?.length ? plan.cast : [null]) {
+          const referenceReservationId = await this.repository.reserveCost("fal", this.config.FAL_ESTIMATED_IMAGE_COST_USD, {
+            contentId: content.id,
+            runId: content.run_id,
+            metadata: { operation: "campaign-character-reference", character_id: actor?.character_id ?? null },
+          });
+          let reference;
+          try {
+            reference = await this.mediaProvider.generateReferenceImage(referenceImagePrompt(content, actor));
+            await this.repository.settleCost(referenceReservationId, this.config.FAL_ESTIMATED_IMAGE_COST_USD, reference.raw?.requestId ?? null);
+          } catch (error) {
+            try { await this.repository.releaseCost(referenceReservationId); } catch (_) { /* preserve provider error */ }
+            throw error;
+          }
+          referenceImageUrl = await this.repository.uploadAsset(
+            `${content.content_key}/${generationId}/character-reference${actor ? `-${actor.character_id}` : ""}.png`,
+            reference.buffer,
+            reference.mimeType ?? "image/png",
+          );
+          if (actor) characterReferenceUrls[actor.character_id] = referenceImageUrl;
         }
-        referenceImageUrl = await this.repository.uploadAsset(
-          `${content.content_key}/${generationId}/character-reference.png`,
-          reference.buffer,
-          reference.mimeType ?? "image/png",
-        );
       }
       const sceneRecords = [];
       for (const scene of plannedScenes) {
         if ((scene.asset_type ?? "generated_video") === "generated_video") {
-          sceneRecords.push(await this.queueVideoScene(content, scene, referenceImageUrl));
+          sceneRecords.push(await this.queueVideoScene(content, scene, plan.cast?.length ? characterReferenceUrls : referenceImageUrl));
         } else {
           sceneRecords.push({
             scene_id: scene.scene_id,
@@ -510,6 +652,7 @@ export class MarketingOrchestrator {
             mode: "multi_scene_reference",
             generation_id: generationId,
             reference_image_url: referenceImageUrl,
+            character_reference_urls: characterReferenceUrls,
             scenes: sceneRecords,
           },
         },
@@ -639,17 +782,25 @@ export class MarketingOrchestrator {
       const record = sceneRecords[index];
       if (record.asset_type !== "generated_video" || record.status !== "generated") continue;
       const sceneSpec = sceneSpecs.get(record.scene_id) ?? plan.scenes[0];
-      const reservationId = await this.repository.reserveCost("openai", this.config.OPENAI_ESTIMATED_QA_COST_USD ?? 0.15, {
-        contentId: content.id,
-        runId: content.run_id,
-        metadata: { operation: "scene-qa", scene_id: record.scene_id, attempt: record.attempt },
-      });
+      let reservationId;
+      try {
+        reservationId = await this.repository.reserveCost("openai", this.config.OPENAI_ESTIMATED_QA_COST_USD ?? 0.15, {
+          contentId: content.id,
+          runId: content.run_id,
+          metadata: { operation: "scene-qa", scene_id: record.scene_id, attempt: record.attempt },
+        });
+      } catch (error) {
+        if (!openAiBudgetExceeded(error)) throw error;
+        sceneRecords[index] = { ...record, status: "qa_failed", qa_score: null, qa: { accept: false, summary: "Scene AI QA unavailable: monthly OpenAI budget reached", defects: ["Scene AI QA unavailable: monthly OpenAI budget reached"], required_fixes: [], review_status: "budget_blocked" } };
+        continue;
+      }
       let result;
       try {
-        result = await this.brain.sceneQualityReview(content, sceneSpec, [record.contact_sheet_url]);
+        result = await this.brain.sceneQualityReview(content, sceneSpec, [record.contact_sheet_url,
+          ...sceneReferenceUrls(plan, sceneSpec, plan.cast?.length ? generation.character_reference_urls : generation.reference_image_url)]);
         await this.repository.settleCost(reservationId, result.costUsd, result.responseId);
       } catch (error) {
-        try { await this.repository.releaseCost(reservationId); } catch (_) { /* preserve root error */ }
+        await settleOrReleaseOpenAiReservation(this.repository, reservationId, error);
         throw error;
       }
       const score = sceneScore(result.data);
@@ -669,7 +820,7 @@ export class MarketingOrchestrator {
       const retry = await this.queueVideoScene(
         content,
         sceneSpec,
-        generation.reference_image_url,
+        plan.cast?.length ? generation.character_reference_urls : generation.reference_image_url,
         record.attempt + 1,
         result.data.retry_prompt || result.data.required_fixes.join("; "),
       );
@@ -687,16 +838,6 @@ export class MarketingOrchestrator {
     }
 
     generation.scenes = sceneRecords;
-    if (sceneRecords.some((scene) => scene.status === "qa_failed")) {
-      const failedScenes = sceneRecords.filter((scene) => scene.status === "qa_failed").map((scene) => scene.scene_id);
-      const failed = await this.repository.updateContent(content.id, {
-        status: "failed",
-        provider_task_id: null,
-        failure_reason: `Scene QA failed after maximum attempts: ${failedScenes.join(", ")}`,
-        decision: { ...content.decision, generation },
-      });
-      return { skipped: false, pending: false, content: failed };
-    }
     if (queuedRetry) {
       const pendingTask = sceneRecords.find((scene) => scene.status === "queued");
       const updated = await this.repository.updateContent(content.id, {
@@ -707,7 +848,15 @@ export class MarketingOrchestrator {
       return { skipped: false, pending: true, content: updated, retrying: true };
     }
 
+    return this.finishVideoGeneration(content, sceneRecords, generation);
+  }
+
+  async finishVideoGeneration(content, sceneRecords, generation) {
+    const plan = content.decision.content;
     const generatedRecords = sceneRecords.filter((scene) => scene.asset_type === "generated_video");
+    if (!generatedRecords.length || generatedRecords.some((scene) => !["qa_passed", "qa_failed"].includes(scene.status) || !scene.asset_url)) {
+      throw new Error("Cannot render a review video until every generated scene has a saved clip and completed QA");
+    }
     const sceneVideoBuffers = [];
     for (const record of generatedRecords) {
       const downloaded = await fetchAsset(record.asset_url);
@@ -717,13 +866,24 @@ export class MarketingOrchestrator {
     const renderOptions = plan.scenes.some((scene) => scene.asset_type)
       ? { sceneVideoBuffers, voiceoverBuffer }
       : { supportingVideoBuffer: sceneVideoBuffers[0]?.buffer ?? null, voiceoverBuffer };
-    const renderedVideo = await renderProductVideo(plan, { ...renderOptions, sceneVoiceoverBuffers: await this.sceneAudio(content), appCaptureResolver: this.appCaptureResolver });
+    const sceneVoiceoverBuffers = await this.sceneAudio(content);
+    generation.preview_audio_gaps = sceneVoiceoverBuffers.filter((scene) => scene.missingNarration).map((scene) => scene.sceneId);
+    const sceneCaptions = Number(plan.production_version) >= 3
+      ? verifiedSceneCaptions(plan, sceneRecords, generation.preview_audio_gaps)
+      : {};
+    generation.preview_caption_gaps = Number(plan.production_version) >= 3
+      ? (plan.scenes ?? [])
+        .filter((scene) => ["native", "voiceover"].includes(scene.audio_strategy) && !sceneCaptions[scene.scene_id])
+        .map((scene) => scene.scene_id)
+      : [];
+    const renderedVideo = await renderProductVideo(plan, { ...renderOptions, sceneVoiceoverBuffers, sceneCaptions, appCaptureResolver: this.appCaptureResolver });
     const version = generation.generation_id ?? randomUUID();
     const storedVideo = await this.repository.uploadAsset(`${content.content_key}/${version}/final-video.mp4`, renderedVideo, "video/mp4");
     const duration = plannedVideoDuration(plan);
     const contactSheet = await extractVideoContactSheet(renderedVideo, duration, 16);
     const thumbnailUrl = await this.repository.uploadAsset(`${content.content_key}/${version}/final-contact-sheet-16.jpg`, contactSheet, "image/jpeg");
     generation.final_technical = await this.finalTechnical(content, renderedVideo);
+    generation.scenes = sceneRecords;
     const updated = await this.repository.updateContent(content.id, {
       status: "generated",
       provider_task_id: null,
@@ -740,30 +900,53 @@ export class MarketingOrchestrator {
     if (content.status !== "generated" && content.status !== "qa_failed") {
       return { skipped: true, reason: `status is ${content.status}`, content };
     }
+    const sceneIssues = content.content_type === "video"
+      ? (content.decision?.generation?.scenes ?? []).filter((scene) => scene.status === "qa_failed")
+        .map((scene) => `${scene.scene_id}: ${scene.qa?.defects?.[0] || scene.qa?.required_fixes?.[0] || "Scene QA failed"}`)
+      : [];
+    const story = content.decision?.story_review;
+    const storyIssues = content.content_type === "video" && Number(content.decision.content.production_version) >= 3
+      && story?.fingerprint === storyFingerprint(content.decision.content) && !storyReviewPassed(story)
+      ? [`Creative story QA: ${story.required_fixes?.join("; ") || story.summary || "did not pass"}`] : [];
+    const technical = content.decision?.generation?.final_technical;
+    const technicalIssues = content.content_type === "video" && Number(content.decision.content.production_version) >= 2
+      && (!technical?.final_dialogue_match || !technical?.duration_matches_plan)
+      ? ["Final edited audio or duration does not match the approved plan"] : [];
+    const audioIssues = (content.decision?.generation?.preview_audio_gaps ?? []).map((sceneId) => `${sceneId}: Narration missing from budget-limited preview`);
+    const captionIssues = (content.decision?.generation?.preview_caption_gaps ?? []).map((sceneId) => `${sceneId}: Subtitle omitted because spoken audio could not be verified`);
     const visuals = content.content_type === "video" ? [content.thumbnail_url].filter(Boolean) : content.asset_urls;
-    const reservationId = await this.repository.reserveCost("openai", this.config.OPENAI_ESTIMATED_DAILY_COST_USD, { contentId: content.id, runId: content.run_id, metadata: { operation: "qa" } });
+    let reservationId;
+    try {
+      reservationId = await this.repository.reserveCost("openai", this.config.OPENAI_ESTIMATED_DAILY_COST_USD, { contentId: content.id, runId: content.run_id, metadata: { operation: "qa" } });
+    } catch (error) {
+      if (content.content_type !== "video" || !content.asset_urls?.length || !/openai provider budget exceeded/i.test(error.message)) throw error;
+      const scores = (content.decision?.generation?.scenes ?? []).map((scene) => scene.qa_score).filter(Number.isFinite);
+      const lowest = scores.length ? Math.min(...scores) : null;
+      const issues = [...storyIssues, ...sceneIssues, ...audioIssues, ...captionIssues, ...technicalIssues, "Final AI QA could not run: monthly OpenAI budget reached"];
+      const updated = await this.repository.updateContent(id, {
+        status: "qa_failed", qa_score: lowest,
+        qa: { publish: false, summary: `Preview ready. ${lowest == null ? "Scene QA scores unavailable" : `Lowest scene QA: ${lowest}`}; final AI QA pending budget reset.`, critical_issues: issues, required_fixes: [], review_status: "budget_blocked" },
+        failure_reason: issues.join("; ").slice(0, 1800),
+      });
+      return { skipped: false, passed: false, content: updated };
+    }
     try {
       const result = await this.brain.qualityReview(content, visuals);
       await this.repository.settleCost(reservationId, result.costUsd, result.responseId);
       const score = overallQaScore(result.data);
       const brand = await this.repository.brandConfig();
-      const passed = result.data.publish && score >= brand.minimum_qa_score;
+      const issues = [...storyIssues, ...sceneIssues, ...audioIssues, ...captionIssues, ...technicalIssues, ...(result.data.critical_issues ?? [])];
+      const passed = result.data.publish && score >= brand.minimum_qa_score && !storyIssues.length && !sceneIssues.length && !audioIssues.length && !captionIssues.length && !technicalIssues.length;
       const updated = await this.repository.updateContent(content.id, {
         status: passed ? "awaiting_approval" : "qa_failed",
         qa_score: score,
-        qa: result.data,
-        failure_reason: passed ? null : result.data.critical_issues.join("; ") || "QA threshold not met",
+        qa: { ...result.data, publish: passed, critical_issues: issues },
+        failure_reason: passed ? null : issues.join("; ").slice(0, 1800) || "QA threshold not met",
       });
       return { skipped: false, passed, content: updated };
     } catch (error) {
-      try { await this.repository.releaseCost(reservationId); } catch (_) { /* preserve root error */ }
+      await settleOrReleaseOpenAiReservation(this.repository, reservationId, error);
       throw error;
-    }
-    if (content.content_type === "video" && content.decision.content.production_version === 2) {
-      const technical = content.decision.generation?.final_technical;
-      if (!technical?.final_dialogue_match || !technical?.duration_matches_plan) {
-        return { skipped: false, passed: false, content: await this.repository.updateContent(id, { status: "qa_failed", failure_reason: "Final edited audio or duration does not match the approved plan. Review the retained cut before asset approval." }) };
-      }
     }
   }
 
@@ -802,7 +985,9 @@ export class MarketingOrchestrator {
     }
 
     while (content.status === "generating") {
-      if (!content.provider_task_id) {
+      const resumableGeneratedScene = (content.decision?.generation?.scenes ?? [])
+        .some((scene) => scene.asset_type === "generated_video" && scene.status === "generated");
+      if (!content.provider_task_id && !resumableGeneratedScene) {
         return {
           skipped: true,
           pending: false,
@@ -821,7 +1006,7 @@ export class MarketingOrchestrator {
           stages,
         };
       }
-      if (pollIntervalMs > 0) await wait(pollIntervalMs);
+      if (content.provider_task_id && pollIntervalMs > 0) await wait(pollIntervalMs);
       const refresh = await this.refreshContent(id);
       stages.push({ stage: "refresh", result: refresh });
       content = refresh.content ?? await this.repository.contentById(id);
@@ -885,9 +1070,7 @@ export class MarketingOrchestrator {
       const reset = await this.repository.resetContentForRevision(content, revised.data, instructions.trim());
       return { skipped: false, content: reset };
     } catch (error) {
-      if (reservationId) {
-        try { await this.repository.releaseCost(reservationId); } catch (_) { /* preserve root error */ }
-      }
+      await settleOrReleaseOpenAiReservation(this.repository, reservationId, error);
       throw error;
     }
   }
@@ -1156,17 +1339,18 @@ export class MarketingOrchestrator {
           content_id: content.id,
           platform,
           account_ref: accountByPlatform[platform],
-          status: "pending",
+          status: error.safeToRetry ? "failed" : "pending",
+          ...(error.bufferPostId ? { provider_request_id: error.bufferPostId } : {}),
           platform_copy: copy,
-          error: `Submission uncertain; check Buffer before retrying: ${error.message}`,
+          error: error.safeToRetry ? `Buffer rejected submission: ${error.message}` : `Submission uncertain; check Buffer before retrying: ${error.message}`,
         }));
       }
     }
-    if (publications.length && publications.every((publication) => publication.provider_request_id)) {
+    if (publications.length && publications.every((publication) => publication.provider_request_id && !publication.error)) {
       const scheduledAt = publications.map((publication) => publication.scheduled_at).filter(Boolean).sort()[0] ?? null;
       await this.repository.updateContent(content.id, { status: "scheduled", scheduled_at: scheduledAt });
     }
-    return { skipped: false, content, publications };
+    return { skipped: false, content: await this.repository.contentById(id), publications };
   }
 
   async refreshPublications() {

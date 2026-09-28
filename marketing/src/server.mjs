@@ -6,10 +6,11 @@ import { FalMediaProvider } from "./providers/fal.mjs";
 import { BufferPublisher } from "./providers/buffer.mjs";
 import { Ga4Reporter } from "./providers/ga4.mjs";
 import { OpenAIVoiceProvider } from "./providers/openai-voice.mjs";
-import { GoogleSheetsApprovalQueue } from "./providers/google-sheets.mjs";
+import { ReviewBoard as GoogleSheetsApprovalQueue } from "./providers/review-board.mjs";
 import { buildApp } from "./app.mjs";
 import { MarketingCampaigns } from "./campaigns.mjs";
 import { CmoController } from "./cmo-controller.mjs";
+import { CaptureIngestor } from "./capture-ingest.mjs";
 
 const config = loadConfig();
 const repository = new MarketingRepository(config);
@@ -57,7 +58,8 @@ const orchestrator = new MarketingOrchestrator({
   campaigns,
 });
 const cmo = new CmoController({ orchestrator, campaigns, repository, approvalSheet, config });
-const app = buildApp({ config, orchestrator, cmo, logger: { level: config.LOG_LEVEL } });
+const captureIngestor = new CaptureIngestor({ credentialsPath: config.GOOGLE_SHEETS_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS });
+const app = buildApp({ config, orchestrator, cmo, captureIngestor, logger: { level: config.LOG_LEVEL } });
 
 try {
   await app.listen({ port: config.PORT, host: "0.0.0.0" });

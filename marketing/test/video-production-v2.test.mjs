@@ -6,7 +6,7 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { normalizeRequestedCaptureRequirements, validateVideoProductionPlan } from "../src/brain.mjs";
-import { productionTimeline, renderProductVideo, validateAppCaptureSource, validateRetainedCut } from "../src/render-product-video.mjs";
+import { productionTimeline, renderProductVideo, validateAppCaptureSource, validateRetainedCut, verifiedSceneCaptions } from "../src/render-product-video.mjs";
 
 const execFileAsync = promisify(execFile);
 const ffmpeg = process.env.FFMPEG_PATH || "ffmpeg";
@@ -76,6 +76,27 @@ test("timeline retains source cuts, product captions and narration per scene", (
   assert.equal(timeline[1].start, 4);
   assert.equal(timeline[1].subtitle, plan.scenes[1].voiceover_text);
   assert.equal(timeline[3].showOverlay, true);
+});
+
+test("review master captions use the recorded words and omit unverified speech", () => {
+  const plan = {
+    scenes: [
+      { scene_id: "hook", asset_type: "generated_video", audio_strategy: "native", spoken_dialogue: "Planned line", overlay_text: "Hook" },
+      { scene_id: "reply", asset_type: "generated_video", audio_strategy: "native", spoken_dialogue: "Another planned line", overlay_text: "Reply" },
+      { scene_id: "proof", asset_type: "app_capture", audio_strategy: "voiceover", voiceover_text: "Open Train.", overlay_text: "Train" },
+    ],
+  };
+  const captions = verifiedSceneCaptions(plan, [
+    { scene_id: "hook", technical: { has_audio: true, transcript: "What comes next?", dialogue_match: false } },
+    { scene_id: "reply", technical: { has_audio: true, transcript: "" } },
+  ], ["proof"]);
+  assert.deepEqual(captions, { hook: "What comes next?", reply: "", proof: "" });
+  const timeline = productionTimeline(plan, [
+    { sceneId: "hook", buffer: Buffer.from("first") },
+    { sceneId: "reply", buffer: Buffer.from("second") },
+  ], null, captions);
+  assert.deepEqual(timeline.map((scene) => scene.subtitle), ["What comes next?", "", ""]);
+  assert.equal(timeline[0].headline, "Hook");
 });
 
 test("renderer requires an actual verified capture and checks the physical source duration", async () => {

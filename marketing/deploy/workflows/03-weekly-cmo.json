@@ -1,4 +1,5 @@
 {
+  "id": "l1TIPNfnv19Wj9QU",
   "name": "GymFeed 03 - Weekly CMO",
   "nodes": [
     {
@@ -22,10 +23,55 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const timezone = 'America/New_York';\nconst localNow = $now.setZone(timezone);\nconst daysUntilMonday = ((8 - localNow.weekday) % 7) || 7;\nconst startDate = localNow.plus({ days: daysUntilMonday }).toFormat('yyyy-MM-dd');\nconst name = `GymFeed weekly ideas ${startDate}`;\nreturn [{ json: { action: 'plan_campaign', name, startDate, days: 7, timezone, requestKey: `campaign:${name}:${startDate}:7:${timezone}` } }];"
+      },
+      "id": "99685fcf-a0f3-4f59-8b72-adc85958a4d2",
+      "name": "Prepare next seven days",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://marketing-worker:3000/v1/cmo/execute",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-marketing-token", "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": { "timeout": 21600000 }
+      },
+      "id": "99685fcf-a0f3-4f59-8b72-adc85958a4d3",
+      "name": "Create seven-day idea plan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 0]
+    },
+    {
+      "id": "99685fcf-a0f3-4f59-8b72-adc85958a4d4",
+      "name": "Weekly process",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, -340],
+      "parameters": {
+        "content": "## Sunday weekly plan\nRefreshes learning first, then creates exactly seven days of ideas. The run stops at Idea Review. Individual approvals trigger individual production; there is no automatic bulk generation.",
+        "height": 240,
+        "width": 940,
+        "color": 4
+      }
     }
   ],
-  "connections": { "Sunday 08:00 ET": { "main": [[{ "node": "Run weekly learning loop", "type": "main", "index": 0 }]] } },
-  "active": false,
+  "connections": {
+    "Sunday 08:00 ET": { "main": [[{ "node": "Run weekly learning loop", "type": "main", "index": 0 }]] },
+    "Run weekly learning loop": { "main": [[{ "node": "Prepare next seven days", "type": "main", "index": 0 }]] },
+    "Prepare next seven days": { "main": [[{ "node": "Create seven-day idea plan", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
   "settings": { "executionOrder": "v1", "timezone": "America/New_York" },
   "versionId": "f5c6a214-597e-48fb-88aa-8303549829bd",
   "meta": {},

@@ -29,7 +29,7 @@ export async function resolveAppCapture(ref, root = directory) {
 }
 
 export async function preflightAppCaptures(plan, resolver = resolveAppCapture) {
-  if (plan.production_version === 2 && !(plan.scenes ?? []).some((scene) => scene.asset_type === "app_capture")) {
+  if (Number(plan.production_version) >= 2 && !(plan.scenes ?? []).some((scene) => scene.asset_type === "app_capture")) {
     throw new Error("Product-use video requires a verified app recording before generation");
   }
   for (const scene of plan.scenes ?? []) {

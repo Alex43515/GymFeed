@@ -263,6 +263,22 @@ The daily run is deliberately split into two model calls:
 
 Availability of screenshots never overrides that choice. Human-led and hybrid decisions send a narrative human-action brief to fal.ai, then add only the verified GymFeed screens needed for product proof. Product-led decisions remain available when quantified evidence supports a direct UI demonstration. Buffer metrics are refreshed after publication and feed the next daily and weekly decisions; GA4 and Supabase remain responsible for traffic, registration, activation, and subscription outcomes.
 
+## Pre-production story repair
+
+Version 3 dialogue videos receive independent creative story review before paid video tasks are submitted. A known story rejection is a failed, safely retryable work attempt, not an uncertain provider outcome. The controller revises the same approved idea through the existing revision RPC, preserves the concept and cast, and repeats the review, with at most two automatic script repairs. Final asset approval remains manual in Content Review. Existing media tasks and ambiguous provider errors are never cleared by this repair loop.
+
+If the reviewed story remains below the creative threshold after those two revisions, the worker records a fingerprint-bound preview authorization and generates the video for human review. The failed story findings stay in Content Review QA and cannot become an automatic QA pass.
+
+If a network failure leaves work running after the request has ended, reconcile the stored provider task IDs before resuming. Successful tasks are downloaded and inspected through the existing refresh path, not submitted again. Expiration alone is not permission to regenerate.
+
+## Reviewable video after low QA
+
+After the bounded scene retries, the worker renders a complete preview from all saved clips, including clips that failed scene QA. It runs final QA and puts the master video, preview, original AI score and specific findings in the same Content Review row. A failed scene or final check keeps the row at Needs Review; it no longer prevents the reviewer from seeing the video. The reviewer may Reject for a replacement or explicitly Approve the visible asset. Approval records a human override with the original QA findings and score. A provider failure without a usable clip still blocks production and cannot be approved as a video.
+
+If the monthly OpenAI budget prevents the final QA call after the master exists, Content Review still receives the video. It displays the lowest saved scene score, identifies the missing final QA and retains any scene or audio findings. This does not raise the configured budget.
+
+When that budget is exhausted earlier, the story and scene QA calls record an unavailable verdict and production continues to a human-review preview. Missing generated narration is represented by a silent track and listed as a QA issue, so the reviewer can see the edit but knows exactly which audio is absent. The preview cannot pass automatic QA or be published without an explicit Content Review approval.
+
 ## Validation commands
 
 ```powershell

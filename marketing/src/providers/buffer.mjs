@@ -238,8 +238,17 @@ export class BufferPublisher {
       }
     `, { input });
     const error = mutationError(data.createPost);
-    if (error) throw new Error(`Buffer publish failed: ${error}`);
+    if (error) {
+      const rejected = new Error(`Buffer publish failed: ${error}`);
+      rejected.safeToRetry = true;
+      throw rejected;
+    }
     if (!data.createPost?.post?.id) throw new Error("Buffer returned no post ID");
+    if (data.createPost.post.error?.message) {
+      const rejected = new Error(`Buffer post ${data.createPost.post.id}: ${data.createPost.post.error.message}`);
+      rejected.bufferPostId = data.createPost.post.id;
+      throw rejected;
+    }
     return data.createPost.post;
   }
 

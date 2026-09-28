@@ -22,8 +22,10 @@ test("Google Sheet dispatcher reads the decision fields matching each content ty
       "Carousel decision": "Approve",
       "Carousel instructions": "This must be ignored for a video row",
       "Content type": "video",
+      "Current status": "qa_failed",
       Revision: 2,
       "Content ID": "video-1",
+      "Updated at": "2026-09-26T12:00:00Z",
     }),
     approvalRow({
       "Video decision": "Approve",
@@ -31,8 +33,10 @@ test("Google Sheet dispatcher reads the decision fields matching each content ty
       "Carousel decision": "Reject",
       "Carousel instructions": "Use the verified Train screenshot",
       "Content type": "carousel",
+      "Current status": "awaiting_approval",
       Revision: 3,
       "Content ID": "carousel-1",
+      "Updated at": "2026-09-26T13:00:00Z",
     }),
   ];
 
@@ -44,6 +48,9 @@ test("Google Sheet dispatcher reads the decision fields matching each content ty
       revision: 2,
       decision: "Reject",
       instructions: "Show the member arriving at the gym",
+      currentStatus: "qa_failed",
+      contentUpdatedAt: "2026-09-26T12:00:00Z",
+      processingResult: "",
     },
     {
       rowNumber: 3,
@@ -52,6 +59,9 @@ test("Google Sheet dispatcher reads the decision fields matching each content ty
       revision: 3,
       decision: "Reject",
       instructions: "Use the verified Train screenshot",
+      currentStatus: "awaiting_approval",
+      contentUpdatedAt: "2026-09-26T13:00:00Z",
+      processingResult: "",
     },
   ]);
 });

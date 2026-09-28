@@ -9,7 +9,9 @@
       "feature": "ai_coach",
       "title": "Coach hub",
       "description": "GymFeed Coach hub with Pro upgrade card and the connected AI tool grid.",
-      "approved_claims": ["Coach brings food scan, equipment scan, AI Trainer and body scan into one hub."],
+      "approved_claims": [
+        "Coach brings food scan, equipment scan, AI Trainer and body scan into one hub."
+      ],
       "marketing_safe": false,
       "review_note": "Current UI contains the unsupported absolute phrase 'Identify any machine instantly'; do not use in marketing until that product copy is corrected or the tile is safely redacted."
     },
@@ -19,8 +21,16 @@
       "feature": "train",
       "title": "Workout routine",
       "description": "Upper Body routine with exercises and a Start workout action.",
-      "approved_claims": ["Members can open a routine and start a workout."],
-      "marketing_safe": true
+      "approved_claims": [
+        "Members can open a routine and start a workout."
+      ],
+      "marketing_safe": true,
+      "screenshot_ref": "curated/gymfeed-train-routine.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "db532ddb6b987bcf880e54293c7754d1c743ef8e4605cad08fc2195b1e9f91c2",
+      "drive_file_id": "1GO_kwe_VRlc-6SEFUVEBjvG_uHOeMuTL",
+      "drive_filename": "gymfeed-train-routine.png"
     },
     {
       "filename": "curated/gymfeed-train-set-configuration.png",
@@ -28,7 +38,9 @@
       "feature": "train",
       "title": "Set configuration",
       "description": "Bench Press configuration with individual kilograms and repetitions per set.",
-      "approved_claims": ["Exercises support individual sets, reps and kilograms."],
+      "approved_claims": [
+        "Exercises support individual sets, reps and kilograms."
+      ],
       "marketing_safe": true
     },
     {
@@ -37,7 +49,9 @@
       "feature": "train",
       "title": "Active workout",
       "description": "Active Upper Body workout with editable sets, weights and repetitions.",
-      "approved_claims": ["Members can track sets, reps and kilograms during an active workout."],
+      "approved_claims": [
+        "Members can track sets, reps and kilograms during an active workout."
+      ],
       "marketing_safe": true
     },
     {
@@ -46,7 +60,9 @@
       "feature": "train",
       "title": "Workout completed",
       "description": "Workout completion summary with duration, volume, sets and exercises.",
-      "approved_claims": ["GymFeed provides a workout completion summary."],
+      "approved_claims": [
+        "GymFeed provides a workout completion summary."
+      ],
       "marketing_safe": true
     },
     {
@@ -55,7 +71,9 @@
       "feature": "events",
       "title": "Discover events",
       "description": "Events discovery screen with category filters and joined activity state.",
-      "approved_claims": ["Members can discover and join community workout activities."],
+      "approved_claims": [
+        "Members can discover and join community workout activities."
+      ],
       "marketing_safe": true
     },
     {
@@ -64,7 +82,9 @@
       "feature": "nutrition_diary",
       "title": "Nutrition diary",
       "description": "Daily calorie target, macro progress and planned meals in Nutrition diary.",
-      "approved_claims": ["Nutrition diary tracks calorie targets, macros and planned meals."],
+      "approved_claims": [
+        "Nutrition diary tracks calorie targets, macros and planned meals."
+      ],
       "marketing_safe": true
     },
     {
@@ -73,7 +93,9 @@
       "feature": "nutrition_diary",
       "title": "Meal plan and logged meals",
       "description": "Planned meals and logged meals with calories inside Nutrition diary.",
-      "approved_claims": ["Planned and logged meals live together in Nutrition diary."],
+      "approved_claims": [
+        "Planned and logged meals live together in Nutrition diary."
+      ],
       "marketing_safe": true
     },
     {
@@ -82,7 +104,9 @@
       "feature": "nutrition_diary",
       "title": "Meal details",
       "description": "Meal details with estimated calories, macros and preparation guidance.",
-      "approved_claims": ["Planned meals open to calories, macros and preparation details."],
+      "approved_claims": [
+        "Planned meals open to calories, macros and preparation details."
+      ],
       "marketing_safe": true
     },
     {
@@ -91,7 +115,9 @@
       "feature": "scan_food",
       "title": "Food scan camera",
       "description": "Food scan camera ready to capture a meal photo.",
-      "approved_claims": ["Members can photograph a meal for AI-assisted analysis."],
+      "approved_claims": [
+        "Members can photograph a meal for AI-assisted analysis."
+      ],
       "marketing_safe": true
     },
     {
@@ -100,8 +126,16 @@
       "feature": "scan_equipment",
       "title": "Equipment scan camera",
       "description": "Equipment scan camera with framing guide.",
-      "approved_claims": ["Members can photograph gym equipment for AI-assisted identification."],
-      "marketing_safe": true
+      "approved_claims": [
+        "Members can photograph gym equipment for AI-assisted identification."
+      ],
+      "marketing_safe": true,
+      "screenshot_ref": "curated/gymfeed-scan-equipment-input.png",
+      "width": 1080,
+      "height": 2400,
+      "sha256": "3948d6d7654a0282f4df88be845141cecd37e9920ef3cc38c24427e20be2ba09",
+      "drive_file_id": "1h_bHOxnTWWK60KOmZZy-Q33MubOJhuM_",
+      "drive_filename": "gymfeed-scan-equipment-input.png"
     },
     {
       "filename": "curated/gymfeed-scan-equipment-result.jpeg",
@@ -109,8 +143,16 @@
       "feature": "scan_equipment",
       "title": "Equipment scan result",
       "description": "AI-assisted equipment result with likely machine, primary muscles and safe-use steps.",
-      "approved_claims": ["Equipment scan can return a likely machine, target muscles and safe-use guidance."],
-      "marketing_safe": true
+      "approved_claims": [
+        "Equipment scan can return a likely machine, target muscles and safe-use guidance."
+      ],
+      "marketing_safe": true,
+      "screenshot_ref": "curated/gymfeed-scan-equipment-result.jpeg",
+      "width": 945,
+      "height": 2048,
+      "sha256": "c25c7aea819e2b71dac03e90ac1a42d7a2679dc3ed0f0bacb9cb13092e29d797",
+      "drive_file_id": "1QG5yDxomAAnFcFnbAAGiLVg7eJT-qGQk",
+      "drive_filename": "gymfeed-scan-equipment-result.jpeg"
     },
     {
       "filename": "curated/gymfeed-body-scan-input.png",
@@ -118,7 +160,9 @@
       "feature": "body_scan",
       "title": "Body scan framing",
       "description": "Body scan framing screen before a scan begins.",
-      "approved_claims": ["Body scan includes a guided full-body photo flow."],
+      "approved_claims": [
+        "Body scan includes a guided full-body photo flow."
+      ],
       "marketing_safe": true
     },
     {
@@ -127,7 +171,9 @@
       "feature": "body_scan",
       "title": "Body scan analysis progress",
       "description": "Body scan processing steps for landmarks, composition, muscle balance and coach insights.",
-      "approved_claims": ["The body scan flow estimates wellness and progress indicators."],
+      "approved_claims": [
+        "The body scan flow estimates wellness and progress indicators."
+      ],
       "marketing_safe": true
     },
     {
@@ -136,7 +182,9 @@
       "feature": "ai_coach",
       "title": "AI Coach dated workout context",
       "description": "AI Coach refers to a dated scheduled workout and provides scoped fitness guidance.",
-      "approved_claims": ["AI Coach can use a member's dated Train context when answering."],
+      "approved_claims": [
+        "AI Coach can use a member's dated Train context when answering."
+      ],
       "marketing_safe": false,
       "review_note": "Contains demo fitness-profile context; approve only after the demo-data status is confirmed."
     },
@@ -146,7 +194,9 @@
       "feature": "progress",
       "title": "My Progress and plans",
       "description": "Progress screen showing weight, workout frequency, session duration and plan links.",
-      "approved_claims": ["My Progress and plans connects progress information to workout and meal plans."],
+      "approved_claims": [
+        "My Progress and plans connects progress information to workout and meal plans."
+      ],
       "marketing_safe": false,
       "review_note": "Contains demo body measurements; approve only after the demo-data status is confirmed."
     },
@@ -156,7 +206,9 @@
       "feature": "fitclips",
       "title": "FitClips",
       "description": "Full-screen vertical workout video with GymFeed navigation and social actions.",
-      "approved_claims": ["FitClips is GymFeed's vertical workout-video discovery feed."],
+      "approved_claims": [
+        "FitClips is GymFeed's vertical workout-video discovery feed."
+      ],
       "marketing_safe": false,
       "review_note": "Contains a visible username; requires public-use confirmation or redaction."
     },
@@ -166,7 +218,9 @@
       "feature": "home_feed",
       "title": "Explore",
       "description": "Explore grid with mixed GymFeed social and fitness content.",
-      "approved_claims": ["Explore helps members discover fitness content and people."],
+      "approved_claims": [
+        "Explore helps members discover fitness content and people."
+      ],
       "marketing_safe": false,
       "review_note": "Contains account identifiers and user-generated media; requires public-use confirmation."
     },
@@ -176,7 +230,9 @@
       "feature": "home_feed",
       "title": "Home feed",
       "description": "GymFeed Home feed with AI Coach shortcut and fitness post engagement controls.",
-      "approved_claims": ["Home connects fitness posts, engagement and Coach access."],
+      "approved_claims": [
+        "Home connects fitness posts, engagement and Coach access."
+      ],
       "marketing_safe": false,
       "review_note": "Contains a visible username and user media; requires public-use confirmation."
     },
@@ -186,7 +242,9 @@
       "feature": "home_feed",
       "title": "Member profile",
       "description": "Profile screen with identity, social counts and mixed content grid.",
-      "approved_claims": ["Profiles connect social identity, counts and GymFeed content."],
+      "approved_claims": [
+        "Profiles connect social identity, counts and GymFeed content."
+      ],
       "marketing_safe": false,
       "review_note": "Contains a visible name and profile image; requires public-use confirmation or redaction."
     },
@@ -196,7 +254,9 @@
       "feature": "messages",
       "title": "Messaging",
       "description": "Real-time GymFeed conversation with text and media actions.",
-      "approved_claims": ["GymFeed messaging supports real-time conversations and media sharing."],
+      "approved_claims": [
+        "GymFeed messaging supports real-time conversations and media sharing."
+      ],
       "marketing_safe": false,
       "review_note": "Contains a visible name and message; requires public-use confirmation or replacement with a clean demo capture."
     }

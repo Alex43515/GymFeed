@@ -185,7 +185,22 @@ export function plannedVideoDuration(plan) {
     ?? PRODUCT_VIDEO_DURATION_SECONDS;
 }
 
-export function productionTimeline(plan, sceneVideoBuffers = [], supportingVideoBuffer = null) {
+export function verifiedSceneCaptions(plan, sceneRecords = [], missingNarration = []) {
+  const records = new Map(sceneRecords.map((record) => [record.scene_id, record]));
+  const silent = new Set(missingNarration);
+  return Object.fromEntries((plan.scenes ?? []).map((scene) => {
+    if (scene.audio_strategy === "native") {
+      const technical = records.get(scene.scene_id)?.technical;
+      return [scene.scene_id, technical?.has_audio && technical.transcript?.trim() ? technical.transcript.trim() : ""];
+    }
+    if (scene.audio_strategy === "voiceover") {
+      return [scene.scene_id, silent.has(scene.scene_id) ? "" : scene.voiceover_text?.trim() ?? ""];
+    }
+    return [scene.scene_id, ""];
+  }));
+}
+
+export function productionTimeline(plan, sceneVideoBuffers = [], supportingVideoBuffer = null, sceneCaptions = {}) {
   const plannedScenes = plan.scenes ?? [];
   if (plannedScenes.some((scene) => scene.asset_type)) {
     const videos = new Map(sceneVideoBuffers.map((item) => [item.sceneId, item]));
@@ -195,7 +210,9 @@ export function productionTimeline(plan, sceneVideoBuffers = [], supportingVideo
         duration: Number(scene.duration_seconds),
         start: Number(scene.source_start_seconds ?? 0),
         headline: scene.overlay_text || (index === 0 ? plan.hook : plan.caption_text?.[index] ?? plan.product_promise),
-        subtitle: scene.spoken_dialogue || scene.voiceover_text || "",
+        subtitle: Object.hasOwn(sceneCaptions, scene.scene_id)
+          ? sceneCaptions[scene.scene_id]
+          : scene.spoken_dialogue || scene.voiceover_text || "",
         audioStrategy: scene.audio_strategy ?? null,
         voiceoverText: scene.voiceover_text ?? "",
         purpose: scene.purpose,
@@ -233,9 +250,10 @@ export async function renderProductVideo(plan, {
   sceneVideoBuffers = [],
   voiceoverBuffer = null,
   sceneVoiceoverBuffers = [],
+  sceneCaptions = {},
   appCaptureResolver = async (reference) => { throw new Error(`Verified app capture resolver is not configured: ${reference}`); },
 } = {}) {
-  const scenes = productionTimeline(plan, sceneVideoBuffers, supportingVideoBuffer);
+  const scenes = productionTimeline(plan, sceneVideoBuffers, supportingVideoBuffer, sceneCaptions);
   const totalDuration = scenes.reduce((total, scene) => total + Number(scene.duration), 0);
   const productionV2 = Number(plan.production_version) >= 2;
   if (productionV2 && voiceoverBuffer) throw new Error("Production V2 needs sceneVoiceoverBuffers; a full-master voiceover could overlap native speech");
@@ -253,7 +271,13 @@ export async function renderProductVideo(plan, {
         scene.voicePath = join(directory, `narration-${index}.mp3`);
         await writeFile(scene.voicePath, buffer);
         const spoken = await inspectMedia(scene.voicePath);
-        if (!spoken.hasAudio || spoken.duration > scene.duration + 0.08) throw new Error(`Narration does not fit retained cut for ${scene.sceneId}: ${spoken.duration}s / ${scene.duration}s`);
+        if (!spoken.hasAudio) throw new Error(`Narration is missing for ${scene.sceneId}`);
+        scene.voiceTempo = spoken.duration > scene.duration + 0.08 ? spoken.duration / scene.duration : 1;
+        if (scene.voiceTempo > 1.75) {
+          const error = new Error(`Narration does not fit retained cut for ${scene.sceneId}: ${spoken.duration}s / ${scene.duration}s`);
+          error.safeToRetry = true;
+          throw error;
+        }
       }
       if (scene.type === "app_capture") {
         const asset = validateAppCaptureSource(scene, await appCaptureResolver(scene.captureRef));
@@ -366,7 +390,8 @@ export async function renderProductVideo(plan, {
         const audioIndex = segment.voiceInputIndex ?? (segment.hasAudio && ["native", "ambient"].includes(segment.audioStrategy) ? segment.inputIndex : null);
         if (audioIndex != null) {
           // Inputs already begin at the selected source cut; narration starts with its scene.
-          filters.push(`[${audioIndex}:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS,apad=whole_dur=${segment.duration},atrim=duration=${segment.duration}[a${index}]`);
+          const tempo = segment.voiceInputIndex != null && segment.voiceTempo > 1 ? `atempo=${segment.voiceTempo.toFixed(6)},` : "";
+          filters.push(`[${audioIndex}:a]${tempo}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS,apad=whole_dur=${segment.duration},atrim=duration=${segment.duration}[a${index}]`);
         } else {
           filters.push(`anullsrc=r=48000:cl=stereo:d=${segment.duration}[a${index}]`);
         }

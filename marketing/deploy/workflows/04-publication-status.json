@@ -1,4 +1,5 @@
 {
+  "id": "Dk8U4ejMbezFM4St",
   "name": "GymFeed 04 - Publication Status",
   "nodes": [
     {
@@ -18,14 +19,14 @@
         "options": { "timeout": 300000 }
       },
       "id": "a44d00a3-e820-4842-b8be-78de7a644e83",
-      "name": "Refresh Blotato posts",
+      "name": "Refresh Buffer posts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [260, 0]
     }
   ],
-  "connections": { "Hourly": { "main": [[{ "node": "Refresh Blotato posts", "type": "main", "index": 0 }]] } },
-  "active": false,
+  "connections": { "Hourly": { "main": [[{ "node": "Refresh Buffer posts", "type": "main", "index": 0 }]] } },
+  "active": true,
   "settings": { "executionOrder": "v1", "timezone": "America/New_York" },
   "versionId": "82c02520-e11b-45fd-a863-9691246cc642",
   "meta": {},

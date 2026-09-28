@@ -1,4 +1,64 @@
 {
   "version": 1,
-  "captures": []
+  "captures": [
+    {
+      "id": "requested:train-start-track-complete-set",
+      "filename": "train-start-track-complete-set-privacy-v1.mp4",
+      "feature": "train",
+      "description": "Privacy-cleared derivative of the original Android recording. Status bar and demo account name are masked; no UI, touches or values are generated. The 3.78-5.53 second interval shows Upper Body, its native Start workout action and the active workout. Earlier footage includes another routine; later footage includes set tracking and completion. Select only actions supported by the retained range.",
+      "duration_seconds": 13.708333,
+      "recorded_interactions": [
+        "Source seconds 3.78-5.53 at normal speed show the Upper Body routine and its genuine Start workout transition to an active workout. This interval does not show a completed set or workout."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "1e234b61282c9a6491870bb180dcb0098de5a3a40a1be3947457def01f0b92ba",
+      "source_filename": "train-start-track-complete-set.mp4",
+      "source_sha256": "7a9692f6576b070074d7c8994c9ba76640d22b9d045a3e4bd51c24fd6a69ddc7",
+      "privacy_verification": "2026-09-28: inspected retained 3.78-5.53 range. Opaque status-bar mask y=0..88; name mask x=480..810,y=370..455 before 4.70s and after 12s. Original preserved. No replacement account identity; routine title, Start workout and active workout remain readable.",
+      "drive_file_id": "1jglBQqvyc3XHnAhXKuWsM9lCuAT6Dj1a"
+    },
+    {
+      "id": "requested:train-open-start-active",
+      "filename": "train-open-start-active.mp4",
+      "feature": "train",
+      "description": "Use requested:train-open-start-active. QA must confirm the stated actions occur within this retained interval; if not, recut and seek approval rather than imply a missing tap.",
+      "duration_seconds": 32.5239,
+      "recorded_interactions": [
+        "Show the recorded opening of the existing routine and its actual Start workout tap, maintaining the original order and touch feedback."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "c4b0a46b7787c2e18ee8d2de25695d65a07ea1ab7da6dc824427537fc5c76378",
+      "drive_file_id": "1mc52osyTQFmzqaY_2J-krHtZIreyECdb"
+    },
+    {
+      "id": "requested:scan-equipment-photo-result",
+      "filename": "scan-equipment-photo-result.mp4",
+      "feature": "scan_equipment",
+      "description": "Use requested:scan-equipment-photo-result only. Before export, verify that the retained source interval visibly contains native framing, one genuine equipment-photo capture, and the resulting guidance state. Do not substitute gallery selection, animated screenshots, or simulated interaction.",
+      "duration_seconds": 38.315144,
+      "recorded_interactions": [
+        "Show one genuine native equipment-photo capture and end with the resulting Equipment Scan guidance state visible."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "fa3a26001939d752b88631dd3b20e550db1e5ea1d953ddc0f8642ab023024e1a",
+      "drive_file_id": "1Dd_YXXl5SUrjTXX8Z6PfJTwakT-D8yGL"
+    },
+    {
+      "id": "requested:scan-food-photo-review-log-diary",
+      "filename": "scan-food-photo-review-log-diary.mp4",
+      "feature": "scan_food",
+      "description": "Use requested:scan-food-photo-review-log-diary. The provisional 0–6 second interval is in source bounds; inspect actual action timecodes and keep the phone-glance-to-capture cut causal.",
+      "duration_seconds": 43.004778,
+      "recorded_interactions": [
+        "Show the genuine recording’s framing-to-photo action only if confirmed within this source cut; otherwise retime the cut to the actual recorded photo action before publishing."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "33cfb655fe331b49276e24e8233094b8d21b7102a93924d537a3abbb77e957a5",
+      "drive_file_id": "1yx3OT8RzD7C7jyW11kCcWZNIjq7Nf-Vq"
+    }
+  ]
 }

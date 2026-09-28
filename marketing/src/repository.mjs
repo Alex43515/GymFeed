@@ -49,7 +49,7 @@ export class MarketingRepository {
     };
   }
 
-  async startRun(workflow, idempotencyKey, input = {}) {
+  async startRun(workflow, idempotencyKey, input = {}, { restartFailed = false } = {}) {
     const result = await this.client.from("marketing_runs").insert({
       workflow,
       idempotency_key: idempotencyKey,
@@ -61,7 +61,9 @@ export class MarketingRepository {
       await this.client.from("marketing_runs").select("*").eq("idempotency_key", idempotencyKey).single(),
       "load existing marketing run",
     );
-    if (["failed", "skipped"].includes(existing.status)) {
+    // A failed AI run may already have incurred provider charges. Require a new
+    // revision key for another attempt instead of spending again on every poll.
+    if (existing.status === "skipped" || (existing.status === "failed" && restartFailed)) {
       const restarted = unwrap(await this.client.from("marketing_runs").update({
         status: "running",
         input,
@@ -155,6 +157,14 @@ export class MarketingRepository {
 
   async campaignCommand(action, payload = {}) {
     return unwrap(await this.client.rpc("marketing_campaign_command", { p_action: action, p_payload: payload }), `campaign ${action}`);
+  }
+
+  async startCampaignItem(payload) {
+    return unwrap(await this.client.rpc("marketing_campaign_start_item", { p_payload: payload }), "start campaign item");
+  }
+
+  async rescheduleCampaignIdea(payload) {
+    return unwrap(await this.client.rpc("marketing_campaign_reschedule_idea", { p_payload: payload }), "reschedule campaign idea");
   }
 
   async campaignList() {
@@ -265,13 +275,18 @@ export class MarketingRepository {
   }
 
   async reserveCost(provider, estimatedCostUsd, { runId = null, contentId = null, metadata = {} } = {}) {
-    return unwrap(await this.client.rpc("reserve_marketing_cost", {
-      p_provider: provider,
-      p_estimated_cost_usd: estimatedCostUsd,
-      p_run_id: runId,
-      p_content_id: contentId,
-      p_metadata: metadata,
-    }), `reserve ${provider} cost`);
+    try {
+      return unwrap(await this.client.rpc("reserve_marketing_cost", {
+        p_provider: provider,
+        p_estimated_cost_usd: estimatedCostUsd,
+        p_run_id: runId,
+        p_content_id: contentId,
+        p_metadata: metadata,
+      }), `reserve ${provider} cost`);
+    } catch (error) {
+      if (/budget (?:exceeded|configured)/i.test(error.message)) error.safeToRetry = true;
+      throw error;
+    }
   }
 
   async settleCost(reservationId, actualCostUsd, externalRef = null) {

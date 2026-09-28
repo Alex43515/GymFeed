@@ -48,28 +48,6 @@ function textLines(lines, { x, y, step, className }) {
   return lines.map((line, index) => `<text class="${className}" x="${x}" y="${y + index * step}">${escapeXml(line)}</text>`).join("");
 }
 
-function featureDiagram(feature, { x, y, width, height }) {
-  const config = FEATURES[feature] ?? FEATURES.connected_ecosystem;
-  const gap = 18;
-  const columns = 2;
-  const itemWidth = (width - 96 - gap) / columns;
-  const itemHeight = 84;
-  return `
-    <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="42" fill="#111613" stroke="#2c3630" stroke-width="3"/>
-    <text class="diagramLabel" x="${x + 48}" y="${y + 66}">${escapeXml(config.label)}</text>
-    <circle cx="${x + width - 66}" cy="${y + 54}" r="18" fill="#0bea70"/>
-    ${config.items.slice(0, 6).map((item, index) => {
-      const row = Math.floor(index / columns);
-      const column = index % columns;
-      const itemX = x + 48 + column * (itemWidth + gap);
-      const itemY = y + 112 + row * (itemHeight + gap);
-      return `<rect x="${itemX}" y="${itemY}" width="${itemWidth}" height="${itemHeight}" rx="25" fill="#1b231e" stroke="#344239" stroke-width="2"/>
-        <circle cx="${itemX + 34}" cy="${itemY + itemHeight / 2}" r="10" fill="#0bea70"/>
-        <text class="diagramItem" x="${itemX + 58}" y="${itemY + itemHeight / 2 + 7}">${escapeXml(item)}</text>`;
-    }).join("")}
-  `;
-}
-
 async function roundedScreenshot(input, width, height) {
   const mask = Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect width="${width}" height="${height}" rx="42" fill="white"/></svg>`);
   return sharp(input)
@@ -99,15 +77,14 @@ export async function renderProductSlide({
   const headlineY = isVideo ? 330 : 300;
   const headlineStep = isVideo ? 94 : 86;
   const bodyY = headlineY + headlineLines.length * headlineStep + 48;
-  const diagramY = isVideo ? 860 : 690;
-  const diagramHeight = isVideo ? 570 : 410;
   const footerY = height - 72;
   const finalScreenshotUrl = hasScreenshot && index === total - 1;
+  const isFinalSlide = index === total - 1;
   const urlX = finalScreenshotUrl ? 70 : width - 70;
   const urlY = finalScreenshotUrl ? height - 180 : footerY - 31;
   const urlAnchor = finalScreenshotUrl ? "start" : "end";
   const copyAlreadyContainsUrl = [headline, body, cta].some((value) => /gymfeed\.io/i.test(String(value ?? "")));
-  const showUrl = (!hasScreenshot || index === total - 1) && !copyAlreadyContainsUrl;
+  const showUrl = isFinalSlide && !copyAlreadyContainsUrl;
   const phoneWidth = isVideo ? 430 : 350;
   const phoneHeight = Math.round(phoneWidth * 2.2222);
   const phoneX = isVideo ? Math.round((width - phoneWidth) / 2) : width - phoneWidth - 48;
@@ -122,8 +99,6 @@ export async function renderProductSlide({
         .kicker { font-size: 25px; font-weight: 700; fill: #0bea70; letter-spacing: 2px; }
         .headline { font-size: ${isVideo ? 78 : 72}px; font-weight: 700; fill: #fff; }
         .body { font-size: ${isVideo ? 36 : 31}px; font-weight: 400; fill: #c8d0cb; }
-        .diagramLabel { font-size: 24px; font-weight: 700; fill: #0bea70; letter-spacing: 1.4px; }
-        .diagramItem { font-size: ${isVideo ? 22 : 19}px; font-weight: 600; fill: #f3f6f4; }
         .cta { font-size: 25px; font-weight: 700; fill: #041008; }
         .url { font-size: 25px; font-weight: 600; fill: #fff; }
       </style>
@@ -136,9 +111,9 @@ export async function renderProductSlide({
     <text class="kicker" x="72" y="${isVideo ? 224 : 204}">${escapeXml(featureConfig.label)}</text>
     ${textLines(headlineLines, { x: 70, y: headlineY, step: headlineStep, className: "headline" })}
     ${textLines(bodyLines, { x: 74, y: bodyY, step: isVideo ? 52 : 46, className: "body" })}
-    ${hasScreenshot ? `<rect x="${phoneX - 14}" y="${phoneY - 14}" width="${phoneWidth + 28}" height="${phoneHeight + 28}" rx="54" fill="#111" stroke="#0bea70" stroke-width="4"/>` : featureDiagram(feature, { x: 70, y: diagramY, width: width - 140, height: diagramHeight })}
-    <rect x="70" y="${height - 148}" width="${isVideo ? 430 : 390}" height="68" rx="34" fill="#0bea70"/>
-    <text class="cta" x="${isVideo ? 285 : 265}" y="${height - 104}" text-anchor="middle">${escapeXml(cta)}</text>
+    ${hasScreenshot ? `<rect x="${phoneX - 14}" y="${phoneY - 14}" width="${phoneWidth + 28}" height="${phoneHeight + 28}" rx="54" fill="#111" stroke="#0bea70" stroke-width="4"/>` : ""}
+    ${isFinalSlide ? `<rect x="70" y="${height - 148}" width="${isVideo ? 430 : 390}" height="68" rx="34" fill="#0bea70"/>
+    <text class="cta" x="${isVideo ? 285 : 265}" y="${height - 104}" text-anchor="middle">${escapeXml(cta)}</text>` : ""}
     ${showUrl ? `<text class="url" x="${urlX}" y="${urlY}" text-anchor="${urlAnchor}">gymfeed.io</text>` : ""}
     <rect x="70" y="${footerY}" width="190" height="7" rx="3.5" fill="#0bea70"/>
   </svg>`;
