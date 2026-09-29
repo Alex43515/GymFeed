@@ -38,6 +38,7 @@ jobs:
       APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
       APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
       APP_STORE_VERSION_ID: ${{ inputs.version_id }}
+      GYMFEED_APP_ID: '6480524639'
       REVIEW_SUBMISSION_ID: ${{ inputs.submission_id }}
       GYMFEED_ADVERTISING: ${{ inputs.advertising }}
       GYMFEED_AGE_ASSURANCE: ${{ inputs.age_assurance }}
@@ -63,7 +64,7 @@ jobs:
         shell: bash
         run: |
           python3 scripts/ios_age_rating_release.py \
-            --version-id "$APP_STORE_VERSION_ID" \
+            --app-id "$GYMFEED_APP_ID" \
             --advertising "$GYMFEED_ADVERTISING" \
             --age-assurance "$GYMFEED_AGE_ASSURANCE"
 

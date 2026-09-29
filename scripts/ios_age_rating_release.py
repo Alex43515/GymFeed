@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Complete GymFeed's App Store age rating answers for an existing version.
+"""Complete GymFeed's App Store age rating answers for an existing app.
 
 The App Store Connect key is supplied by the protected GitHub environment.
-Only the named version's age rating declaration is updated.
+Only the app's current editable age rating declaration is updated.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def _request(token: str, method: str, path: str, body: dict | None = None) -> di
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version-id", required=True)
+    parser.add_argument("--app-id", required=True)
     parser.add_argument("--advertising", default="false")
     parser.add_argument("--age-assurance", default="false")
     args = parser.parse_args()
@@ -66,7 +66,16 @@ def main() -> int:
         algorithm="ES256",
         headers={"kid": os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]},
     )
-    path = f"/appStoreVersions/{args.version_id}/ageRatingDeclaration"
+    infos = _request(token, "GET", f"/apps/{args.app_id}/appInfos")['data']
+    editable = [info for info in infos if info.get('attributes', {}).get('state') == 'PREPARE_FOR_SUBMISSION']
+    if len(editable) == 1:
+        info = editable[0]
+    elif len(infos) == 1:
+        info = infos[0]
+    else:
+        states = [(info['id'], info.get('attributes', {}).get('state')) for info in infos]
+        raise RuntimeError(f"Cannot identify current app info: {states}")
+    path = f"/appInfos/{info['id']}/ageRatingDeclaration"
     declaration = _request(token, "GET", path)["data"]
     declaration_id = declaration["id"]
     current = declaration.get("attributes") or {}
