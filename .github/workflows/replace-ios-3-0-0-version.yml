@@ -1,0 +1,69 @@
+name: Prepare App Store version 3.0.1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remove-superseded-version:
+    runs-on: ubuntu-24.04
+    environment: app-store-connect
+    timeout-minutes: 10
+    env:
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+
+    steps:
+      - name: Install Apple API dependencies
+        run: python3 -m pip install --disable-pip-version-check PyJWT cryptography
+
+      - name: Remove only withdrawn 3.0.0 version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import time
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+          import jwt
+
+          app_id = '6480524639'
+          obsolete_id = '8d95a6cd-4233-45e2-a434-37ad0b801e55'
+          now = int(time.time())
+          token = jwt.encode(
+              {'iss': os.environ['APP_STORE_CONNECT_ISSUER_ID'],
+               'iat': now, 'exp': now + 600, 'aud': 'appstoreconnect-v1'},
+              base64.b64decode(os.environ['APP_STORE_CONNECT_PRIVATE_KEY_BASE64']),
+              algorithm='ES256',
+              headers={'kid': os.environ['APP_STORE_CONNECT_KEY_IDENTIFIER']},
+          )
+
+          def request(method, path):
+              req = Request('https://api.appstoreconnect.apple.com/v1' + path,
+                            method=method, headers={'Authorization': 'Bearer ' + token})
+              try:
+                  with urlopen(req, timeout=60) as response:
+                      return json.load(response) if response.status != 204 else None
+              except HTTPError as error:
+                  raise RuntimeError(f'{method} {path}: {error.code} {error.read().decode()}') from error
+
+          versions = request('GET', f'/apps/{app_id}/appStoreVersions?limit=200')['data']
+          current = next((v for v in versions if v['id'] == obsolete_id), None)
+          if current is None:
+              raise RuntimeError('Expected 3.0.0 version is not associated with GymFeed')
+          details = current['attributes']
+          print('Superseded version:', details['versionString'], details['appStoreState'])
+          if details['versionString'] != '3.0.0' or details['appStoreState'] != 'DEVELOPER_REJECTED':
+              raise RuntimeError('Refusing to delete an Apple version that is not withdrawn 3.0.0')
+          if not any(v['id'] != obsolete_id and v['attributes']['appStoreState'] == 'READY_FOR_SALE'
+                     for v in versions):
+              raise RuntimeError('No prior live App Store version; refusing to delete')
+          request('DELETE', f'/appStoreVersions/{obsolete_id}')
+          print('Removed withdrawn App Store version 3.0.0; 3.0.1 can be created')
+          PY
