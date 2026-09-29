@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  remove-superseded-version:
+  update-superseded-version:
     runs-on: ubuntu-24.04
     environment: app-store-connect
     timeout-minutes: 10
@@ -20,7 +20,7 @@ jobs:
       - name: Install Apple API dependencies
         run: python3 -m pip install --disable-pip-version-check PyJWT cryptography
 
-      - name: Remove only withdrawn 3.0.0 version
+      - name: Change only withdrawn 3.0.0 version to 3.0.1
         shell: bash
         run: |
           set -euo pipefail
@@ -44,9 +44,11 @@ jobs:
               headers={'kid': os.environ['APP_STORE_CONNECT_KEY_IDENTIFIER']},
           )
 
-          def request(method, path):
+          def request(method, path, body=None):
               req = Request('https://api.appstoreconnect.apple.com/v1' + path,
-                            method=method, headers={'Authorization': 'Bearer ' + token})
+                            data=json.dumps(body).encode() if body is not None else None,
+                            method=method, headers={'Authorization': 'Bearer ' + token,
+                                                    'Content-Type': 'application/json'})
               try:
                   with urlopen(req, timeout=60) as response:
                       return json.load(response) if response.status != 204 else None
@@ -63,7 +65,19 @@ jobs:
               raise RuntimeError('Refusing to delete an Apple version that is not withdrawn 3.0.0')
           if not any(v['id'] != obsolete_id and v['attributes']['appStoreState'] == 'READY_FOR_SALE'
                      for v in versions):
-              raise RuntimeError('No prior live App Store version; refusing to delete')
-          request('DELETE', f'/appStoreVersions/{obsolete_id}')
-          print('Removed withdrawn App Store version 3.0.0; 3.0.1 can be created')
+              raise RuntimeError('No prior live App Store version; refusing to change version')
+          if any(v['id'] != obsolete_id and v['attributes']['versionString'] == '3.0.1'
+                 for v in versions):
+              raise RuntimeError('Another App Store version 3.0.1 already exists')
+          updated = request('PATCH', f'/appStoreVersions/{obsolete_id}', {
+              'data': {
+                  'type': 'appStoreVersions',
+                  'id': obsolete_id,
+                  'attributes': {'versionString': '3.0.1'},
+              }
+          })['data']
+          if updated['attributes']['versionString'] != '3.0.1':
+              raise RuntimeError('Apple did not retain App Store version 3.0.1')
+          print('Updated App Store version:', updated['attributes']['versionString'],
+                updated['attributes']['appStoreState'])
           PY
