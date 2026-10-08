@@ -71,6 +71,7 @@ jobs:
           install -m 0644 website/public_html/report-mail.php "$deploy_dir/report-mail.php"
           rsync -a website/public_html/.well-known/ "$deploy_dir/.well-known/"
           rsync -a website/public_html/assets/ "$deploy_dir/assets/"
+          rsync -a website/public_html/download/ "$deploy_dir/download/"
           rsync -a website/public_html/privacy/ "$deploy_dir/privacy/"
           rsync -a website/public_html/support/ "$deploy_dir/support/"
           rsync -a website/public_html/terms/ "$deploy_dir/terms/"
@@ -79,6 +80,7 @@ jobs:
           test -s "$deploy_dir/main.dart.js"
           test -s "$deploy_dir/.htaccess"
           test -s "$deploy_dir/.well-known/assetlinks.json"
+          test -s "$deploy_dir/download/index.html"
           test -s "$deploy_dir/post.php"
           test -s "$deploy_dir/report-mail.php"
 
@@ -170,6 +172,9 @@ jobs:
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 3 \
             https://gymfeed.io/.well-known/assetlinks.json > /dev/null
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-delay 3 \
+            https://gymfeed.io/download/ > /dev/null
           curl --fail --silent --show-error --location \
             --retry 5 --retry-delay 3 \
             https://gymfeed.io/privacy/ > /dev/null
