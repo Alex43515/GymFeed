@@ -96,11 +96,6 @@ dependencies:
   google_maps_flutter_ios: 2.13.0
   google_maps_flutter_platform_interface: 2.9.2
   google_maps_flutter_web: 0.5.10
-  google_sign_in: 6.2.1
-  google_sign_in_android: 6.1.30
-  google_sign_in_ios: 5.7.7
-  google_sign_in_platform_interface: 2.4.5
-  google_sign_in_web: 0.12.4+2
   html: 0.15.4
   http: 1.2.2
   image: 4.5.4

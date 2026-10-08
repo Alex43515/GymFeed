@@ -1,14 +1,11 @@
 import 'dart:async';
 
 import '/backend/supabase/repositories/profile_repository.dart';
-import '/auth/firebase_auth/auth_util.dart';
-import '/auth/supabase_auth/social_auth_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'sign_up_model.dart';
 export 'sign_up_model.dart';
 
@@ -398,43 +395,6 @@ class _SignUpWidgetState extends State<SignUpWidget> {
                             borderRadius: BorderRadius.circular(28.0),
                           ),
                         ),
-                        const SizedBox(height: 22.0),
-                        Row(
-                          children: [
-                            Expanded(
-                                child: Container(
-                                    height: 1.0, color: theme.accent4)),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text(
-                                'Or sign up with',
-                                style: theme.bodySmall.override(
-                                  fontFamily: 'Poppins',
-                                  color: theme.secondaryText,
-                                  fontSize: 13.0,
-                                  letterSpacing: 0.0,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                                child: Container(
-                                    height: 1.0, color: theme.accent4)),
-                          ],
-                        ),
-                        const SizedBox(height: 22.0),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _socialButton(
-                                icon: FontAwesomeIcons.google,
-                                onTap: () => _startSocialSignup(
-                                    () => authManager.signInWithGoogle(
-                                          context,
-                                          nextPath: socialAuthSignupDestination,
-                                        ))),
-                          ],
-                        ),
                         const SizedBox(height: 24.0),
                       ],
                     ),
@@ -483,45 +443,6 @@ class _SignUpWidgetState extends State<SignUpWidget> {
     );
   }
 
-  Future<void> _startSocialSignup(
-    Future<Object?> Function() launch,
-  ) async {
-    _clearError();
-    final name = _model.fullNameTextController.text.trim();
-    final username = _model.usernameTextController.text.trim();
-    // Social providers supply the verified name and email. A username is
-    // generated on the callback when the user leaves it blank, so tapping the
-    // Google button on an empty form must still launch OAuth.
-    final usernameError = username.isEmpty
-        ? null
-        : _model.usernameTextControllerValidator?.call(context, username);
-    if (usernameError != null) {
-      safeSetState(() {
-        _model.errorField = 'username';
-        _model.errorMessage = usernameError;
-      });
-      return;
-    }
-
-    final available = username.isEmpty
-        ? true
-        : await ProfileRepository().isUsernameAvailable(username);
-    if (!available) {
-      safeSetState(() {
-        _model.errorField = 'username';
-        _model.errorMessage = 'Username taken! Please try again.';
-      });
-      return;
-    }
-
-    FFAppState().signupName = name;
-    FFAppState().signupUsername = username;
-    // The verified provider email replaces this value on the callback page.
-    FFAppState().signupEmail = '';
-    FFAppState().update(() {});
-    await launch();
-  }
-
   Widget _circleIconButton(
       {required IconData icon, required VoidCallback onTap}) {
     final theme = FlutterFlowTheme.of(context);
@@ -536,20 +457,6 @@ class _SignUpWidgetState extends State<SignUpWidget> {
             BoxDecoration(color: theme.secondary, shape: BoxShape.circle),
         child: Icon(icon, color: theme.tertiary, size: 18.0),
       ),
-    );
-  }
-
-  Widget _socialButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    double size = 24.0,
-  }) {
-    final theme = FlutterFlowTheme.of(context);
-    return InkWell(
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      onTap: onTap,
-      child: FaIcon(icon, color: theme.secondary, size: size),
     );
   }
 }

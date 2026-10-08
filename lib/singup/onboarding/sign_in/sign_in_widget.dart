@@ -4,7 +4,6 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'sign_in_model.dart';
 export 'sign_in_model.dart';
 
@@ -337,40 +336,6 @@ class _SignInWidgetState extends State<SignInWidget> {
                           borderRadius: BorderRadius.circular(28.0),
                         ),
                       ),
-                      const SizedBox(height: 22.0),
-                      // Social sign-in divider
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(height: 1.0, color: theme.accent4),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'Or continue with',
-                              style: theme.bodySmall.override(
-                                fontFamily: 'Poppins',
-                                color: theme.secondaryText,
-                                fontSize: 13.0,
-                                letterSpacing: 0.0,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Container(height: 1.0, color: theme.accent4),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22.0),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _socialButton(
-                            icon: FontAwesomeIcons.google,
-                            onTap: () => authManager.signInWithGoogle(context),
-                          ),
-                        ],
-                      ),
                       const SizedBox(height: 24.0),
                     ],
                   ),
@@ -433,20 +398,6 @@ class _SignInWidgetState extends State<SignInWidget> {
         ),
         child: Icon(icon, color: theme.tertiary, size: 18.0),
       ),
-    );
-  }
-
-  Widget _socialButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    double size = 24.0,
-  }) {
-    final theme = FlutterFlowTheme.of(context);
-    return InkWell(
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      onTap: onTap,
-      child: FaIcon(icon, color: theme.secondary, size: size),
     );
   }
 }

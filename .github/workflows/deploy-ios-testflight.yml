@@ -34,7 +34,7 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  APP_STORE_WHATS_NEW: GymFeed 3.0.1 restores the GymFeed app icon and keeps completed workout sets saved between visits.
+  APP_STORE_WHATS_NEW: GymFeed 3.0.1 removes third-party Google sign-in from iOS, restores the GymFeed app icon, and keeps completed workout sets saved between visits.
 
 jobs:
   validate-ios:

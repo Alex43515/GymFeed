@@ -22,7 +22,6 @@ enum SupabaseAuthFailureKind { emailNotConfirmed, other }
 class SupabaseAuthManager extends AuthManager
     with
         EmailSignInManager,
-        GoogleSignInManager,
         AppleSignInManager,
         FacebookSignInManager {
   SupabaseAuthFailureKind? lastFailure;
@@ -165,13 +164,6 @@ class SupabaseAuthManager extends AuthManager
     AppStateNotifier.instance.completeAuthEvent(authenticatedUser);
     return authenticatedUser;
   }
-
-  @override
-  Future<BaseAuthUser?> signInWithGoogle(
-    BuildContext context, {
-    String nextPath = socialAuthLoginDestination,
-  }) =>
-      _signInWithOAuth(context, OAuthProvider.google, nextPath: nextPath);
 
   @override
   Future<BaseAuthUser?> signInWithApple(

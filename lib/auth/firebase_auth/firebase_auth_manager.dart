@@ -10,7 +10,6 @@ import 'anonymous_auth.dart';
 import 'apple_auth.dart';
 import 'email_auth.dart';
 import 'firebase_user_provider.dart';
-import 'google_auth.dart';
 import 'jwt_token_auth.dart';
 import 'github_auth.dart';
 
@@ -42,16 +41,11 @@ class FirebasePhoneAuthManager extends ChangeNotifier {
 class FirebaseAuthManager extends AuthManager
     with
         EmailSignInManager,
-        GoogleSignInManager,
         AppleSignInManager,
         AnonymousSignInManager,
         JwtSignInManager,
         GithubSignInManager,
         PhoneSignInManager {
-  // Set when using phone verification (after phone number is provided).
-  String? _phoneAuthVerificationCode;
-  // Set when using phone sign in in web mode (ignored otherwise).
-  ConfirmationResult? _webPhoneAuthConfirmationResult;
   FirebasePhoneAuthManager phoneAuthManager = FirebasePhoneAuthManager();
 
   @override
@@ -176,10 +170,6 @@ class FirebaseAuthManager extends AuthManager
   @override
   Future<BaseAuthUser?> signInWithApple(BuildContext context) =>
       _signInOrCreateAccount(context, appleSignIn, 'APPLE');
-
-  @override
-  Future<BaseAuthUser?> signInWithGoogle(BuildContext context) =>
-      _signInOrCreateAccount(context, googleSignInFunc, 'GOOGLE');
 
   @override
   Future<BaseAuthUser?> signInWithGithub(BuildContext context) =>
