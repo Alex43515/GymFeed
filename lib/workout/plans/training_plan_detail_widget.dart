@@ -546,10 +546,11 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
     );
   }
 
-  /// The creator's intro, playing as soon as the plan page opens.
-  Widget _intro(TrainingPlan plan) {
+  /// The creator's intro video takes the top of the page and plays as soon
+  /// as it opens; the cover image is only used when there is no intro.
+  Widget _topMedia(TrainingPlan plan) {
     final intro = plan.introVideo;
-    if (intro == null || !intro.isPlayable) return const SizedBox.shrink();
+    if (intro == null || !intro.isPlayable) return _cover(plan);
     final player = widget.introPlayerBuilder?.call(intro.playbackUrl) ??
         FlutterFlowVideoPlayer(
           path: intro.playbackUrl,
@@ -559,27 +560,29 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
           showControls: true,
           allowFullScreen: true,
         );
-    return Column(
+    return ClipRRect(
       key: const ValueKey('plan-intro-video'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 16),
-        Text('Intro from the creator',
-            style:
-                planText(size: 13, color: planMuted, weight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: ColoredBox(
-            color: Colors.black,
-            child: SizedBox(
-              height: 460,
-              width: double.infinity,
-              child: Center(child: player),
-            ),
+      borderRadius: BorderRadius.circular(18),
+      child: ColoredBox(
+        color: Colors.black,
+        child: SizedBox(
+          height: 460,
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(child: player),
+              if (plan.isFeatured)
+                Positioned(
+                  left: 10,
+                  top: 10,
+                  child: planChip('Featured',
+                      color: planBg, background: planAmber),
+                ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -844,13 +847,12 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                             const SizedBox(height: 12),
                           ],
                           if (isOwner) ..._ownerSection(plan),
-                          _cover(plan),
+                          _topMedia(plan),
                           const SizedBox(height: 14),
                           Text(plan.title,
                               style: planText(size: 22, weight: FontWeight.w800)),
                           const SizedBox(height: 10),
                           _creator(plan),
-                          _intro(plan),
                           const SizedBox(height: 14),
                           Wrap(
                             spacing: 6,

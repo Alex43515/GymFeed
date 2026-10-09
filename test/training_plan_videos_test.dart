@@ -392,6 +392,25 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
+    testWidgets('a plan without an intro shows its cover at the top', (tester) async {
+      tallPhone(tester);
+      final repository = FakeRepository(
+          plan: plan(status: 'published', coverImageUrl: 'https://cdn.test/cover.jpg'));
+
+      await tester.pumpWidget(MaterialApp(
+        home: TrainingPlanDetailWidget(
+          introPlayerBuilder: (url) => Text('intro:$url'),
+          planId: 'p1',
+          currentUserId: 'someone',
+          service: TrainingPlanService(repository: repository),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('plan-cover-image')), findsOneWidget);
+      expect(find.byKey(const ValueKey('plan-intro-video')), findsNothing);
+    });
+
     testWidgets('admins feature published plans', (tester) async {
       tallPhone(tester);
       final repository = FakeRepository(admin: true, plan: complete(status: 'published'));
@@ -429,7 +448,9 @@ void main() {
       expect(find.byKey(const ValueKey('toggle-featured')), findsNothing);
       expect(find.byKey(const ValueKey('rate-plan')), findsNothing,
           reason: 'only people who follow the plan can rate it');
-      expect(find.byKey(const ValueKey('plan-cover-image')), findsOneWidget);
+      expect(find.byKey(const ValueKey('plan-intro-video')), findsOneWidget,
+          reason: 'the intro video sits where the cover would be');
+      expect(find.byKey(const ValueKey('plan-cover-image')), findsNothing);
       expect(find.byKey(const ValueKey('plan-creator')), findsOneWidget);
       expect(find.text('intro:https://cdn.test/Intro/playlist.m3u8'), findsOneWidget);
       expect(
