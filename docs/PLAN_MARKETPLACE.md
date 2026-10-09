@@ -205,7 +205,19 @@ seller_payouts      id, seller_id, amount_usd, currency, provider, reference, st
 - **Rutine plana:** u Train listi rutina se ne prikazuju (ostaju u kalendaru i na stranici plana), a na novom telefonu se vraćaju iz baze.
 - **Testovi:** `test/training_plans_test.dart`.
 
-**Odobravanje prvih planova:** u Supabase SQL editoru:
+### Status faze 2 (video po vežbi + pregled u aplikaciji)
+
+- **Video za svaku vežbu je obavezan.** Ista vežba ima jedan video po planu (npr. Squat na danu 1 i danu 8). Builder ima sekciju „Exercise videos“ (upload preko postojećeg Bunny pipeline-a, do 60 s).
+- **Proveru radi i baza:** `submit_training_plan` odbija plan ako neka vežba nema video ili je upload pao. Migracija je `20261010090000_training_plan_videos.sql`, tabela `training_plan_exercise_videos`.
+- **Gledanje:** kupac na stranici plana tapne vežbu i gleda video. U aktivnom treningu pored vežbe iz plana stoji dugme „How to“.
+- **Admin pregled u aplikaciji:**
+  - admini su upisani u `app_admins`;
+  - Train → Training plans → **Review (N)** u gornjem desnom uglu (vidi ga samo admin);
+  - admin otvara plan, gleda videe i bira **Approve** ili **Request changes** sa napomenom, koju kreator vidi na svom planu.
+- **Prvi admin:** nalog `alexZ`. Novi admin se dodaje sa:
+  `insert into app_admins (user_id) select id from profiles where username = '<username>';`
+
+**Odobravanje bez aplikacije** (i dalje radi) — u Supabase SQL editoru:
 ```sql
 select id, title, seller_id, created_at from training_plans where status = 'in_review';
 select review_training_plan('<id>', true, '');                          -- odobri

@@ -28,6 +28,7 @@ class TrainingPlanService {
       syncKey: import.syncKey,
       routines: import.routines,
       schedule: import.schedule,
+      videos: import.videos,
       force: true,
     );
     await _repository.enroll(
@@ -64,6 +65,7 @@ class TrainingPlanService {
             syncKey: import.syncKey,
             routines: import.routines,
             schedule: import.schedule,
+            videos: import.videos,
           ) ||
           changed;
     }

@@ -49,6 +49,7 @@ class TrainingPlanImport {
     required this.syncKey,
     required this.routines,
     required this.schedule,
+    this.videos = const {},
   });
 
   final String planKey;
@@ -57,6 +58,9 @@ class TrainingPlanImport {
   final String syncKey;
   final List<WorkoutRoutine> routines;
   final Map<String, List<String>> schedule;
+
+  /// Exercise name → explanation video URL, for the "How to" button.
+  final Map<String, String> videos;
 }
 
 TrainingPlanImport buildTrainingPlanImport({
@@ -97,5 +101,9 @@ TrainingPlanImport buildTrainingPlanImport({
     ].join(':'),
     routines: routines,
     schedule: schedule,
+    videos: {
+      for (final video in plan.videos.values)
+        if (video.isPlayable) video.exerciseName: video.playbackUrl,
+    },
   );
 }

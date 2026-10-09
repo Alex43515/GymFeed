@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '/components/send_post/send_post_widget.dart';
 
+import 'exercise_video_sheet.dart';
 import 'workout_routine_models.dart';
 import 'workout_routine_store.dart';
 
@@ -1134,6 +1135,9 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
   int _restSeconds = 0;
   bool _finishing = false;
 
+  /// Explanation videos for exercises of a training-plan day, by name.
+  Map<String, String> _videoUrls = const {};
+
   @override
   void initState() {
     super.initState();
@@ -1143,6 +1147,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
         .map((exercise) => _ActiveExercise(exercise))
         .toList();
     unawaited(_loadProgress());
+    unawaited(_loadExerciseVideos());
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsedSeconds += 1);
     });
@@ -1157,6 +1162,16 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
       exercise.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadExerciseVideos() async {
+    final urls = <String, String>{};
+    for (final exercise in widget.routine.exercises) {
+      final url = await WorkoutRoutineStore.exerciseVideoUrl(
+          widget.routine.id, exercise.name);
+      if (url != null) urls[exercise.name] = url;
+    }
+    if (mounted && urls.isNotEmpty) setState(() => _videoUrls = urls);
   }
 
   Future<void> _loadProgress() async {
@@ -1361,6 +1376,16 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                         color: _routineGreen,
                         weight: FontWeight.w700)),
               ),
+              if (_videoUrls[exercise.name] != null)
+                ExerciseVideoButton(
+                  key: ValueKey('exercise-video-${exercise.name}'),
+                  onPressed: () => showExerciseVideo(
+                    context,
+                    exerciseName: exercise.name,
+                    videoUrl: _videoUrls[exercise.name]!,
+                    subtitle: widget.routine.name,
+                  ),
+                ),
               Text('${activeExercise.sets.length} sets',
                   style: _routineText(size: 10, color: _routineMuted)),
             ],

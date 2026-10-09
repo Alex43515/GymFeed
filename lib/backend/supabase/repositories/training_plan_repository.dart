@@ -8,7 +8,9 @@ class TrainingPlanRepository {
 
   static const _listSelect =
       '*, seller:profiles!training_plans_seller_id_fkey(id,username,display_name,photo_url)';
-  static const _detailSelect = '$_listSelect, days:training_plan_days(*)';
+  static const _detailSelect = '$_listSelect, days:training_plan_days(*), '
+      'videos:training_plan_exercise_videos(exercise_name,video_asset_id,'
+      'asset:media_assets(playback_url,thumbnail_url,status))';
 
   String _requireUid() {
     final uid = _uid;
@@ -81,6 +83,7 @@ class TrainingPlanRepository {
     required String level,
     required String equipment,
     required List<TrainingPlanDay> days,
+    Iterable<PlanExerciseVideo> videos = const [],
   }) async {
     _requireUid();
     final id = await _db.rpc('save_training_plan', params: {
@@ -93,6 +96,7 @@ class TrainingPlanRepository {
         'equipment': equipment,
       },
       'p_days': days.map((day) => day.toRpcJson()).toList(),
+      'p_videos': videos.map((video) => video.toRpcJson()).toList(),
     });
     return id.toString();
   }
@@ -126,6 +130,32 @@ class TrainingPlanRepository {
           .eq('id', plan.id)
           .eq('seller_id', uid);
     }
+  }
+
+  /// GymFeed admins review creators' first plans in the app.
+  Future<bool> isAdmin() async {
+    if (_uid == null) return false;
+    return await _db.rpc('is_app_admin') == true;
+  }
+
+  Future<List<TrainingPlan>> reviewQueue() async {
+    final rows = await _db
+        .from('training_plans')
+        .select(_listSelect)
+        .eq('status', 'in_review')
+        .order('updated_at', ascending: true);
+    return _plans(rows);
+  }
+
+  /// Approves, or sends back with [note] telling the creator what to change.
+  Future<String> review(String planId,
+      {required bool approve, String note = ''}) async {
+    final status = await _db.rpc('review_training_plan', params: {
+      'p_plan_id': planId,
+      'p_approve': approve,
+      'p_note': note.trim(),
+    });
+    return status.toString();
   }
 
   Future<void> enroll({

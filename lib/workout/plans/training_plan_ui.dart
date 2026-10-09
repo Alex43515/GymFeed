@@ -71,7 +71,7 @@ Widget planTopBar(
               ],
             ),
           ),
-          SizedBox(width: 72, child: action),
+          SizedBox(width: 96, child: action),
         ],
       ),
     );

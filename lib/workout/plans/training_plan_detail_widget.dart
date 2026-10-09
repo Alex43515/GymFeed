@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '/backend/supabase/supabase.dart';
+import '/workout/routines/exercise_video_sheet.dart';
 import '/workout/routines/workout_routine_store.dart';
 
 import 'add_plan_to_train_widget.dart';
@@ -34,6 +37,7 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
       widget.service ?? TrainingPlanService();
   late Future<TrainingPlan?> _planFuture;
   bool _onMyTrain = false;
+  bool _isAdmin = false;
   bool _busy = false;
   bool _changed = false;
 
@@ -48,6 +52,9 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
 
   void _load() {
     _planFuture = _service.repository.get(widget.planId);
+    _service.repository.isAdmin().then((admin) {
+      if (mounted && admin != _isAdmin) setState(() => _isAdmin = admin);
+    }).catchError((_) {});
     WorkoutRoutineStore.loadPlanSyncKeys().then((keys) {
       if (mounted) {
         setState(() =>
@@ -113,6 +120,13 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
   }
 
   Future<void> _submit(TrainingPlan plan) async {
+    final missing = plan.exercisesMissingVideo;
+    if (missing.isNotEmpty) {
+      _message(missing.length == 1
+          ? '${missing.first} still needs a video. Tap Edit to add it.'
+          : '${missing.length} exercises still need a video. Tap Edit to add them.');
+      return;
+    }
     await _guard(() async {
       final status = await _service.repository.submit(plan.id);
       _changed = true;
@@ -142,14 +156,114 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
       return true;
     } catch (error) {
       final text = error.toString();
-      _message(text.contains('exercise') || text.contains('workout day')
-          ? 'Every workout day needs at least one exercise.'
-          : 'Something went wrong. Please try again.');
+      _message(text.contains('video')
+          ? 'Every exercise needs an explanation video.'
+          : text.contains('exercise') || text.contains('workout day')
+              ? 'Every workout day needs at least one exercise.'
+              : text.contains('what to change')
+                  ? 'Write what the creator should change.'
+                  : 'Something went wrong. Please try again.');
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _review(TrainingPlan plan, {required bool approve}) async {
+    var note = '';
+    if (!approve) {
+      final controller = TextEditingController();
+      final entered = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: planCard,
+          title: Text('Request changes',
+              style: planText(size: 16, weight: FontWeight.w700)),
+          content: TextField(
+            key: const ValueKey('review-note'),
+            controller: controller,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 6,
+            style: planText(size: 13),
+            decoration: planInput('What should the creator change?'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Cancel', style: planText(color: planMuted))),
+            TextButton(
+                key: const ValueKey('send-review-note'),
+                onPressed: () => Navigator.pop(context, controller.text),
+                child: Text('Send',
+                    style: planText(color: planGreen, weight: FontWeight.w700))),
+          ],
+        ),
+      );
+      // The dialog keeps building during its closing animation.
+      unawaited(Future<void>.delayed(
+          const Duration(milliseconds: 500), controller.dispose));
+      if (entered == null || entered.trim().isEmpty) return;
+      note = entered.trim();
+    }
+    final ok = await _guard(() async {
+      await _service.repository.review(plan.id, approve: approve, note: note);
+    });
+    if (!ok || !mounted) return;
+    _changed = true;
+    _message(approve ? 'Plan approved and live.' : 'Sent back to the creator.');
+    _reload();
+  }
+
+  List<Widget> _adminSection(TrainingPlan plan) => [
+        Container(
+          key: const ValueKey('admin-review-card'),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F1A0E),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: planAmber),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Admin review',
+                  style: planText(
+                      size: 13, color: planAmber, weight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(
+                  'Watch every exercise video below. Approve to publish it, or send it back with what to fix.',
+                  style: planText(size: 12, color: planMuted)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('review-request-changes'),
+                      onPressed:
+                          _busy ? null : () => _review(plan, approve: false),
+                      child: Text('Request changes',
+                          style: planText(size: 12, color: Colors.white)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      key: const ValueKey('review-approve'),
+                      onPressed:
+                          _busy ? null : () => _review(plan, approve: true),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: planGreen, foregroundColor: planBg),
+                      child: const Text('Approve'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ];
 
   Future<bool> _confirm(String title, String body) async {
     final result = await showDialog<bool>(
@@ -173,7 +287,7 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
     return result == true;
   }
 
-  Widget _dayTile(TrainingPlanDay day) {
+  Widget _dayTile(TrainingPlan plan, TrainingPlanDay day) {
     return Container(
       margin: const EdgeInsets.only(bottom: 9),
       decoration: BoxDecoration(
@@ -215,12 +329,26 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                   ...day.exercises.map((exercise) {
                     final sets = exercise.plannedSets;
                     final reps = sets.map((set) => set.reps).toSet();
-                    return Padding(
+                    final video = plan.videoFor(exercise.name);
+                    final playable = video?.isPlayable == true;
+                    return InkWell(
+                      key: ValueKey('plan-exercise-${day.day}-${exercise.name}'),
+                      onTap: playable
+                          ? () => showExerciseVideo(context,
+                              exerciseName: exercise.name,
+                              videoUrl: video!.playbackUrl,
+                              subtitle: plan.title)
+                          : null,
+                      child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),
                       child: Row(
                         children: [
-                          const Icon(Icons.fitness_center_rounded,
-                              color: planGreen, size: 15),
+                          Icon(
+                              playable
+                                  ? Icons.play_circle_fill_rounded
+                                  : Icons.fitness_center_rounded,
+                              color: playable ? planGreen : planMuted,
+                              size: playable ? 19 : 15),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(exercise.name,
@@ -230,6 +358,7 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                               '${sets.length} × ${reps.length == 1 ? reps.first : '${reps.reduce((a, b) => a < b ? a : b)}-${reps.reduce((a, b) => a > b ? a : b)}'}',
                               style: planText(size: 12, color: planMuted)),
                         ],
+                      ),
                       ),
                     );
                   }),
@@ -269,6 +398,14 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                 },
                 style: planText(size: 12, color: planMuted),
               ),
+              if (plan.isEditable && plan.exercisesMissingVideo.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Videos needed: ${plan.exercisesMissingVideo.join(', ')}',
+                  key: const ValueKey('owner-missing-videos'),
+                  style: planText(size: 12, color: planAmber),
+                ),
+              ],
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -340,6 +477,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
                         children: [
+                          if (_isAdmin && plan.status == 'in_review')
+                            ..._adminSection(plan),
                           if (isOwner) ..._ownerSection(plan),
                           Text(plan.title,
                               style: planText(size: 22, weight: FontWeight.w800)),
@@ -365,13 +504,13 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                                 style: planText(size: 13, color: const Color(0xFFCFCFCF))),
                           ],
                           const SizedBox(height: 20),
-                          Text('Plan days',
+                          Text('Plan days · tap an exercise to watch how',
                               style: planText(
                                   size: 13,
                                   color: planMuted,
                                   weight: FontWeight.w600)),
                           const SizedBox(height: 8),
-                          ...plan.days.map(_dayTile),
+                          ...plan.days.map((day) => _dayTile(plan, day)),
                           const SizedBox(height: 8),
                           Text(
                             'Consult a doctor before starting a new training program.',

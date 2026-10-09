@@ -1,20 +1,58 @@
 import 'package:flutter/material.dart';
 
 import '/backend/supabase/repositories/training_plan_repository.dart';
+import '/custom_code/actions/index.dart' as actions;
+import '/custom_code/widgets/upload_progress_screen.dart';
+import '/workout/routines/exercise_video_sheet.dart';
 import '/workout/routines/workout_routine_flow.dart';
 import '/workout/routines/workout_routine_models.dart';
 
 import 'training_plan_models.dart';
 import 'training_plan_ui.dart';
 
+typedef PlanVideoUploader = Future<PlanExerciseVideo?> Function(
+    BuildContext context, String exerciseName);
+
+/// Picks a video from the gallery and uploads it through the shared Bunny
+/// pipeline. Returns null when the user cancels.
+Future<PlanExerciseVideo?> uploadPlanExerciseVideo(
+    BuildContext context, String exerciseName) async {
+  final file = await actions.pickAndPrepareVideo();
+  final bytes = file?.bytes;
+  if (bytes == null || bytes.isEmpty || !context.mounted) return null;
+  final upload = await showUploadProgress(
+    context,
+    videoBytes: bytes,
+    videoTitle: 'GymFeed plan · $exerciseName',
+    videoFileName: file?.name ?? 'gymfeed-exercise.mp4',
+  );
+  final assetId = upload?.videoAssetId;
+  if (upload == null || !upload.success || assetId == null) return null;
+  return PlanExerciseVideo(
+    exerciseName: exerciseName,
+    assetId: assetId,
+    playbackUrl: upload.videoPlaylistUrl ?? '',
+    thumbnailUrl: upload.videoThumbnailUrl ?? '',
+    status: 'processing',
+  );
+}
+
 /// Creates or edits a plan: details, then a list of 1-31 days where each day is
-/// a workout (built with the regular routine builder) or a rest day.
-/// Pops `true` after the draft is saved.
+/// a workout (built with the regular routine builder) or a rest day, and an
+/// explanation video for every exercise. Pops `true` after the draft is saved.
 class TrainingPlanBuilderWidget extends StatefulWidget {
-  const TrainingPlanBuilderWidget({super.key, this.plan, this.repository});
+  const TrainingPlanBuilderWidget({
+    super.key,
+    this.plan,
+    this.repository,
+    this.videoUploader,
+  });
 
   final TrainingPlan? plan;
   final TrainingPlanRepository? repository;
+
+  /// Overrides the gallery picker + upload in tests.
+  final PlanVideoUploader? videoUploader;
 
   @override
   State<TrainingPlanBuilderWidget> createState() =>
@@ -30,6 +68,8 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
   late String _level;
   late String _equipment;
   late List<TrainingPlanDay> _days;
+  late Map<String, PlanExerciseVideo> _videos;
+  String? _uploadingExercise;
   bool _saving = false;
 
   @override
@@ -42,6 +82,37 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
     _level = plan?.level ?? 'intermediate';
     _equipment = plan?.equipment ?? 'gym';
     _days = List.of(plan?.days ?? const <TrainingPlanDay>[]);
+    _videos = Map.of(plan?.videos ?? const <String, PlanExerciseVideo>{});
+  }
+
+  List<String> get _exerciseNames => distinctPlanExercises(_days);
+
+  PlanExerciseVideo? _videoFor(String name) =>
+      _videos[trainingPlanExerciseKey(name)];
+
+  int get _missingVideos => _exerciseNames
+      .where((name) => _videoFor(name) == null || _videoFor(name)!.failed)
+      .length;
+
+  Future<void> _uploadVideo(String exerciseName) async {
+    if (_uploadingExercise != null) return;
+    setState(() => _uploadingExercise = exerciseName);
+    try {
+      final uploader = widget.videoUploader ?? uploadPlanExerciseVideo;
+      final video = await uploader(context, exerciseName);
+      if (video != null && mounted) {
+        setState(() => _videos[trainingPlanExerciseKey(exerciseName)] = video);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      final text = error.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(text.contains('too long')
+              ? 'Exercise videos can be up to 60 seconds.'
+              : 'The video could not be uploaded. Please try again.')));
+    } finally {
+      if (mounted) setState(() => _uploadingExercise = null);
+    }
   }
 
   @override
@@ -143,6 +214,10 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
         level: _level,
         equipment: _equipment,
         days: _days,
+        videos: _exerciseNames
+            .map(_videoFor)
+            .whereType<PlanExerciseVideo>()
+            .toList(),
       );
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
@@ -222,6 +297,116 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
       ),
     );
   }
+
+  List<Widget> _videoSection() {
+    final missing = _missingVideos;
+    return [
+      const SizedBox(height: 22),
+      Row(
+        children: [
+          Expanded(
+            child: Text('Exercise videos',
+                style: planText(size: 14, weight: FontWeight.w700)),
+          ),
+          Text(missing == 0 ? 'All set' : '$missing still needed',
+              key: const ValueKey('plan-videos-missing'),
+              style: planText(
+                  size: 11,
+                  color: missing == 0 ? planGreen : planAmber,
+                  weight: FontWeight.w600)),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Every exercise needs a short video (up to 60 s) showing how to do it. '
+        'Record each exercise once: it is reused on every day it appears.',
+        style: planText(size: 11, color: planMuted),
+      ),
+      const SizedBox(height: 10),
+      ..._exerciseNames.map(_videoRow),
+    ];
+  }
+
+  Widget _videoRow(String name) {
+    final video = _videoFor(name);
+    final uploading = _uploadingExercise == name;
+    final ok = video != null && !video.failed;
+    final status = ok
+        ? (video.status == 'ready' ? 'Video added' : 'Video added · processing')
+        : video?.failed == true
+            ? 'Upload failed, add it again'
+            : 'Video needed';
+    return Container(
+      key: ValueKey('plan-video-row-$name'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: planCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ok ? planBorder : const Color(0xFF4A3A16)),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(9),
+            child: SizedBox(
+              width: 40,
+              height: 52,
+              child: ok && video.thumbnailUrl.isNotEmpty
+                  ? Image.network(video.thumbnailUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stack) =>
+                          _videoPlaceholder(ok))
+                  : _videoPlaceholder(ok),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: planText(size: 13, weight: FontWeight.w600)),
+                Text(status,
+                    style:
+                        planText(size: 10, color: ok ? planMuted : planAmber)),
+              ],
+            ),
+          ),
+          if (ok && video.playbackUrl.isNotEmpty)
+            IconButton(
+              tooltip: 'Watch video',
+              onPressed: () => showExerciseVideo(context,
+                  exerciseName: name, videoUrl: video.playbackUrl),
+              icon: const Icon(Icons.play_circle_outline_rounded,
+                  color: planMuted, size: 22),
+            ),
+          TextButton(
+            key: ValueKey('upload-plan-video-$name'),
+            onPressed:
+                _uploadingExercise == null ? () => _uploadVideo(name) : null,
+            child: uploading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: planGreen))
+                : Text(ok ? 'Replace' : 'Upload',
+                    style: planText(
+                        size: 12, color: planGreen, weight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _videoPlaceholder(bool ok) => ColoredBox(
+        color: const Color(0xFF1B1B1B),
+        child: Icon(ok ? Icons.videocam_rounded : Icons.videocam_off_outlined,
+            color: ok ? planGreen : planAmber, size: 18),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -343,6 +528,7 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                         ),
                       ],
                     ),
+                    if (_exerciseNames.isNotEmpty) ..._videoSection(),
                     const SizedBox(height: 18),
                     Text(
                       'Plans are free for now. Paid plans are coming soon.',

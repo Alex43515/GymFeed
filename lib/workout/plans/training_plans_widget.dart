@@ -32,12 +32,36 @@ class _TrainingPlansWidgetState extends State<TrainingPlansWidget> {
   late Future<List<TrainingPlan>> _storeFuture;
   late Future<_MyPlans> _mineFuture;
   bool _calendarChanged = false;
+  int? _reviewCount;
 
   @override
   void initState() {
     super.initState();
     _loadStore();
     _loadMine();
+    _loadReviewCount();
+  }
+
+  /// Only GymFeed admins get a review queue; for everyone else this is null.
+  Future<void> _loadReviewCount() async {
+    try {
+      if (!await _repository.isAdmin()) return;
+      final queue = await _repository.reviewQueue();
+      if (mounted) setState(() => _reviewCount = queue.length);
+    } catch (_) {
+      // The store works without the admin queue.
+    }
+  }
+
+  Future<void> _openReviewQueue() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      settings: const RouteSettings(name: 'training-plan-review'),
+      builder: (_) => TrainingPlanReviewQueueWidget(service: _service),
+    ));
+    if (mounted) {
+      _refresh();
+      _loadReviewCount();
+    }
   }
 
   @override
@@ -277,8 +301,24 @@ class _TrainingPlansWidgetState extends State<TrainingPlansWidget> {
           body: SafeArea(
             child: Column(
               children: [
-                planTopBar(context,
-                    title: 'Training plans', subtitle: 'From the GymFeed community'),
+                planTopBar(
+                  context,
+                  title: 'Training plans',
+                  subtitle: 'From the GymFeed community',
+                  action: _reviewCount == null
+                      ? null
+                      : TextButton(
+                          key: const ValueKey('open-plan-review-queue'),
+                          onPressed: _openReviewQueue,
+                          child: Text('Review ($_reviewCount)',
+                              style: planText(
+                                  size: 12,
+                                  color: _reviewCount! > 0
+                                      ? planAmber
+                                      : planMuted,
+                                  weight: FontWeight.w700)),
+                        ),
+                ),
                 Expanded(
                   child: RefreshIndicator(
                     color: planGreen,
@@ -309,4 +349,77 @@ class _MyPlans {
 
   final List<TrainingPlan> created;
   final List<TrainingPlanEnrollment> following;
+}
+
+/// Admin-only list of creators' plans waiting for review.
+class TrainingPlanReviewQueueWidget extends StatefulWidget {
+  const TrainingPlanReviewQueueWidget({super.key, this.service});
+
+  final TrainingPlanService? service;
+
+  @override
+  State<TrainingPlanReviewQueueWidget> createState() =>
+      _TrainingPlanReviewQueueWidgetState();
+}
+
+class _TrainingPlanReviewQueueWidgetState
+    extends State<TrainingPlanReviewQueueWidget> {
+  late final TrainingPlanService _service =
+      widget.service ?? TrainingPlanService();
+  late Future<List<TrainingPlan>> _queue = _service.repository.reviewQueue();
+
+  Future<void> _open(String planId) async {
+    await Navigator.of(context).push<bool>(MaterialPageRoute(
+      settings: const RouteSettings(name: 'training-plan-review-detail'),
+      builder: (_) =>
+          TrainingPlanDetailWidget(planId: planId, service: _service),
+    ));
+    if (mounted) setState(() => _queue = _service.repository.reviewQueue());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return planScaled(
+      context,
+      Scaffold(
+        backgroundColor: planBg,
+        body: SafeArea(
+          child: Column(
+            children: [
+              planTopBar(context,
+                  title: 'Plans to review', subtitle: 'First plans of new creators'),
+              Expanded(
+                child: FutureBuilder<List<TrainingPlan>>(
+                  future: _queue,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                          child: CircularProgressIndicator(color: planGreen));
+                    }
+                    final plans = snapshot.data ?? const [];
+                    if (snapshot.hasError || plans.isEmpty) {
+                      return Center(
+                        child: Text(
+                            snapshot.hasError
+                                ? 'The review queue could not load.'
+                                : 'Nothing to review right now.',
+                            style: planText(size: 13, color: planMuted)),
+                      );
+                    }
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+                      children: plans
+                          .map((plan) => TrainingPlanCard(
+                              plan: plan, onTap: () => _open(plan.id)))
+                          .toList(),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

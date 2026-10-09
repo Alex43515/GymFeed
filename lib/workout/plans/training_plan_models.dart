@@ -32,6 +32,43 @@ String _text(dynamic value, [String fallback = '']) {
 int _int(dynamic value, [int fallback = 0]) =>
     value is num ? value.toInt() : int.tryParse('$value') ?? fallback;
 
+/// One explanation video per exercise per plan; matching ignores case and
+/// surrounding spaces, the same way the database does.
+String trainingPlanExerciseKey(String name) => name.trim().toLowerCase();
+
+class PlanExerciseVideo {
+  const PlanExerciseVideo({
+    required this.exerciseName,
+    required this.assetId,
+    this.playbackUrl = '',
+    this.thumbnailUrl = '',
+    this.status = 'ready',
+  });
+
+  final String exerciseName;
+  final String assetId;
+  final String playbackUrl;
+  final String thumbnailUrl;
+  final String status;
+
+  bool get isPlayable => playbackUrl.isNotEmpty && status != 'failed';
+  bool get failed => status == 'failed' || status == 'quarantined';
+
+  Map<String, dynamic> toRpcJson() =>
+      {'exercise_name': exerciseName.trim(), 'video_asset_id': assetId};
+
+  factory PlanExerciseVideo.fromRow(Map<String, dynamic> row) {
+    final asset = row['asset'];
+    return PlanExerciseVideo(
+      exerciseName: _text(row['exercise_name']),
+      assetId: _text(row['video_asset_id']),
+      playbackUrl: asset is Map ? _text(asset['playback_url']) : '',
+      thumbnailUrl: asset is Map ? _text(asset['thumbnail_url']) : '',
+      status: asset is Map ? _text(asset['status'], 'ready') : 'ready',
+    );
+  }
+}
+
 class TrainingPlanDay {
   const TrainingPlanDay({
     required this.day,
@@ -130,6 +167,7 @@ class TrainingPlan {
     this.enrollmentCount = 0,
     this.seller,
     this.days = const [],
+    this.videos = const {},
     this.updatedAt,
   });
 
@@ -148,7 +186,24 @@ class TrainingPlan {
   final int enrollmentCount;
   final TrainingPlanSeller? seller;
   final List<TrainingPlanDay> days;
+
+  /// Keyed by [trainingPlanExerciseKey].
+  final Map<String, PlanExerciseVideo> videos;
   final DateTime? updatedAt;
+
+  PlanExerciseVideo? videoFor(String exerciseName) =>
+      videos[trainingPlanExerciseKey(exerciseName)];
+
+  /// Distinct exercise names across workout days, in first-use order.
+  List<String> get exerciseNames => distinctPlanExercises(days);
+
+  List<String> get exercisesMissingVideo => exerciseNames
+      .where((name) => !(videoFor(name)?.failed == false))
+      .toList(growable: false);
+
+  String get coverUrl => exerciseNames
+      .map((name) => videoFor(name)?.thumbnailUrl ?? '')
+      .firstWhere((url) => url.isNotEmpty, orElse: () => '');
 
   bool get isFree => priceCents == 0;
   bool get isPublished => status == 'published';
@@ -181,6 +236,14 @@ class TrainingPlan {
             .toList()
           ..sort((a, b) => a.day.compareTo(b.day)))
         : <TrainingPlanDay>[];
+    final rawVideos = row['videos'];
+    final videos = <String, PlanExerciseVideo>{
+      if (rawVideos is List)
+        for (final item in rawVideos.whereType<Map>())
+          trainingPlanExerciseKey(_text(item['exercise_name'])):
+              PlanExerciseVideo.fromRow(
+                  item.map((key, value) => MapEntry(key.toString(), value))),
+    }..remove('');
     return TrainingPlan(
       id: _text(row['id']),
       sellerId: _text(row['seller_id']),
@@ -204,9 +267,25 @@ class TrainingPlan {
             )
           : null,
       days: List.unmodifiable(days),
+      videos: Map.unmodifiable(videos),
       updatedAt: DateTime.tryParse(_text(row['updated_at']))?.toLocal(),
     );
   }
+}
+
+List<String> distinctPlanExercises(Iterable<TrainingPlanDay> days) {
+  final seen = <String>{};
+  final names = <String>[];
+  for (final day in days) {
+    if (day.isRest) continue;
+    for (final exercise in day.exercises) {
+      final name = exercise.name.trim();
+      if (name.isNotEmpty && seen.add(trainingPlanExerciseKey(name))) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
 }
 
 enum PlanScheduleMode { consecutive, weekdays }
