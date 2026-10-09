@@ -496,10 +496,17 @@ class RoutineBuilderWidget extends StatefulWidget {
     super.key,
     this.routine,
     this.initialExerciseName,
+    this.onSaved,
+    this.title,
   });
 
   final WorkoutRoutine? routine;
   final String? initialExerciseName;
+
+  /// When set, the edited routine is handed back here instead of being saved
+  /// to the user's routine library (used by the training-plan builder).
+  final ValueChanged<WorkoutRoutine>? onSaved;
+  final String? title;
 
   @override
   State<RoutineBuilderWidget> createState() => _RoutineBuilderWidgetState();
@@ -603,7 +610,11 @@ class _RoutineBuilderWidgetState extends State<RoutineBuilderWidget> {
       createdAt: existing?.createdAt ?? DateTime.now(),
       lastPerformedAt: existing?.lastPerformedAt,
     );
-    await WorkoutRoutineStore.saveRoutine(routine);
+    if (widget.onSaved != null) {
+      widget.onSaved!(routine);
+    } else {
+      await WorkoutRoutineStore.saveRoutine(routine);
+    }
     if (!mounted) return;
     Navigator.pop(context, true);
   }
@@ -725,7 +736,9 @@ class _RoutineBuilderWidgetState extends State<RoutineBuilderWidget> {
                           color: Colors.white, size: 25),
                     ),
                     Expanded(
-                      child: Text(_editing ? 'Edit routine' : 'New routine',
+                      child: Text(
+                          widget.title ??
+                              (_editing ? 'Edit routine' : 'New routine'),
                           textAlign: TextAlign.center,
                           style:
                               _routineText(size: 17, weight: FontWeight.w700)),

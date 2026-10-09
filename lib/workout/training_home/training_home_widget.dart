@@ -8,6 +8,9 @@ import '/backend/supabase/repositories/training_repository.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
+import '/workout/plans/training_plan_schedule.dart';
+import '/workout/plans/training_plan_service.dart';
+import '/workout/plans/training_plans_widget.dart';
 import '/workout/routines/workout_routine_flow.dart';
 import '/workout/routines/workout_routine_models.dart';
 import '/workout/routines/workout_routine_store.dart';
@@ -118,6 +121,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     _visibleWeekStart =
         _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
     unawaited(_ensureStarterPlan());
+    unawaited(_syncTrainingPlans());
   }
 
   @override
@@ -168,6 +172,67 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
       // Signup is never blocked by a temporary AI or network outage. A later
       // visit/pull-to-refresh retries the already-requested plan.
     }
+  }
+
+  /// Restores plans the user follows on a new device or after a reinstall.
+  Future<void> _syncTrainingPlans() async {
+    try {
+      final changed = await TrainingPlanService().syncEnrollments();
+      if (changed && mounted) await _refreshLocal();
+    } catch (_) {
+      // Offline or signed out: the local calendar stays as it is.
+    }
+  }
+
+  Future<void> _openTrainingPlans() async {
+    final changed = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      settings: const RouteSettings(name: 'training-plans'),
+      builder: (_) => const TrainingPlansWidget(),
+    ));
+    if (changed == true && mounted) await _refreshLocal();
+  }
+
+  Widget _trainingPlansCard() {
+    return InkWell(
+      key: const ValueKey('open-training-plans'),
+      onTap: _openTrainingPlans,
+      borderRadius: BorderRadius.circular(19),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(color: _border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 43,
+              height: 43,
+              decoration: BoxDecoration(
+                color: const Color(0xFF123821),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(Icons.event_note_rounded,
+                  color: _green, size: 21),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Training plans',
+                      style: _text(size: 15, weight: FontWeight.w700)),
+                  Text('Follow a plan or create your own',
+                      style: _text(size: 11, color: _muted)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: _muted, size: 27),
+          ],
+        ),
+      ),
+    );
   }
 
   void _selectCoachSection(CoachSection section) {
@@ -1034,6 +1099,11 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
             future: _routinesFuture,
             builder: (context, routineSnapshot) {
               final routines = routineSnapshot.data ?? const <WorkoutRoutine>[];
+              // Days of followed plans live in the calendar and on the plan
+              // page, not in the personal routine list.
+              final ownRoutines = routines
+                  .where((routine) => !isTrainingPlanRoutine(routine.id))
+                  .toList();
               return FutureBuilder<List<Training>>(
                 future: _trainingsFuture,
                 builder: (context, trainingSnapshot) {
@@ -1087,7 +1157,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                         key: const ValueKey(
                                             'add-scheduled-workout'),
                                         onPressed: () => _addScheduledWorkout(
-                                            routines, scheduledIds),
+                                            ownRoutines, scheduledIds),
                                         icon: const Icon(Icons.add_rounded,
                                             color: _green, size: 17),
                                         label: Text('Add',
@@ -1100,7 +1170,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                 ),
                                 const SizedBox(height: 10),
                                 if (scheduledRoutines.isEmpty)
-                                  _emptySchedule(routines)
+                                  _emptySchedule(ownRoutines)
                                 else ...[
                                   ...scheduledRoutines.map((routine) => Padding(
                                         padding:
@@ -1115,6 +1185,8 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                 ],
                                 const SizedBox(height: 18),
                                 _aiCoachCard(),
+                                const SizedBox(height: 10),
+                                _trainingPlansCard(),
                                 const SizedBox(height: 20),
                                 _tabs(),
                                 const SizedBox(height: 16),
@@ -1128,10 +1200,10 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                           child: CircularProgressIndicator(
                                               color: _green, strokeWidth: 2.4)),
                                     )
-                                  else if (routines.isEmpty)
+                                  else if (ownRoutines.isEmpty)
                                     _empty(
                                         'No plans yet — create your first routine.'),
-                                  ...routines.map(_routineCard),
+                                  ...ownRoutines.map(_routineCard),
                                   _newRoutineButton(),
                                 ] else if (_tab == 1) ...[
                                   if (trainingSnapshot.connectionState ==

@@ -88,6 +88,89 @@ class WorkoutRoutineStore {
     return true;
   }
 
+  static String get _planSyncKey => 'gymfeed_training_plan_sync_v1_$_scope';
+
+  static Future<Map<String, String>> loadPlanSyncKeys() async {
+    final preferences = await SharedPreferences.getInstance();
+    try {
+      final decoded = jsonDecode(preferences.getString(_planSyncKey) ?? '{}');
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry('$key', '$value'));
+      }
+    } catch (_) {
+      // A damaged marker only means the plan is imported again.
+    }
+    return <String, String>{};
+  }
+
+  /// Materializes an enrolled community plan. Routines whose id starts with
+  /// [planKey] are replaced, and the plan's calendar entries from [today]
+  /// onward are rebuilt; past days stay as they were.
+  static Future<bool> importPlan({
+    required String planKey,
+    required String syncKey,
+    required List<WorkoutRoutine> routines,
+    required Map<String, List<String>> schedule,
+    bool force = false,
+    DateTime? today,
+  }) async {
+    if (planKey.isEmpty || syncKey.isEmpty) return false;
+    final preferences = await SharedPreferences.getInstance();
+    final syncKeys = await loadPlanSyncKeys();
+    if (!force && syncKeys[planKey] == syncKey) return false;
+
+    await _removePlanEntries(preferences, planKey, today ?? DateTime.now());
+    final current = await loadRoutines();
+    final incomingIds = routines.map((item) => item.id).toSet();
+    current.removeWhere((item) => incomingIds.contains(item.id));
+    current.insertAll(0, routines);
+    await _writeRoutines(preferences, current);
+
+    final currentSchedule = await loadSchedule();
+    for (final entry in schedule.entries) {
+      final ids = currentSchedule.putIfAbsent(entry.key, () => <String>[]);
+      for (final routineId in entry.value) {
+        if (!ids.contains(routineId)) ids.add(routineId);
+      }
+    }
+    await _writeSchedule(preferences, currentSchedule);
+    syncKeys[planKey] = syncKey;
+    await preferences.setString(_planSyncKey, jsonEncode(syncKeys));
+    return true;
+  }
+
+  /// Removes an enrolled plan's routines and its upcoming calendar days.
+  static Future<void> removePlan(String planKey, {DateTime? today}) async {
+    final preferences = await SharedPreferences.getInstance();
+    await _removePlanEntries(preferences, planKey, today ?? DateTime.now());
+    final syncKeys = await loadPlanSyncKeys();
+    syncKeys.remove(planKey);
+    await preferences.setString(_planSyncKey, jsonEncode(syncKeys));
+  }
+
+  static Future<void> _removePlanEntries(
+      SharedPreferences preferences, String planKey, DateTime today) async {
+    final prefix = '$planKey-';
+    final fromKey = dateKey(today);
+    final schedule = await loadSchedule();
+    final pastIds = <String>{};
+    for (final entry in schedule.entries) {
+      if (entry.key.compareTo(fromKey) >= 0) {
+        entry.value.removeWhere((id) => id.startsWith(prefix));
+      } else {
+        pastIds.addAll(entry.value.where((id) => id.startsWith(prefix)));
+      }
+    }
+    schedule.removeWhere((_, ids) => ids.isEmpty);
+    await _writeSchedule(preferences, schedule);
+    // Past calendar days keep the workout they showed; only unused plan
+    // routines are dropped.
+    final routines = await loadRoutines();
+    routines.removeWhere(
+        (item) => item.id.startsWith(prefix) && !pastIds.contains(item.id));
+    await _writeRoutines(preferences, routines);
+  }
+
   static Future<void> deleteRoutine(String routineId) async {
     final preferences = await SharedPreferences.getInstance();
     final routines = await loadRoutines();

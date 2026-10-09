@@ -171,6 +171,9 @@ void main() {
     expect(schedule[WorkoutRoutineStore.dateKey(futureDate)],
         contains('default-pull-day-b'));
 
+    await tester.ensureVisible(
+        find.byKey(const ValueKey('remove-scheduled-default-pull-day-b')));
+    await tester.pumpAndSettle();
     await tester
         .tap(find.byKey(const ValueKey('remove-scheduled-default-pull-day-b')));
     await tester.pumpAndSettle();
@@ -183,6 +186,9 @@ void main() {
       -250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('calendar-previous-week')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('calendar-previous-week')));
     await tester.tap(find.byKey(const ValueKey('calendar-previous-week')));
     await tester.pumpAndSettle();
@@ -205,6 +211,9 @@ void main() {
     schedule = await WorkoutRoutineStore.loadSchedule();
     expect(schedule[WorkoutRoutineStore.dateKey(pastDate)],
         contains('default-push-day-a'));
+    await tester.ensureVisible(
+        find.byKey(const ValueKey('remove-scheduled-default-push-day-a')));
+    await tester.pumpAndSettle();
     await tester
         .tap(find.byKey(const ValueKey('remove-scheduled-default-push-day-a')));
     await tester.pumpAndSettle();
