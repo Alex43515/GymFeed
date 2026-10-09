@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '/backend/supabase/repositories/training_plan_repository.dart';
 import '/custom_code/actions/index.dart' as actions;
 import '/custom_code/widgets/upload_progress_screen.dart';
+import '/flutter_flow/upload_data.dart';
 import '/workout/routines/exercise_video_sheet.dart';
 import '/workout/routines/workout_routine_flow.dart';
 import '/workout/routines/workout_routine_models.dart';
@@ -11,25 +12,26 @@ import 'training_plan_models.dart';
 import 'training_plan_ui.dart';
 
 typedef PlanVideoUploader = Future<PlanExerciseVideo?> Function(
-    BuildContext context, String exerciseName);
+    BuildContext context, String label);
+typedef PlanImageUploader = Future<String?> Function(BuildContext context);
 
-/// Picks a video from the gallery and uploads it through the shared Bunny
-/// pipeline. Returns null when the user cancels.
+/// Picks a video from the gallery and uploads it to Bunny Stream through the
+/// same upload screen as posts and workouts. Returns null when cancelled.
 Future<PlanExerciseVideo?> uploadPlanExerciseVideo(
-    BuildContext context, String exerciseName) async {
+    BuildContext context, String label) async {
   final file = await actions.pickAndPrepareVideo();
   final bytes = file?.bytes;
   if (bytes == null || bytes.isEmpty || !context.mounted) return null;
   final upload = await showUploadProgress(
     context,
     videoBytes: bytes,
-    videoTitle: 'GymFeed plan · $exerciseName',
-    videoFileName: file?.name ?? 'gymfeed-exercise.mp4',
+    videoTitle: 'GymFeed plan · $label',
+    videoFileName: file?.name ?? 'gymfeed-plan-video.mp4',
   );
   final assetId = upload?.videoAssetId;
   if (upload == null || !upload.success || assetId == null) return null;
   return PlanExerciseVideo(
-    exerciseName: exerciseName,
+    exerciseName: label,
     assetId: assetId,
     playbackUrl: upload.videoPlaylistUrl ?? '',
     thumbnailUrl: upload.videoThumbnailUrl ?? '',
@@ -37,22 +39,46 @@ Future<PlanExerciseVideo?> uploadPlanExerciseVideo(
   );
 }
 
-/// Creates or edits a plan: details, then a list of 1-31 days where each day is
-/// a workout (built with the regular routine builder) or a rest day, and an
-/// explanation video for every exercise. Pops `true` after the draft is saved.
+/// Picks a photo and uploads it to the `images` bucket, like post photos.
+Future<String?> uploadPlanCoverImage(BuildContext context) async {
+  final selection = await selectMedia(
+    mediaSource: MediaSource.photoGallery,
+    imageQuality: 85,
+    maxWidth: 1600,
+  );
+  final file = (selection == null || selection.isEmpty) ? null : selection.first;
+  final bytes = file?.bytes;
+  if (file == null || bytes == null || bytes.isEmpty || !context.mounted) {
+    return null;
+  }
+  final name = file.storagePath.split('/').last;
+  final upload = await showUploadProgress(
+    context,
+    imageBytes: bytes,
+    imageFileName: name.contains('.') ? name : 'plan-cover.jpg',
+  );
+  return upload?.imageUrl;
+}
+
+/// Creates or edits a plan: cover image, intro video, details, then 1-31
+/// days where each day is a workout (built with the regular routine builder)
+/// or a rest day. Every exercise gets its explanation video right on its day.
+/// Pops `true` after the draft is saved.
 class TrainingPlanBuilderWidget extends StatefulWidget {
   const TrainingPlanBuilderWidget({
     super.key,
     this.plan,
     this.repository,
     this.videoUploader,
+    this.imageUploader,
   });
 
   final TrainingPlan? plan;
   final TrainingPlanRepository? repository;
 
-  /// Overrides the gallery picker + upload in tests.
+  /// Override the gallery pickers + uploads in tests.
   final PlanVideoUploader? videoUploader;
+  final PlanImageUploader? imageUploader;
 
   @override
   State<TrainingPlanBuilderWidget> createState() =>
@@ -60,6 +86,8 @@ class TrainingPlanBuilderWidget extends StatefulWidget {
 }
 
 class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
+  static const _introLabel = 'Intro';
+
   late final TrainingPlanRepository _repository =
       widget.repository ?? TrainingPlanRepository();
   late final TextEditingController _title;
@@ -69,7 +97,11 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
   late String _equipment;
   late List<TrainingPlanDay> _days;
   late Map<String, PlanExerciseVideo> _videos;
-  String? _uploadingExercise;
+  late String _coverUrl;
+  PlanExerciseVideo? _intro;
+
+  /// Exercise name, [_introLabel] or 'cover' while an upload is running.
+  String? _uploading;
   bool _saving = false;
 
   @override
@@ -83,36 +115,8 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
     _equipment = plan?.equipment ?? 'gym';
     _days = List.of(plan?.days ?? const <TrainingPlanDay>[]);
     _videos = Map.of(plan?.videos ?? const <String, PlanExerciseVideo>{});
-  }
-
-  List<String> get _exerciseNames => distinctPlanExercises(_days);
-
-  PlanExerciseVideo? _videoFor(String name) =>
-      _videos[trainingPlanExerciseKey(name)];
-
-  int get _missingVideos => _exerciseNames
-      .where((name) => _videoFor(name) == null || _videoFor(name)!.failed)
-      .length;
-
-  Future<void> _uploadVideo(String exerciseName) async {
-    if (_uploadingExercise != null) return;
-    setState(() => _uploadingExercise = exerciseName);
-    try {
-      final uploader = widget.videoUploader ?? uploadPlanExerciseVideo;
-      final video = await uploader(context, exerciseName);
-      if (video != null && mounted) {
-        setState(() => _videos[trainingPlanExerciseKey(exerciseName)] = video);
-      }
-    } catch (error) {
-      if (!mounted) return;
-      final text = error.toString();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(text.contains('too long')
-              ? 'Exercise videos can be up to 60 seconds.'
-              : 'The video could not be uploaded. Please try again.')));
-    } finally {
-      if (mounted) setState(() => _uploadingExercise = null);
-    }
+    _coverUrl = plan?.coverImageUrl ?? '';
+    _intro = plan?.introVideo;
   }
 
   @override
@@ -121,6 +125,56 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
     _description.dispose();
     super.dispose();
   }
+
+  List<String> get _exerciseNames => distinctPlanExercises(_days);
+
+  PlanExerciseVideo? _videoFor(String name) =>
+      _videos[trainingPlanExerciseKey(name)];
+
+  bool _hasVideo(String name) => _videoFor(name)?.failed == false;
+
+  int get _videosDone => _exerciseNames.where(_hasVideo).length;
+
+  void _message(String text) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(text)));
+
+  Future<void> _runUpload(String slot, Future<void> Function() upload) async {
+    if (_uploading != null) return;
+    setState(() => _uploading = slot);
+    try {
+      await upload();
+    } catch (error) {
+      if (!mounted) return;
+      _message(error.toString().contains('too long')
+          ? 'Videos can be up to 60 seconds.'
+          : 'The upload did not finish. Please try again.');
+    } finally {
+      if (mounted) setState(() => _uploading = null);
+    }
+  }
+
+  Future<void> _uploadExerciseVideo(String exerciseName) =>
+      _runUpload(exerciseName, () async {
+        final video = await (widget.videoUploader ?? uploadPlanExerciseVideo)(
+            context, exerciseName);
+        if (video != null && mounted) {
+          setState(() => _videos[trainingPlanExerciseKey(exerciseName)] = video);
+        }
+      });
+
+  Future<void> _uploadIntro() => _runUpload(_introLabel, () async {
+        final video = await (widget.videoUploader ?? uploadPlanExerciseVideo)(
+            context, _introLabel);
+        if (video != null && mounted) setState(() => _intro = video);
+      });
+
+  Future<void> _uploadCover() => _runUpload('cover', () async {
+        final url =
+            await (widget.imageUploader ?? uploadPlanCoverImage)(context);
+        if (url != null && url.isNotEmpty && mounted) {
+          setState(() => _coverUrl = url);
+        }
+      });
 
   void _renumber() {
     _days = [
@@ -161,12 +215,20 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
   Future<void> _addWorkout() async {
     if (_days.length >= trainingPlanMaxDays) return;
     final day = await _buildWorkout(null);
-    if (day != null && mounted) setState(() => _days.add(day));
+    if (day == null || !mounted) return;
+    setState(() => _days.add(day));
+    final missing = day.exercises.where((e) => !_hasVideo(e.name)).length;
+    if (missing > 0) {
+      _message(missing == 1
+          ? 'Now add the video for the new exercise on Day ${day.day}.'
+          : 'Now add a video for each of the $missing new exercises on Day ${day.day}.');
+    }
   }
 
   void _addRest() {
     if (_days.length >= trainingPlanMaxDays) return;
-    setState(() => _days.add(TrainingPlanDay(day: _days.length + 1, isRest: true)));
+    setState(
+        () => _days.add(TrainingPlanDay(day: _days.length + 1, isRest: true)));
   }
 
   Future<void> _editDay(int index) async {
@@ -191,17 +253,19 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
   }
 
   String? _validate() {
-    if (_title.text.trim().length < 3) return 'Give your plan a name (3+ characters).';
+    if (_title.text.trim().length < 3) {
+      return 'Give your plan a name (3+ characters).';
+    }
     if (_days.isEmpty) return 'Add at least one day.';
     if (_days.every((day) => day.isRest)) return 'Add at least one workout day.';
     return null;
   }
 
   Future<void> _save() async {
-    if (_saving) return;
+    if (_saving || _uploading != null) return;
     final problem = _validate();
     if (problem != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+      _message(problem);
       return;
     }
     setState(() => _saving = true);
@@ -218,14 +282,306 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
             .map(_videoFor)
             .whereType<PlanExerciseVideo>()
             .toList(),
+        coverImageUrl: _coverUrl,
+        introVideoAssetId: _intro?.assetId,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not save the plan. Please try again.')));
+      _message('Could not save the plan. Please try again.');
     }
+  }
+
+  Widget _sectionTitle(String text, {String? trailing, bool done = false}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(text,
+                  style: planText(size: 14, weight: FontWeight.w700)),
+            ),
+            if (trailing != null)
+              Flexible(
+                child: Text(trailing,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: planText(
+                        size: 11,
+                        color: done ? planGreen : planAmber,
+                        weight: FontWeight.w600)),
+              ),
+          ],
+        ),
+      );
+
+  Widget _uploadButton(String slot, String label, VoidCallback onPressed,
+          {Key? key}) =>
+      TextButton(
+        key: key,
+        onPressed: _uploading == null ? onPressed : null,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: const Size(0, 36),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: _uploading == slot
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child:
+                    CircularProgressIndicator(strokeWidth: 2, color: planGreen))
+            : Text(label,
+                style: planText(
+                    size: 12, color: planGreen, weight: FontWeight.w700)),
+      );
+
+  Widget _coverCard() {
+    final has = _coverUrl.isNotEmpty;
+    return Material(
+      color: planCard,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: const ValueKey('plan-cover'),
+        onTap: _uploading == null ? _uploadCover : null,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (has)
+                Image.network(_coverUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stack) =>
+                        const ColoredBox(color: Color(0xFF1B1B1B)))
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFF4A3A16)),
+                  ),
+                ),
+              Center(
+                child: _uploading == 'cover'
+                    ? const CircularProgressIndicator(color: planGreen)
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                                has
+                                    ? Icons.edit_rounded
+                                    : Icons.add_photo_alternate_outlined,
+                                color: has ? Colors.white : planAmber,
+                                size: 18),
+                            const SizedBox(width: 8),
+                            Text(has ? 'Change cover' : 'Add cover image',
+                                style: planText(
+                                    size: 12, weight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _thumb(PlanExerciseVideo? video, {double width = 40, double height = 52}) {
+    final ok = video != null && !video.failed;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(9),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: ok && video.thumbnailUrl.isNotEmpty
+            ? Image.network(video.thumbnailUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stack) => _placeholder(ok))
+            : _placeholder(ok),
+      ),
+    );
+  }
+
+  Widget _placeholder(bool ok) => ColoredBox(
+        color: const Color(0xFF1B1B1B),
+        child: Icon(ok ? Icons.videocam_rounded : Icons.videocam_off_outlined,
+            color: ok ? planGreen : planAmber, size: 18),
+      );
+
+  String _videoStatus(PlanExerciseVideo? video) {
+    if (video == null) return 'Video needed';
+    if (video.failed) return 'Upload failed, add it again';
+    return video.status == 'ready' ? 'Video added' : 'Video added · processing';
+  }
+
+  Widget _introCard() {
+    final intro = _intro;
+    final ok = intro != null && !intro.failed;
+    return Container(
+      key: const ValueKey('plan-intro-row'),
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: planCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ok ? planBorder : const Color(0xFF4A3A16)),
+      ),
+      child: Row(
+        children: [
+          _thumb(intro),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Intro video',
+                    style: planText(size: 13, weight: FontWeight.w600)),
+                Text(
+                    ok
+                        ? _videoStatus(intro)
+                        : 'Up to 60 s: who the plan is for and what they will get',
+                    style:
+                        planText(size: 10, color: ok ? planMuted : planAmber)),
+              ],
+            ),
+          ),
+          if (ok && intro.playbackUrl.isNotEmpty)
+            IconButton(
+              tooltip: 'Watch intro',
+              onPressed: () => showExerciseVideo(context,
+                  exerciseName: 'Intro video', videoUrl: intro.playbackUrl),
+              icon: const Icon(Icons.play_circle_outline_rounded,
+                  color: planMuted, size: 22),
+            ),
+          _uploadButton(_introLabel, ok ? 'Replace' : 'Upload', _uploadIntro,
+              key: const ValueKey('upload-plan-intro')),
+        ],
+      ),
+    );
+  }
+
+  Widget _exerciseRow(TrainingPlanDay day, RoutineExercise exercise) {
+    final name = exercise.name;
+    final video = _videoFor(name);
+    final ok = video != null && !video.failed;
+    final otherDays = _days
+        .where((other) =>
+            other.day != day.day &&
+            other.exercises.any((e) =>
+                trainingPlanExerciseKey(e.name) == trainingPlanExerciseKey(name)))
+        .map((other) => other.day)
+        .toList();
+    return Container(
+      key: ValueKey('plan-exercise-row-d${day.day}-$name'),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101010),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ok ? planBorder : const Color(0xFF4A3A16)),
+      ),
+      child: Row(
+        children: [
+          _thumb(video, width: 34, height: 44),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: planText(size: 13, weight: FontWeight.w600)),
+                Text(
+                    '${exercise.setCount} sets · ${_videoStatus(video)}'
+                    '${ok && otherDays.isNotEmpty ? ' · also day ${otherDays.join(', ')}' : ''}',
+                    maxLines: 2,
+                    style:
+                        planText(size: 10, color: ok ? planMuted : planAmber)),
+              ],
+            ),
+          ),
+          if (ok && video.playbackUrl.isNotEmpty)
+            IconButton(
+              tooltip: 'Watch video',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              onPressed: () => showExerciseVideo(context,
+                  exerciseName: name, videoUrl: video.playbackUrl),
+              icon: const Icon(Icons.play_circle_outline_rounded,
+                  color: planMuted, size: 21),
+            ),
+          _uploadButton(name, ok ? 'Replace' : 'Upload',
+              () => _uploadExerciseVideo(name),
+              key: ValueKey('upload-plan-video-d${day.day}-$name')),
+        ],
+      ),
+    );
+  }
+
+  Widget _dayCard(int index) {
+    final day = _days[index];
+    return Container(
+      key: ValueKey('builder-day-${day.day}'),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 6, 6, 10),
+      decoration: BoxDecoration(
+        color: planCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: planBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('Day ${day.day}',
+                  style: planText(
+                      size: 11,
+                      color: day.isRest ? planMuted : planGreen,
+                      weight: FontWeight.w700)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(day.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: planText(
+                        size: 14,
+                        color: day.isRest ? planMuted : Colors.white,
+                        weight: FontWeight.w600)),
+              ),
+              if (!day.isRest)
+                IconButton(
+                  key: ValueKey('edit-plan-day-${day.day}'),
+                  tooltip: 'Edit exercises',
+                  onPressed: () => _editDay(index),
+                  icon: const Icon(Icons.edit_outlined,
+                      color: planMuted, size: 19),
+                ),
+              IconButton(
+                key: ValueKey('remove-plan-day-${day.day}'),
+                tooltip: 'Remove day',
+                onPressed: () => _removeDay(index),
+                icon: const Icon(Icons.delete_outline_rounded,
+                    color: planMuted, size: 19),
+              ),
+            ],
+          ),
+          ...day.exercises.map((exercise) => _exerciseRow(day, exercise)),
+        ],
+      ),
+    );
   }
 
   Widget _picker(String label, Map<String, String> options, String value,
@@ -234,7 +590,8 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: planText(size: 12, color: planMuted, weight: FontWeight.w600)),
+            style:
+                planText(size: 12, color: planMuted, weight: FontWeight.w600)),
         const SizedBox(height: 7),
         Wrap(
           spacing: 7,
@@ -262,155 +619,10 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
     );
   }
 
-  Widget _dayCard(int index) {
-    final day = _days[index];
-    return Container(
-      key: ValueKey('builder-day-${day.day}'),
-      margin: const EdgeInsets.only(bottom: 9),
-      decoration: BoxDecoration(
-        color: planCard,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: planBorder),
-      ),
-      child: ListTile(
-        onTap: day.isRest ? null : () => _editDay(index),
-        leading: Text('Day ${day.day}',
-            style: planText(
-                size: 11,
-                color: day.isRest ? planMuted : planGreen,
-                weight: FontWeight.w700)),
-        title: Text(day.displayTitle,
-            style: planText(
-                size: 14,
-                color: day.isRest ? planMuted : Colors.white,
-                weight: FontWeight.w600)),
-        subtitle: day.isRest
-            ? null
-            : Text('${day.exercises.length} exercises · tap to edit',
-                style: planText(size: 10, color: planMuted)),
-        trailing: IconButton(
-          key: ValueKey('remove-plan-day-${day.day}'),
-          tooltip: 'Remove day',
-          onPressed: () => _removeDay(index),
-          icon: const Icon(Icons.delete_outline_rounded, color: planMuted, size: 19),
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _videoSection() {
-    final missing = _missingVideos;
-    return [
-      const SizedBox(height: 22),
-      Row(
-        children: [
-          Expanded(
-            child: Text('Exercise videos',
-                style: planText(size: 14, weight: FontWeight.w700)),
-          ),
-          Text(missing == 0 ? 'All set' : '$missing still needed',
-              key: const ValueKey('plan-videos-missing'),
-              style: planText(
-                  size: 11,
-                  color: missing == 0 ? planGreen : planAmber,
-                  weight: FontWeight.w600)),
-        ],
-      ),
-      const SizedBox(height: 4),
-      Text(
-        'Every exercise needs a short video (up to 60 s) showing how to do it. '
-        'Record each exercise once: it is reused on every day it appears.',
-        style: planText(size: 11, color: planMuted),
-      ),
-      const SizedBox(height: 10),
-      ..._exerciseNames.map(_videoRow),
-    ];
-  }
-
-  Widget _videoRow(String name) {
-    final video = _videoFor(name);
-    final uploading = _uploadingExercise == name;
-    final ok = video != null && !video.failed;
-    final status = ok
-        ? (video.status == 'ready' ? 'Video added' : 'Video added · processing')
-        : video?.failed == true
-            ? 'Upload failed, add it again'
-            : 'Video needed';
-    return Container(
-      key: ValueKey('plan-video-row-$name'),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-      decoration: BoxDecoration(
-        color: planCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ok ? planBorder : const Color(0xFF4A3A16)),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(9),
-            child: SizedBox(
-              width: 40,
-              height: 52,
-              child: ok && video.thumbnailUrl.isNotEmpty
-                  ? Image.network(video.thumbnailUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) =>
-                          _videoPlaceholder(ok))
-                  : _videoPlaceholder(ok),
-            ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: planText(size: 13, weight: FontWeight.w600)),
-                Text(status,
-                    style:
-                        planText(size: 10, color: ok ? planMuted : planAmber)),
-              ],
-            ),
-          ),
-          if (ok && video.playbackUrl.isNotEmpty)
-            IconButton(
-              tooltip: 'Watch video',
-              onPressed: () => showExerciseVideo(context,
-                  exerciseName: name, videoUrl: video.playbackUrl),
-              icon: const Icon(Icons.play_circle_outline_rounded,
-                  color: planMuted, size: 22),
-            ),
-          TextButton(
-            key: ValueKey('upload-plan-video-$name'),
-            onPressed:
-                _uploadingExercise == null ? () => _uploadVideo(name) : null,
-            child: uploading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: planGreen))
-                : Text(ok ? 'Replace' : 'Upload',
-                    style: planText(
-                        size: 12, color: planGreen, weight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _videoPlaceholder(bool ok) => ColoredBox(
-        color: const Color(0xFF1B1B1B),
-        child: Icon(ok ? Icons.videocam_rounded : Icons.videocam_off_outlined,
-            color: ok ? planGreen : planAmber, size: 18),
-      );
-
   @override
   Widget build(BuildContext context) {
     final full = _days.length >= trainingPlanMaxDays;
+    final total = _exerciseNames.length;
     return planScaled(
       context,
       Scaffold(
@@ -425,7 +637,7 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                 icon: Icons.close_rounded,
                 action: TextButton(
                   key: const ValueKey('save-training-plan'),
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving || _uploading != null ? null : _save,
                   child: Text(_saving ? 'Saving…' : 'Save',
                       style: planText(
                           size: 13, color: planGreen, weight: FontWeight.w700)),
@@ -435,14 +647,27 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
                   children: [
+                    _sectionTitle('Cover image',
+                        trailing: _coverUrl.isEmpty ? 'Required' : 'Added',
+                        done: _coverUrl.isNotEmpty),
+                    _coverCard(),
+                    const SizedBox(height: 18),
+                    _sectionTitle('Intro video',
+                        trailing: _intro == null || _intro!.failed
+                            ? 'Required'
+                            : 'Added',
+                        done: _intro != null && !_intro!.failed),
+                    _introCard(),
+                    const SizedBox(height: 18),
                     TextField(
                       key: const ValueKey('plan-title'),
                       controller: _title,
                       maxLength: 80,
                       textCapitalization: TextCapitalization.sentences,
                       style: planText(size: 16, weight: FontWeight.w600),
-                      decoration: planInput('Plan name, e.g. 4-Week Glute Builder')
-                          .copyWith(counterText: ''),
+                      decoration:
+                          planInput('Plan name, e.g. 4-Week Glute Builder')
+                              .copyWith(counterText: ''),
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -459,15 +684,18 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                     ),
                     const SizedBox(height: 16),
                     _picker('Goal', trainingPlanGoals, _goal, (v) => _goal = v),
-                    _picker('Level', trainingPlanLevels, _level, (v) => _level = v),
+                    _picker(
+                        'Level', trainingPlanLevels, _level, (v) => _level = v),
                     _picker('Equipment', trainingPlanEquipment, _equipment,
                         (v) => _equipment = v),
                     Row(
                       children: [
                         Expanded(
-                          child: Text('Days',
-                              style: planText(
-                                  size: 14, weight: FontWeight.w700)),
+                          child: _sectionTitle('Days',
+                              trailing: total == 0
+                                  ? null
+                                  : 'Videos $_videosDone/$total',
+                              done: total > 0 && _videosDone == total),
                         ),
                         if (_days.length >= 2 && !full)
                           TextButton.icon(
@@ -481,10 +709,15 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    Text(
+                      'Every exercise needs a short video (up to 60 s) showing how to do it. '
+                      'An exercise used on several days shares one video.',
+                      style: planText(size: 11, color: planMuted),
+                    ),
+                    const SizedBox(height: 10),
                     if (_days.isEmpty)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         child: Text(
                           'Add workout and rest days in the order people should do them. A plan can be 1 to 31 days long.',
                           style: planText(size: 12, color: planMuted),
@@ -528,7 +761,6 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                         ),
                       ],
                     ),
-                    if (_exerciseNames.isNotEmpty) ..._videoSection(),
                     const SizedBox(height: 18),
                     Text(
                       'Plans are free for now. Paid plans are coming soon.',

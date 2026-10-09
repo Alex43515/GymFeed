@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '/backend/supabase/supabase.dart';
 
-enum ReportedContentType { post, foodPost, workout, account }
+enum ReportedContentType { post, foodPost, workout, account, trainingPlan }
 
 extension ReportedContentTypeValue on ReportedContentType {
   String get databaseValue => switch (this) {
@@ -12,12 +12,14 @@ extension ReportedContentTypeValue on ReportedContentType {
         ReportedContentType.foodPost => 'food_post',
         ReportedContentType.workout => 'workout',
         ReportedContentType.account => 'account',
+        ReportedContentType.trainingPlan => 'training_plan',
       };
 
   String get label => switch (this) {
         ReportedContentType.foodPost => 'food post',
         ReportedContentType.workout => 'workout',
         ReportedContentType.account => 'account',
+        ReportedContentType.trainingPlan => 'training plan',
         ReportedContentType.post => 'post',
       };
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '/backend/backend.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
+import '/backend/supabase/repositories/training_plan_repository.dart';
 import '/backend/supabase/repositories/training_repository.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/components/post_type_badge/post_type_badge.dart';
@@ -11,6 +12,9 @@ import '/flutter_flow/custom_functions.dart' as functions;
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import '/ai_workout/coach_events/event_details_sheet.dart';
+import '/workout/plans/training_plan_detail_widget.dart';
+import '/workout/plans/training_plan_models.dart';
+import '/workout/plans/training_plan_ui.dart';
 
 class MobileProfileView extends StatefulWidget {
   const MobileProfileView({
@@ -54,6 +58,7 @@ class _MobileProfileViewState extends State<MobileProfileView> {
   late Stream<List<PostsRecord>> _posts;
   late Stream<List<PostsRecord>> _tagged;
   late Stream<List<UserTrainingsRecord>> _trainings;
+  Future<List<TrainingPlan>>? _plans;
   Future<ProfileSocialState>? _social;
 
   String get _userId {
@@ -64,7 +69,7 @@ class _MobileProfileViewState extends State<MobileProfileView> {
   @override
   void initState() {
     super.initState();
-    _tab = widget.initialTab.clamp(0, 2);
+    _tab = widget.initialTab.clamp(0, 3);
     _bindData();
   }
 
@@ -80,6 +85,7 @@ class _MobileProfileViewState extends State<MobileProfileView> {
     _posts = queryPostsByUserStream(_userId);
     _tagged = queryTaggedPostsByUserStream(_userId);
     _trainings = queryTrainingsByUserStream(_userId);
+    _plans = null;
     if (widget.followerCount == null || widget.followingCount == null) {
       _social = ProfileRepository().socialState(_userId);
     }
@@ -269,7 +275,7 @@ class _MobileProfileViewState extends State<MobileProfileView> {
   Widget _divider() => Container(width: 1.5, height: 43, color: Colors.black);
 
   Widget _tabs() {
-    const labels = ['Posts', 'Tagged', 'Workout'];
+    const labels = ['Posts', 'Tagged', 'Workout', 'Plans'];
     return Row(
       children: List.generate(labels.length, (index) {
         final selected = _tab == index;
@@ -300,6 +306,7 @@ class _MobileProfileViewState extends State<MobileProfileView> {
 
   Widget _content() {
     if (_tab == 2) return _workoutList();
+    if (_tab == 3) return _planList();
     return _postGrid(_tab == 0 ? _posts : _tagged);
   }
 
@@ -374,6 +381,42 @@ class _MobileProfileViewState extends State<MobileProfileView> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Published training plans by this athlete.
+  Widget _planList() {
+    final plans = _plans ??= TrainingPlanRepository()
+        .bySeller(_userId)
+        .catchError((_) => const <TrainingPlan>[]);
+    return FutureBuilder<List<TrainingPlan>>(
+      future: plans,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+              height: 180,
+              child: Center(child: CircularProgressIndicator(color: _green)));
+        }
+        final items = snapshot.data ?? const <TrainingPlan>[];
+        if (items.isEmpty) {
+          return _empty(widget.isSelf
+              ? 'Create a plan in Train → Training plans'
+              : 'No training plans yet');
+        }
+        return Column(
+          children: items
+              .map((plan) => TrainingPlanCard(
+                    plan: plan,
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      settings:
+                          const RouteSettings(name: 'profile-training-plan'),
+                      builder: (_) =>
+                          TrainingPlanDetailWidget(planId: plan.id),
+                    )),
+                  ))
+              .toList(),
+        );
+      },
     );
   }
 

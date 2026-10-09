@@ -115,6 +115,15 @@ InputDecoration planInput(String hint) => InputDecoration(
       ),
     );
 
+Widget _daysBadge(TrainingPlan plan) => Container(
+      color: const Color(0xFF123821),
+      alignment: Alignment.center,
+      child: Text('${plan.dayCount}\nDAYS',
+          textAlign: TextAlign.center,
+          style: planText(
+              size: 11, color: planGreen, weight: FontWeight.w800, height: 1.1)),
+    );
+
 class TrainingPlanCard extends StatelessWidget {
   const TrainingPlanCard({
     super.key,
@@ -146,21 +155,18 @@ class TrainingPlanCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF123821),
-                    borderRadius: BorderRadius.circular(14),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: plan.coverUrl.isNotEmpty
+                        ? Image.network(plan.coverUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stack) =>
+                                _daysBadge(plan))
+                        : _daysBadge(plan),
                   ),
-                  alignment: Alignment.center,
-                  child: Text('${plan.dayCount}\nDAYS',
-                      textAlign: TextAlign.center,
-                      style: planText(
-                          size: 11,
-                          color: planGreen,
-                          weight: FontWeight.w800,
-                          height: 1.1)),
                 ),
                 const SizedBox(width: 13),
                 Expanded(
@@ -184,12 +190,20 @@ class TrainingPlanCard extends StatelessWidget {
                         spacing: 6,
                         runSpacing: 6,
                         children: [
+                          if (plan.isFeatured && !showStatus)
+                            planChip('Featured',
+                                color: planBg, background: planAmber),
                           if (showStatus)
                             planChip(plan.statusLabel,
                                 color: planStatusColor(plan.status))
                           else
                             planChip(plan.goalLabel),
+                          planChip(plan.lengthLabel),
                           planChip(plan.priceLabel, color: planGreen),
+                          if (plan.ratingCount > 0 && plan.ratingAvg != null)
+                            planChip(
+                                '★ ${plan.ratingAvg!.toStringAsFixed(1)} (${plan.ratingCount})',
+                                color: planAmber),
                           if (plan.enrollmentCount > 0)
                             planChip('${plan.enrollmentCount} following'),
                         ],

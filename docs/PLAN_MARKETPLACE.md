@@ -217,6 +217,18 @@ seller_payouts      id, seller_id, amount_usd, currency, provider, reference, st
 - **Prvi admin:** nalog `alexZ`. Novi admin se dodaje sa:
   `insert into app_admins (user_id) select id from profiles where username = '<username>';`
 
+### Status faze 2b (sve besplatno je urađeno, plaćeni planovi nisu)
+
+- **Upload videa direktno na svakoj vežbi:** u builder-u svaki dan prikazuje svoje vežbe, a uz svaku stoji Upload/Replace. Ista vežba na više dana deli jedan video.
+- **Cover slika** (obavezna, `images` bucket kao slike postova) i **intro video** (obavezan, Bunny). Stranica plana prikazuje cover sa dugmetom „Watch intro“, a karte u prodavnici prikazuju cover.
+- **Ocene 1–5 + komentar:** samo ljudi koji su dodali plan u Train i nisu njegov autor. Prosek se računa sam.
+- **Istaknuti planovi:** admin na stranici objavljenog plana bira „Admin: feature in store“, a ti planovi su na vrhu Discover-a.
+- **Tab „Plans“ na profilu** (mobilni profil) prikazuje objavljene planove tog korisnika.
+- **Deljenje:** link `https://gymfeed.io/trainingPlan?id=<id>` otvara plan u aplikaciji na Androidu (App Links), odnosno u web aplikaciji. Na iOS-u za sada otvara web, jer iOS associated domains nisu podešeni za gymfeed.io.
+- **Prijava plana:** isti „Report“ tok kao za postove (`content_type = training_plan`).
+- **Zaštita:** objavljen plan ne može da se menja direktno, samo kroz uređivanje i ponovno slanje.
+- Migracija je `20261010120000_training_plan_media_and_ratings.sql` (puštena u produkciju).
+
 **Odobravanje bez aplikacije** (i dalje radi) — u Supabase SQL editoru:
 ```sql
 select id, title, seller_id, created_at from training_plans where status = 'in_review';

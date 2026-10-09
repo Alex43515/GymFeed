@@ -2,7 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '/backend/share_links.dart';
+import '/backend/supabase/repositories/content_safety_repository.dart';
 import '/backend/supabase/supabase.dart';
+import '/components/content_safety/report_content_sheet.dart';
+import '/flutter_flow/flutter_flow_video_player.dart';
 import '/workout/routines/exercise_video_sheet.dart';
 import '/workout/routines/workout_routine_store.dart';
 
@@ -27,6 +31,10 @@ class TrainingPlanDetailWidget extends StatefulWidget {
   final TrainingPlanService? service;
   final String? currentUserId;
 
+  /// Shared links open https://gymfeed.io/trainingPlan?id=<plan id>.
+  static String routeName = 'trainingPlan';
+  static String routePath = 'trainingPlan';
+
   @override
   State<TrainingPlanDetailWidget> createState() =>
       _TrainingPlanDetailWidgetState();
@@ -36,7 +44,9 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
   late final TrainingPlanService _service =
       widget.service ?? TrainingPlanService();
   late Future<TrainingPlan?> _planFuture;
+  late Future<List<TrainingPlanRating>> _ratingsFuture;
   bool _onMyTrain = false;
+  bool _playIntro = false;
   bool _isAdmin = false;
   bool _busy = false;
   bool _changed = false;
@@ -52,6 +62,9 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
 
   void _load() {
     _planFuture = _service.repository.get(widget.planId);
+    _ratingsFuture = _service.repository
+        .ratings(widget.planId)
+        .catchError((_) => const <TrainingPlanRating>[]);
     _service.repository.isAdmin().then((admin) {
       if (mounted && admin != _isAdmin) setState(() => _isAdmin = admin);
     }).catchError((_) {});
@@ -120,11 +133,9 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
   }
 
   Future<void> _submit(TrainingPlan plan) async {
-    final missing = plan.exercisesMissingVideo;
-    if (missing.isNotEmpty) {
-      _message(missing.length == 1
-          ? '${missing.first} still needs a video. Tap Edit to add it.'
-          : '${missing.length} exercises still need a video. Tap Edit to add them.');
+    final problems = plan.submitProblems;
+    if (problems.isNotEmpty) {
+      _message('Still needed: ${problems.join(', ')}. Tap Edit to add it.');
       return;
     }
     await _guard(() async {
@@ -156,7 +167,11 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
       return true;
     } catch (error) {
       final text = error.toString();
-      _message(text.contains('video')
+      _message(text.contains('cover image')
+          ? 'Add a cover image first.'
+          : text.contains('intro video')
+          ? 'Add an intro video first.'
+          : text.contains('video')
           ? 'Every exercise needs an explanation video.'
           : text.contains('exercise') || text.contains('workout day')
               ? 'Every workout day needs at least one exercise.'
@@ -264,6 +279,285 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
         ),
         const SizedBox(height: 16),
       ];
+
+  Future<void> _toggleFeatured(TrainingPlan plan) async {
+    final ok = await _guard(
+        () => _service.repository.setFeatured(plan.id, !plan.isFeatured));
+    if (!ok || !mounted) return;
+    _message(plan.isFeatured
+        ? 'Removed from featured plans.'
+        : 'Featured at the top of the store.');
+    _reload();
+  }
+
+  Future<void> _share(TrainingPlan plan) async {
+    final box = context.findRenderObject() as RenderBox?;
+    await shareGymFeedTrainingPlan(
+      planId: plan.id,
+      title: plan.title,
+      sharePositionOrigin:
+          box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+    );
+  }
+
+  Future<void> _report(TrainingPlan plan) => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => ReportContentSheet(
+          contentId: plan.id,
+          authorId: plan.sellerId,
+          authorUsername: plan.seller?.username ?? '',
+          imageUrl: plan.coverUrl,
+          contentType: ReportedContentType.trainingPlan,
+        ),
+      );
+
+  Future<void> _rate(TrainingPlan plan, TrainingPlanRating? mine) async {
+    var stars = mine?.rating ?? 5;
+    final comment = TextEditingController(text: mine?.comment ?? '');
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: planCard,
+          title: Text('Rate this plan',
+              style: planText(size: 16, weight: FontWeight.w700)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  final value = index + 1;
+                  return InkResponse(
+                    key: ValueKey('rate-star-$value'),
+                    radius: 22,
+                    onTap: () => setDialogState(() => stars = value),
+                    child: SizedBox(
+                      width: 42,
+                      height: 44,
+                      child: Icon(
+                          value <= stars
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                          color: planAmber,
+                          size: 32),
+                    ),
+                  );
+                }),
+              ),
+              TextField(
+                key: const ValueKey('rate-comment'),
+                controller: comment,
+                maxLength: 500,
+                minLines: 2,
+                maxLines: 4,
+                style: planText(size: 13),
+                decoration: planInput('What did you like? (optional)'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel', style: planText(color: planMuted))),
+            TextButton(
+                key: const ValueKey('save-rating'),
+                onPressed: () => Navigator.pop(context, true),
+                child: Text('Save',
+                    style: planText(color: planGreen, weight: FontWeight.w700))),
+          ],
+        ),
+      ),
+    );
+    final text = comment.text;
+    // The dialog keeps building during its closing animation.
+    unawaited(Future<void>.delayed(
+        const Duration(milliseconds: 500), comment.dispose));
+    if (save != true) return;
+    final ok = await _guard(() => _service.repository
+        .rate(plan.id, rating: stars, comment: text));
+    if (!ok || !mounted) return;
+    _message('Thanks for rating this plan.');
+    _reload();
+  }
+
+  Widget _stars(double value, {double size = 15}) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(5, (index) {
+          final filled = value >= index + 0.75;
+          final half = !filled && value >= index + 0.25;
+          return Icon(
+              filled
+                  ? Icons.star_rounded
+                  : half
+                      ? Icons.star_half_rounded
+                      : Icons.star_outline_rounded,
+              color: planAmber,
+              size: size);
+        }),
+      );
+
+  Widget _ratingsSection(TrainingPlan plan, bool isOwner) {
+    return FutureBuilder<List<TrainingPlanRating>>(
+      future: _ratingsFuture,
+      builder: (context, snapshot) {
+        final ratings = snapshot.data ?? const <TrainingPlanRating>[];
+        final mine = ratings.where((r) => r.userId == _uid).firstOrNull;
+        final canRate = _onMyTrain && !isOwner && plan.isPublished;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Ratings',
+                      style: planText(
+                          size: 13,
+                          color: planMuted,
+                          weight: FontWeight.w600)),
+                ),
+                if (canRate)
+                  TextButton(
+                    key: const ValueKey('rate-plan'),
+                    onPressed: _busy ? null : () => _rate(plan, mine),
+                    child: Text(mine == null ? 'Rate this plan' : 'Edit my rating',
+                        style: planText(
+                            size: 12,
+                            color: planGreen,
+                            weight: FontWeight.w700)),
+                  ),
+              ],
+            ),
+            Row(
+              children: [
+                _stars(plan.ratingAvg ?? 0, size: 18),
+                const SizedBox(width: 8),
+                Text(plan.ratingLabel,
+                    key: const ValueKey('plan-rating-label'),
+                    style: planText(size: 12, color: planMuted)),
+              ],
+            ),
+            ...ratings.where((r) => r.comment.trim().isNotEmpty).take(5).map(
+                  (rating) => Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: planCard,
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(color: planBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(rating.authorName,
+                                  style: planText(
+                                      size: 12, weight: FontWeight.w600)),
+                            ),
+                            _stars(rating.rating.toDouble(), size: 13),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(rating.comment,
+                            style: planText(
+                                size: 12, color: const Color(0xFFCFCFCF))),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _hero(TrainingPlan plan) {
+    final intro = plan.introVideo;
+    final playable = intro?.isPlayable == true;
+    if (_playIntro && playable) {
+      return ClipRRect(
+        key: const ValueKey('plan-intro-player'),
+        borderRadius: BorderRadius.circular(18),
+        child: ColoredBox(
+          color: Colors.black,
+          child: AspectRatio(
+            aspectRatio: 9 / 12,
+            child: FlutterFlowVideoPlayer(
+              path: intro!.playbackUrl,
+              aspectRatio: 9 / 16,
+              autoPlay: true,
+              looping: false,
+              showControls: true,
+              allowFullScreen: true,
+            ),
+          ),
+        ),
+      );
+    }
+    final cover = plan.coverUrl;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (cover.isNotEmpty)
+              Image.network(cover,
+                  key: const ValueKey('plan-cover-image'),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) =>
+                      const ColoredBox(color: planCard))
+            else
+              const ColoredBox(
+                color: Color(0xFF123821),
+                child: Center(
+                    child: Icon(Icons.event_note_rounded,
+                        color: planGreen, size: 42)),
+              ),
+            if (playable)
+              Center(
+                child: Material(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  shape: const StadiumBorder(),
+                  child: InkWell(
+                    key: const ValueKey('play-plan-intro'),
+                    customBorder: const StadiumBorder(),
+                    onTap: () => setState(() => _playIntro = true),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.play_arrow_rounded,
+                              color: Colors.white, size: 24),
+                          const SizedBox(width: 6),
+                          Text('Watch intro',
+                              style:
+                                  planText(size: 13, weight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (plan.isFeatured)
+              Positioned(
+                left: 10,
+                top: 10,
+                child: planChip('Featured',
+                    color: planBg, background: planAmber),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<bool> _confirm(String title, String body) async {
     final result = await showDialog<bool>(
@@ -398,10 +692,10 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                 },
                 style: planText(size: 12, color: planMuted),
               ),
-              if (plan.isEditable && plan.exercisesMissingVideo.isNotEmpty) ...[
+              if (plan.isEditable && plan.submitProblems.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Videos needed: ${plan.exercisesMissingVideo.join(', ')}',
+                  'Still needed: ${plan.submitProblems.join(', ')}',
                   key: const ValueKey('owner-missing-videos'),
                   style: planText(size: 12, color: planAmber),
                 ),
@@ -472,14 +766,58 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                 final isOwner = plan.sellerId == _uid;
                 return Column(
                   children: [
-                    planTopBar(context, title: plan.title),
+                    planTopBar(
+                      context,
+                      title: plan.title,
+                      action: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (plan.isPublished)
+                            IconButton(
+                              key: const ValueKey('share-plan'),
+                              tooltip: 'Share plan',
+                              onPressed: () => _share(plan),
+                              icon: const Icon(Icons.ios_share_rounded,
+                                  color: Colors.white, size: 20),
+                            ),
+                          if (!isOwner)
+                            IconButton(
+                              key: const ValueKey('report-plan'),
+                              tooltip: 'Report plan',
+                              onPressed: () => _report(plan),
+                              icon: const Icon(Icons.flag_outlined,
+                                  color: planMuted, size: 20),
+                            ),
+                        ],
+                      ),
+                    ),
                     Expanded(
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
                         children: [
                           if (_isAdmin && plan.status == 'in_review')
                             ..._adminSection(plan),
+                          if (_isAdmin && plan.isPublished) ...[
+                            OutlinedButton.icon(
+                              key: const ValueKey('toggle-featured'),
+                              onPressed: _busy ? null : () => _toggleFeatured(plan),
+                              icon: Icon(
+                                  plan.isFeatured
+                                      ? Icons.star_rounded
+                                      : Icons.star_outline_rounded,
+                                  color: planAmber,
+                                  size: 18),
+                              label: Text(
+                                  plan.isFeatured
+                                      ? 'Admin: remove from featured'
+                                      : 'Admin: feature in store',
+                                  style: planText(size: 12)),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           if (isOwner) ..._ownerSection(plan),
+                          _hero(plan),
+                          const SizedBox(height: 14),
                           Text(plan.title,
                               style: planText(size: 22, weight: FontWeight.w800)),
                           const SizedBox(height: 4),
@@ -511,6 +849,11 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                                   weight: FontWeight.w600)),
                           const SizedBox(height: 8),
                           ...plan.days.map((day) => _dayTile(plan, day)),
+                          const SizedBox(height: 16),
+                          if (plan.isPublished) ...[
+                            _ratingsSection(plan, isOwner),
+                            const SizedBox(height: 16),
+                          ],
                           const SizedBox(height: 8),
                           Text(
                             'Consult a doctor before starting a new training program.',

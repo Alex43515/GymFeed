@@ -10,7 +10,9 @@ class TrainingPlanRepository {
       '*, seller:profiles!training_plans_seller_id_fkey(id,username,display_name,photo_url)';
   static const _detailSelect = '$_listSelect, days:training_plan_days(*), '
       'videos:training_plan_exercise_videos(exercise_name,video_asset_id,'
-      'asset:media_assets(playback_url,thumbnail_url,status))';
+      'asset:media_assets(playback_url,thumbnail_url,status)), '
+      'intro:media_assets!training_plans_intro_video_asset_id_fkey('
+      'id,playback_url,thumbnail_url,status)';
 
   String _requireUid() {
     final uid = _uid;
@@ -38,6 +40,18 @@ class TrainingPlanRepository {
     }
     final rows = await query
         .order('enrollment_count', ascending: false)
+        .order('published_at', ascending: false)
+        .limit(limit);
+    return _plans(rows);
+  }
+
+  /// Plans a GymFeed admin picked for the top of the store.
+  Future<List<TrainingPlan>> featured({int limit = 10}) async {
+    final rows = await _db
+        .from('training_plans')
+        .select(_listSelect)
+        .eq('status', 'published')
+        .eq('is_featured', true)
         .order('published_at', ascending: false)
         .limit(limit);
     return _plans(rows);
@@ -84,6 +98,8 @@ class TrainingPlanRepository {
     required String equipment,
     required List<TrainingPlanDay> days,
     Iterable<PlanExerciseVideo> videos = const [],
+    String coverImageUrl = '',
+    String? introVideoAssetId,
   }) async {
     _requireUid();
     final id = await _db.rpc('save_training_plan', params: {
@@ -94,6 +110,8 @@ class TrainingPlanRepository {
         'goal': goal,
         'level': level,
         'equipment': equipment,
+        'cover_image_url': coverImageUrl,
+        'intro_video_asset_id': introVideoAssetId ?? '',
       },
       'p_days': days.map((day) => day.toRpcJson()).toList(),
       'p_videos': videos.map((video) => video.toRpcJson()).toList(),
@@ -156,6 +174,34 @@ class TrainingPlanRepository {
       'p_note': note.trim(),
     });
     return status.toString();
+  }
+
+  Future<void> setFeatured(String planId, bool featured) async {
+    await _db.rpc('set_training_plan_featured',
+        params: {'p_plan_id': planId, 'p_featured': featured});
+  }
+
+  Future<List<TrainingPlanRating>> ratings(String planId, {int limit = 30}) async {
+    final rows = await _db
+        .from('training_plan_ratings')
+        .select('*, author:profiles!training_plan_ratings_user_id_fkey(username,display_name)')
+        .eq('plan_id', planId)
+        .order('updated_at', ascending: false)
+        .limit(limit);
+    return (rows as List)
+        .whereType<Map<String, dynamic>>()
+        .map(TrainingPlanRating.fromRow)
+        .toList(growable: false);
+  }
+
+  /// Only people who added the plan to their Train can rate it (enforced by RLS).
+  Future<void> rate(String planId, {required int rating, String comment = ''}) async {
+    await _db.from('training_plan_ratings').upsert({
+      'plan_id': planId,
+      'user_id': _requireUid(),
+      'rating': rating.clamp(1, 5),
+      'comment': comment.trim(),
+    }, onConflict: 'plan_id,user_id');
   }
 
   Future<void> enroll({

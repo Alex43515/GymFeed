@@ -30,6 +30,7 @@ class _TrainingPlansWidgetState extends State<TrainingPlansWidget> {
   String? _goal;
   final _search = TextEditingController();
   late Future<List<TrainingPlan>> _storeFuture;
+  late Future<List<TrainingPlan>> _featuredFuture;
   late Future<_MyPlans> _mineFuture;
   bool _calendarChanged = false;
   int? _reviewCount;
@@ -70,8 +71,84 @@ class _TrainingPlansWidgetState extends State<TrainingPlansWidget> {
     super.dispose();
   }
 
-  void _loadStore() =>
-      _storeFuture = _repository.browse(goal: _goal, search: _search.text);
+  void _loadStore() {
+    _storeFuture = _repository.browse(goal: _goal, search: _search.text);
+    _featuredFuture = _repository
+        .featured()
+        .catchError((_) => const <TrainingPlan>[]);
+  }
+
+  bool get _filtered => _goal != null || _search.text.trim().isNotEmpty;
+
+  Widget _featured() => FutureBuilder<List<TrainingPlan>>(
+        future: _featuredFuture,
+        builder: (context, snapshot) {
+          final plans = snapshot.data ?? const <TrainingPlan>[];
+          if (_filtered || plans.isEmpty) return const SizedBox.shrink();
+          return Column(
+            key: const ValueKey('featured-plans'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Featured',
+                  style: planText(
+                      size: 13, color: planAmber, weight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 168,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: plans.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final plan = plans[index];
+                    return InkWell(
+                      key: ValueKey('featured-plan-${plan.id}'),
+                      onTap: () => _open(plan.id),
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        width: 220,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: AspectRatio(
+                                aspectRatio: 16 / 9,
+                                child: plan.coverUrl.isEmpty
+                                    ? const ColoredBox(color: Color(0xFF123821))
+                                    : Image.network(plan.coverUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stack) =>
+                                            const ColoredBox(color: planCard)),
+                              ),
+                            ),
+                            const SizedBox(height: 7),
+                            Text(plan.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: planText(
+                                    size: 13, weight: FontWeight.w700)),
+                            Text(
+                                '${plan.lengthLabel} · by ${plan.seller?.label ?? 'GymFeed athlete'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: planText(size: 11, color: planMuted)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('All plans',
+                  style: planText(
+                      size: 13, color: planMuted, weight: FontWeight.w600)),
+              const SizedBox(height: 8),
+            ],
+          );
+        },
+      );
 
   void _loadMine() => _mineFuture = () async {
         final results = await Future.wait<dynamic>([
@@ -215,6 +292,7 @@ class _TrainingPlansWidgetState extends State<TrainingPlansWidget> {
           ),
         ),
         const SizedBox(height: 14),
+        _featured(),
         FutureBuilder<List<TrainingPlan>>(
           future: _storeFuture,
           builder: (context, snapshot) {

@@ -168,6 +168,11 @@ class TrainingPlan {
     this.seller,
     this.days = const [],
     this.videos = const {},
+    this.coverImageUrl = '',
+    this.introVideo,
+    this.isFeatured = false,
+    this.ratingAvg,
+    this.ratingCount = 0,
     this.updatedAt,
   });
 
@@ -189,7 +194,33 @@ class TrainingPlan {
 
   /// Keyed by [trainingPlanExerciseKey].
   final Map<String, PlanExerciseVideo> videos;
+
+  /// Public image in the `images` storage bucket.
+  final String coverImageUrl;
+
+  /// Bunny Stream video shown at the top of the plan page.
+  final PlanExerciseVideo? introVideo;
+  final bool isFeatured;
+  final double? ratingAvg;
+  final int ratingCount;
   final DateTime? updatedAt;
+
+  bool get hasIntroVideo => introVideo != null && !introVideo!.failed;
+
+  /// Everything a plan still needs before it can be submitted.
+  List<String> get submitProblems => [
+        if (coverImageUrl.isEmpty) 'a cover image',
+        if (!hasIntroVideo) 'an intro video',
+        if (exercisesMissingVideo.isNotEmpty)
+          exercisesMissingVideo.length == 1
+              ? 'a video for ${exercisesMissingVideo.first}'
+              : 'videos for ${exercisesMissingVideo.length} exercises',
+      ];
+
+  String get ratingLabel => ratingCount == 0 || ratingAvg == null
+      ? 'No ratings yet'
+      : '${ratingAvg!.toStringAsFixed(1)} · $ratingCount '
+          '${ratingCount == 1 ? 'rating' : 'ratings'}';
 
   PlanExerciseVideo? videoFor(String exerciseName) =>
       videos[trainingPlanExerciseKey(exerciseName)];
@@ -201,9 +232,15 @@ class TrainingPlan {
       .where((name) => !(videoFor(name)?.failed == false))
       .toList(growable: false);
 
-  String get coverUrl => exerciseNames
-      .map((name) => videoFor(name)?.thumbnailUrl ?? '')
-      .firstWhere((url) => url.isNotEmpty, orElse: () => '');
+  /// The uploaded cover, falling back to a video thumbnail for older plans.
+  String get coverUrl {
+    if (coverImageUrl.isNotEmpty) return coverImageUrl;
+    final intro = introVideo?.thumbnailUrl ?? '';
+    if (intro.isNotEmpty) return intro;
+    return exerciseNames
+        .map((name) => videoFor(name)?.thumbnailUrl ?? '')
+        .firstWhere((url) => url.isNotEmpty, orElse: () => '');
+  }
 
   bool get isFree => priceCents == 0;
   bool get isPublished => status == 'published';
@@ -244,6 +281,8 @@ class TrainingPlan {
               PlanExerciseVideo.fromRow(
                   item.map((key, value) => MapEntry(key.toString(), value))),
     }..remove('');
+    final intro = row['intro'];
+    final rating = row['rating_avg'];
     return TrainingPlan(
       id: _text(row['id']),
       sellerId: _text(row['seller_id']),
@@ -268,6 +307,19 @@ class TrainingPlan {
           : null,
       days: List.unmodifiable(days),
       videos: Map.unmodifiable(videos),
+      coverImageUrl: _text(row['cover_image_url']),
+      introVideo: intro is Map && _text(intro['id']).isNotEmpty
+          ? PlanExerciseVideo(
+              exerciseName: 'Intro',
+              assetId: _text(intro['id']),
+              playbackUrl: _text(intro['playback_url']),
+              thumbnailUrl: _text(intro['thumbnail_url']),
+              status: _text(intro['status'], 'ready'),
+            )
+          : null,
+      isFeatured: row['is_featured'] == true,
+      ratingAvg: rating is num ? rating.toDouble() : double.tryParse('$rating'),
+      ratingCount: _int(row['rating_count']),
       updatedAt: DateTime.tryParse(_text(row['updated_at']))?.toLocal(),
     );
   }
@@ -329,6 +381,39 @@ class TrainingPlanEnrollment {
           ? TrainingPlan.fromRow(
               plan.map((key, value) => MapEntry(key.toString(), value)))
           : null,
+    );
+  }
+}
+
+class TrainingPlanRating {
+  const TrainingPlanRating({
+    required this.userId,
+    required this.rating,
+    this.comment = '',
+    this.authorName = '',
+    this.updatedAt,
+  });
+
+  final String userId;
+  final int rating;
+  final String comment;
+  final String authorName;
+  final DateTime? updatedAt;
+
+  factory TrainingPlanRating.fromRow(Map<String, dynamic> row) {
+    final author = row['author'];
+    String name = '';
+    if (author is Map) {
+      final display = _text(author['display_name']).trim();
+      final username = _text(author['username']).trim();
+      name = display.isNotEmpty ? display : (username.isNotEmpty ? '@$username' : '');
+    }
+    return TrainingPlanRating(
+      userId: _text(row['user_id']),
+      rating: _int(row['rating']).clamp(1, 5),
+      comment: _text(row['comment']),
+      authorName: name.isEmpty ? 'GymFeed athlete' : name,
+      updatedAt: DateTime.tryParse(_text(row['updated_at']))?.toLocal(),
     );
   }
 }

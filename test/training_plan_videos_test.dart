@@ -28,6 +28,11 @@ TrainingPlan plan({
   String status = 'draft',
   String sellerId = 'seller',
   Map<String, PlanExerciseVideo> videos = const {},
+  String coverImageUrl = '',
+  PlanExerciseVideo? introVideo,
+  bool isFeatured = false,
+  double? ratingAvg,
+  int ratingCount = 0,
 }) =>
     TrainingPlan(
       id: 'p1',
@@ -41,6 +46,20 @@ TrainingPlan plan({
         TrainingPlanDay(day: 3, title: 'Lower again', exercises: [squat]),
       ],
       videos: videos,
+      coverImageUrl: coverImageUrl,
+      introVideo: introVideo,
+      isFeatured: isFeatured,
+      ratingAvg: ratingAvg,
+      ratingCount: ratingCount,
+    );
+
+TrainingPlan complete({String status = 'draft', String sellerId = 'seller'}) =>
+    plan(
+      status: status,
+      sellerId: sellerId,
+      coverImageUrl: 'https://cdn.test/cover.jpg',
+      introVideo: video('Intro'),
+      videos: {'squat': video('Squat'), 'bench press': video('Bench Press')},
     );
 
 class FakeRepository extends TrainingPlanRepository {
@@ -50,7 +69,24 @@ class FakeRepository extends TrainingPlanRepository {
   final bool admin;
   final reviews = <String>[];
   final submitted = <String>[];
+  final featuredCalls = <bool>[];
+  final rated = <String>[];
   List<PlanExerciseVideo>? savedVideos;
+  String? savedCover;
+  String? savedIntro;
+  List<TrainingPlanRating> ratingList = const [];
+
+  @override
+  Future<void> setFeatured(String planId, bool featured) async =>
+      featuredCalls.add(featured);
+
+  @override
+  Future<List<TrainingPlanRating>> ratings(String planId, {int limit = 30}) async =>
+      ratingList;
+
+  @override
+  Future<void> rate(String planId, {required int rating, String comment = ''}) async =>
+      rated.add('$rating:$comment');
 
   @override
   Future<TrainingPlan?> get(String planId) async => plan;
@@ -81,8 +117,12 @@ class FakeRepository extends TrainingPlanRepository {
     required String equipment,
     required List<TrainingPlanDay> days,
     Iterable<PlanExerciseVideo> videos = const [],
+    String coverImageUrl = '',
+    String? introVideoAssetId,
   }) async {
     savedVideos = videos.toList();
+    savedCover = coverImageUrl;
+    savedIntro = introVideoAssetId;
     return planId ?? 'new';
   }
 
@@ -183,8 +223,10 @@ void main() {
   });
 
   group('builder', () {
-    testWidgets('lists each exercise once and saves uploaded videos', (tester) async {
+    testWidgets('every exercise has its own upload on its day; cover and intro are saved',
+        (tester) async {
       tallPhone(tester);
+      tester.view.physicalSize = const Size(430, 2400);
       final repository = FakeRepository();
       final uploads = <String>[];
 
@@ -196,32 +238,51 @@ void main() {
             uploads.add(name);
             return video(name, status: 'processing');
           },
+          imageUploader: (_) async => 'https://cdn.test/new-cover.jpg',
         ),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('plan-video-row-Squat')), findsOneWidget);
-      expect(find.byKey(const ValueKey('plan-video-row-Bench Press')), findsOneWidget);
-      expect(find.text('2 still needed'), findsOneWidget);
+      // Squat is on day 1 and day 3, Bench Press on day 1.
+      expect(find.byKey(const ValueKey('plan-exercise-row-d1-Squat')), findsOneWidget);
+      expect(find.byKey(const ValueKey('plan-exercise-row-d1-Bench Press')), findsOneWidget);
+      expect(find.byKey(const ValueKey('plan-exercise-row-d3-Squat')), findsOneWidget);
+      expect(find.text('Videos 0/2'), findsOneWidget);
+      expect(find.text('Required'), findsNWidgets(2));
 
-      await tester.tap(find.byKey(const ValueKey('upload-plan-video-Squat')));
+      await tester.tap(find.byKey(const ValueKey('upload-plan-video-d3-Squat')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('upload-plan-video-Bench Press')));
+      expect(find.textContaining('Video added · processing'), findsNWidgets(2),
+          reason: 'one Squat upload covers both days');
+
+      await tester.tap(find.byKey(const ValueKey('upload-plan-video-d1-Bench Press')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('upload-plan-intro')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('plan-cover')));
       await tester.pumpAndSettle();
 
-      expect(uploads, ['Squat', 'Bench Press']);
-      expect(find.text('All set'), findsOneWidget);
-      expect(find.text('Video added · processing'), findsNWidgets(2));
+      expect(uploads, ['Squat', 'Bench Press', 'Intro']);
+      expect(find.text('Videos 2/2'), findsOneWidget);
+      expect(find.text('Required'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('save-training-plan')));
       await tester.pumpAndSettle();
       expect(repository.savedVideos!.map((v) => v.assetId),
           ['asset-Squat', 'asset-Bench Press']);
+      expect(repository.savedCover, 'https://cdn.test/new-cover.jpg');
+      expect(repository.savedIntro, 'asset-Intro');
     });
   });
 
   group('plan page', () {
-    testWidgets('owner cannot submit while videos are missing', (tester) async {
+    test('submit problems list cover, intro and missing videos', () {
+      expect(plan(videos: {'squat': video('Squat')}).submitProblems,
+          ['a cover image', 'an intro video', 'a video for Bench Press']);
+      expect(complete().submitProblems, isEmpty);
+    });
+
+    testWidgets('owner cannot submit while something is missing', (tester) async {
       tallPhone(tester);
       final repository = FakeRepository(plan: plan(videos: {'squat': video('Squat')}));
 
@@ -238,17 +299,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('submit-plan')));
       await tester.pumpAndSettle();
       expect(repository.submitted, isEmpty);
-      expect(find.textContaining('Bench Press still needs a video'), findsOneWidget);
+      expect(find.textContaining('Still needed: a cover image'), findsWidgets);
     });
 
     testWidgets('admins approve or send back plans waiting for review', (tester) async {
       tallPhone(tester);
       final repository = FakeRepository(
         admin: true,
-        plan: plan(status: 'in_review', videos: {
-          'squat': video('Squat'),
-          'bench press': video('Bench Press'),
-        }),
+        plan: complete(status: 'in_review'),
       );
 
       await tester.pumpWidget(MaterialApp(
@@ -274,10 +332,71 @@ void main() {
       expect(repository.reviews, ['reject:Film the squat from the side', 'approve:']);
     });
 
+    testWidgets('followers rate a plan; ratings show on the page', (tester) async {
+      tallPhone(tester);
+      tester.view.physicalSize = const Size(430, 2400);
+      final p = complete(status: 'published');
+      await WorkoutRoutineStore.importPlan(
+          planKey: 'plan-p1', syncKey: 'k', routines: const [], schedule: const {});
+      final repository = FakeRepository(
+        plan: TrainingPlan(
+          id: p.id, sellerId: p.sellerId, title: p.title, dayCount: p.dayCount,
+          status: 'published', days: p.days, videos: p.videos,
+          coverImageUrl: p.coverImageUrl, introVideo: p.introVideo,
+          ratingAvg: 4.5, ratingCount: 2,
+        ),
+      )..ratingList = const [
+          TrainingPlanRating(userId: 'x', rating: 5, comment: 'Loved the squat cues', authorName: 'Mia'),
+        ];
+
+      await tester.pumpWidget(MaterialApp(
+        home: TrainingPlanDetailWidget(
+          planId: 'p1',
+          currentUserId: 'follower',
+          service: TrainingPlanService(repository: repository),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('4.5 · 2 ratings'), findsOneWidget);
+      expect(find.text('Loved the squat cues'), findsOneWidget);
+      expect(find.byKey(const ValueKey('play-plan-intro')), findsOneWidget);
+      expect(find.byKey(const ValueKey('share-plan')), findsOneWidget);
+      expect(find.byKey(const ValueKey('report-plan')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('rate-plan')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('rate-star-4')));
+      await tester.enterText(find.byKey(const ValueKey('rate-comment')), 'Solid plan');
+      await tester.tap(find.byKey(const ValueKey('save-rating')));
+      await tester.pumpAndSettle();
+
+      expect(repository.rated, ['4:Solid plan']);
+      // Let the dialog's delayed controller disposal run.
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('admins feature published plans', (tester) async {
+      tallPhone(tester);
+      final repository = FakeRepository(admin: true, plan: complete(status: 'published'));
+
+      await tester.pumpWidget(MaterialApp(
+        home: TrainingPlanDetailWidget(
+          planId: 'p1',
+          currentUserId: 'admin',
+          service: TrainingPlanService(repository: repository),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('toggle-featured')));
+      await tester.pumpAndSettle();
+      expect(repository.featuredCalls, [true]);
+    });
+
     testWidgets('regular users see no admin controls', (tester) async {
       tallPhone(tester);
-      final repository = FakeRepository(
-          plan: plan(status: 'published', videos: {'squat': video('Squat')}));
+      final repository = FakeRepository(plan: complete(status: 'published'));
 
       await tester.pumpWidget(MaterialApp(
         home: TrainingPlanDetailWidget(
@@ -289,6 +408,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('admin-review-card')), findsNothing);
+      expect(find.byKey(const ValueKey('toggle-featured')), findsNothing);
+      expect(find.byKey(const ValueKey('rate-plan')), findsNothing,
+          reason: 'only people who follow the plan can rate it');
       expect(find.byKey(const ValueKey('add-plan-to-train')), findsOneWidget);
     });
   });

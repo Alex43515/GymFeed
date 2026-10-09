@@ -41,3 +41,25 @@ Future<void> shareGymFeedPost({
     sharePositionOrigin: sharePositionOrigin,
   );
 }
+
+/// Opens the plan in the app (Android App Links) or the GymFeed web app.
+String gymFeedTrainingPlanShareUrl(String planId) {
+  final id = planId.trim();
+  if (id.isEmpty) throw ArgumentError.value(planId, 'planId');
+  return Uri.parse('$gymFeedWebOrigin/trainingPlan')
+      .replace(queryParameters: {'id': id}).toString();
+}
+
+Future<void> shareGymFeedTrainingPlan({
+  required String planId,
+  required String title,
+  Rect? sharePositionOrigin,
+}) {
+  final cleanTitle = title.trim().isEmpty ? 'Training plan' : title.trim();
+  return Share.share(
+    'Check out this training plan on GymFeed: $cleanTitle\n'
+    '${gymFeedTrainingPlanShareUrl(planId)}',
+    subject: cleanTitle,
+    sharePositionOrigin: sharePositionOrigin,
+  );
+}
