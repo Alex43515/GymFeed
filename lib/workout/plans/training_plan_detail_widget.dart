@@ -25,11 +25,15 @@ class TrainingPlanDetailWidget extends StatefulWidget {
     required this.planId,
     this.service,
     this.currentUserId,
+    this.introPlayerBuilder,
   });
 
   final String planId;
   final TrainingPlanService? service;
   final String? currentUserId;
+
+  /// Replaces the network video player in tests.
+  final Widget Function(String videoUrl)? introPlayerBuilder;
 
   /// Shared links open https://gymfeed.io/trainingPlan?id=<plan id>.
   static String routeName = 'trainingPlan';
@@ -46,7 +50,6 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
   late Future<TrainingPlan?> _planFuture;
   late Future<List<TrainingPlanRating>> _ratingsFuture;
   bool _onMyTrain = false;
-  bool _playIntro = false;
   bool _isAdmin = false;
   bool _busy = false;
   bool _changed = false;
@@ -475,29 +478,7 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
     );
   }
 
-  Widget _hero(TrainingPlan plan) {
-    final intro = plan.introVideo;
-    final playable = intro?.isPlayable == true;
-    if (_playIntro && playable) {
-      return ClipRRect(
-        key: const ValueKey('plan-intro-player'),
-        borderRadius: BorderRadius.circular(18),
-        child: ColoredBox(
-          color: Colors.black,
-          child: AspectRatio(
-            aspectRatio: 9 / 12,
-            child: FlutterFlowVideoPlayer(
-              path: intro!.playbackUrl,
-              aspectRatio: 9 / 16,
-              autoPlay: true,
-              looping: false,
-              showControls: true,
-              allowFullScreen: true,
-            ),
-          ),
-        ),
-      );
-    }
+  Widget _cover(TrainingPlan plan) {
     final cover = plan.coverUrl;
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
@@ -519,33 +500,6 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                     child: Icon(Icons.event_note_rounded,
                         color: planGreen, size: 42)),
               ),
-            if (playable)
-              Center(
-                child: Material(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  shape: const StadiumBorder(),
-                  child: InkWell(
-                    key: const ValueKey('play-plan-intro'),
-                    customBorder: const StadiumBorder(),
-                    onTap: () => setState(() => _playIntro = true),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.play_arrow_rounded,
-                              color: Colors.white, size: 24),
-                          const SizedBox(width: 6),
-                          Text('Watch intro',
-                              style:
-                                  planText(size: 13, weight: FontWeight.w700)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             if (plan.isFeatured)
               Positioned(
                 left: 10,
@@ -556,6 +510,76 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _creator(TrainingPlan plan) {
+    final seller = plan.seller;
+    final photo = seller?.photoUrl ?? '';
+    final name = seller?.label ?? 'GymFeed athlete';
+    return Row(
+      key: const ValueKey('plan-creator'),
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: const Color(0xFF123821),
+          foregroundImage: photo.isEmpty ? null : NetworkImage(photo),
+          child: Text(name.replaceAll('@', '').characters.first.toUpperCase(),
+              style: planText(
+                  size: 15, color: planGreen, weight: FontWeight.w700)),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: planText(size: 14, weight: FontWeight.w700)),
+              Text('Plan creator',
+                  style: planText(size: 11, color: planMuted)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The creator's intro, playing as soon as the plan page opens.
+  Widget _intro(TrainingPlan plan) {
+    final intro = plan.introVideo;
+    if (intro == null || !intro.isPlayable) return const SizedBox.shrink();
+    final player = widget.introPlayerBuilder?.call(intro.playbackUrl) ??
+        FlutterFlowVideoPlayer(
+          path: intro.playbackUrl,
+          aspectRatio: 9 / 16,
+          autoPlay: true,
+          looping: false,
+          showControls: true,
+          allowFullScreen: true,
+        );
+    return Column(
+      key: const ValueKey('plan-intro-video'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Text('Intro from the creator',
+            style:
+                planText(size: 13, color: planMuted, weight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: ColoredBox(
+            color: Colors.black,
+            child: SizedBox(
+              height: 460,
+              width: double.infinity,
+              child: Center(child: player),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -580,6 +604,9 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
     );
     return result == true;
   }
+
+  bool _canWatchExercises(TrainingPlan plan) =>
+      _onMyTrain || _isAdmin || plan.sellerId == _uid;
 
   Widget _dayTile(TrainingPlan plan, TrainingPlanDay day) {
     return Container(
@@ -624,7 +651,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                     final sets = exercise.plannedSets;
                     final reps = sets.map((set) => set.reps).toSet();
                     final video = plan.videoFor(exercise.name);
-                    final playable = video?.isPlayable == true;
+                    final playable =
+                        video?.isPlayable == true && _canWatchExercises(plan);
                     return InkWell(
                       key: ValueKey('plan-exercise-${day.day}-${exercise.name}'),
                       onTap: playable
@@ -816,14 +844,14 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                             const SizedBox(height: 12),
                           ],
                           if (isOwner) ..._ownerSection(plan),
-                          _hero(plan),
+                          _cover(plan),
                           const SizedBox(height: 14),
                           Text(plan.title,
                               style: planText(size: 22, weight: FontWeight.w800)),
-                          const SizedBox(height: 4),
-                          Text('by ${plan.seller?.label ?? 'GymFeed athlete'}',
-                              style: planText(size: 12, color: planMuted)),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
+                          _creator(plan),
+                          _intro(plan),
+                          const SizedBox(height: 14),
                           Wrap(
                             spacing: 6,
                             runSpacing: 6,
@@ -842,7 +870,11 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                                 style: planText(size: 13, color: const Color(0xFFCFCFCF))),
                           ],
                           const SizedBox(height: 20),
-                          Text('Plan days · tap an exercise to watch how',
+                          Text(
+                              _canWatchExercises(plan)
+                                  ? 'Plan days · tap an exercise to watch how'
+                                  : 'Plan days · exercise videos unlock when you add the plan to your Train',
+                              key: const ValueKey('plan-days-heading'),
                               style: planText(
                                   size: 13,
                                   color: planMuted,

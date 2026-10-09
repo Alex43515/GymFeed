@@ -223,7 +223,7 @@ void main() {
   });
 
   group('builder', () {
-    testWidgets('every exercise has its own upload on its day; cover and intro are saved',
+    testWidgets('each exercise gets its video inside the day editor; cover and intro are saved',
         (tester) async {
       tallPhone(tester);
       tester.view.physicalSize = const Size(430, 2400);
@@ -243,27 +243,36 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Squat is on day 1 and day 3, Bench Press on day 1.
+      // The plan's day cards only list exercises; there is no upload there.
       expect(find.byKey(const ValueKey('plan-exercise-row-d1-Squat')), findsOneWidget);
-      expect(find.byKey(const ValueKey('plan-exercise-row-d1-Bench Press')), findsOneWidget);
       expect(find.byKey(const ValueKey('plan-exercise-row-d3-Squat')), findsOneWidget);
+      expect(find.byKey(const ValueKey('upload-exercise-video-Squat')), findsNothing);
       expect(find.text('Videos 0/2'), findsOneWidget);
-      expect(find.text('Required'), findsNWidgets(2));
 
-      await tester.tap(find.byKey(const ValueKey('upload-plan-video-d3-Squat')));
+      // Open day 1: every exercise has its own video row.
+      await tester.tap(find.byKey(const ValueKey('edit-plan-day-1')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Video added · processing'), findsNWidgets(2),
-          reason: 'one Squat upload covers both days');
+      expect(find.byKey(const ValueKey('exercise-video-footer-Squat')), findsOneWidget);
+      expect(find.byKey(const ValueKey('exercise-video-footer-Bench Press')), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('upload-plan-video-d1-Bench Press')));
+      await tester.tap(find.byKey(const ValueKey('upload-exercise-video-Squat')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('upload-exercise-video-Bench Press')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Video added · processing'), findsNWidgets(2));
+      expect(find.textContaining('used on day 1, 3'), findsOneWidget,
+          reason: 'Squat on day 1 and 3 shares one video');
+
+      await tester.tap(find.byKey(const ValueKey('save-routine')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Videos 2/2'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('upload-plan-intro')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('plan-cover')));
       await tester.pumpAndSettle();
 
       expect(uploads, ['Squat', 'Bench Press', 'Intro']);
-      expect(find.text('Videos 2/2'), findsOneWidget);
       expect(find.text('Required'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('save-training-plan')));
@@ -288,6 +297,7 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: TrainingPlanDetailWidget(
+          introPlayerBuilder: (url) => Text('intro:$url'),
           planId: 'p1',
           currentUserId: 'seller',
           service: TrainingPlanService(repository: repository),
@@ -311,6 +321,7 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: TrainingPlanDetailWidget(
+          introPlayerBuilder: (url) => Text('intro:$url'),
           planId: 'p1',
           currentUserId: 'admin',
           service: TrainingPlanService(repository: repository),
@@ -351,6 +362,7 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: TrainingPlanDetailWidget(
+          introPlayerBuilder: (url) => Text('intro:$url'),
           planId: 'p1',
           currentUserId: 'follower',
           service: TrainingPlanService(repository: repository),
@@ -360,7 +372,11 @@ void main() {
 
       expect(find.text('4.5 · 2 ratings'), findsOneWidget);
       expect(find.text('Loved the squat cues'), findsOneWidget);
-      expect(find.byKey(const ValueKey('play-plan-intro')), findsOneWidget);
+      expect(find.text('intro:https://cdn.test/Intro/playlist.m3u8'), findsOneWidget,
+          reason: 'the intro plays on the plan page right away');
+      expect(find.byKey(const ValueKey('plan-creator')), findsOneWidget);
+      expect(find.text('Plan days · tap an exercise to watch how'), findsOneWidget,
+          reason: 'followers can watch exercise videos');
       expect(find.byKey(const ValueKey('share-plan')), findsOneWidget);
       expect(find.byKey(const ValueKey('report-plan')), findsOneWidget);
 
@@ -382,6 +398,7 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: TrainingPlanDetailWidget(
+          introPlayerBuilder: (url) => Text('intro:$url'),
           planId: 'p1',
           currentUserId: 'admin',
           service: TrainingPlanService(repository: repository),
@@ -400,6 +417,7 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: TrainingPlanDetailWidget(
+          introPlayerBuilder: (url) => Text('intro:$url'),
           planId: 'p1',
           currentUserId: 'someone',
           service: TrainingPlanService(repository: repository),
@@ -411,6 +429,16 @@ void main() {
       expect(find.byKey(const ValueKey('toggle-featured')), findsNothing);
       expect(find.byKey(const ValueKey('rate-plan')), findsNothing,
           reason: 'only people who follow the plan can rate it');
+      expect(find.byKey(const ValueKey('plan-cover-image')), findsOneWidget);
+      expect(find.byKey(const ValueKey('plan-creator')), findsOneWidget);
+      expect(find.text('intro:https://cdn.test/Intro/playlist.m3u8'), findsOneWidget);
+      expect(
+          find.text('Plan days · exercise videos unlock when you add the plan to your Train'),
+          findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('plan-day-1')));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.play_circle_fill_rounded), findsNothing,
+          reason: 'exercise names only until the plan is added');
       expect(find.byKey(const ValueKey('add-plan-to-train')), findsOneWidget);
     });
   });

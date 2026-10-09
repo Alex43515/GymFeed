@@ -499,10 +499,16 @@ class RoutineBuilderWidget extends StatefulWidget {
     this.initialExerciseName,
     this.onSaved,
     this.title,
+    this.exerciseFooterBuilder,
   });
 
   final WorkoutRoutine? routine;
   final String? initialExerciseName;
+
+  /// Extra content under each exercise card; the training-plan builder puts
+  /// the exercise's explanation-video upload here.
+  final Widget Function(BuildContext context, RoutineExercise exercise)?
+      exerciseFooterBuilder;
 
   /// When set, the edited routine is handed back here instead of being saved
   /// to the user's routine library (used by the training-plan builder).
@@ -638,7 +644,9 @@ class _RoutineBuilderWidgetState extends State<RoutineBuilderWidget> {
               borderRadius: BorderRadius.circular(17),
               border: Border.all(color: _routineBorder),
             ),
-            child: Row(
+            child: Column(
+              children: [
+            Row(
               children: [
                 Container(
                   width: 42,
@@ -707,6 +715,10 @@ class _RoutineBuilderWidgetState extends State<RoutineBuilderWidget> {
                   icon: const Icon(Icons.delete_outline_rounded, size: 19),
                   color: _routineMuted,
                 ),
+              ],
+            ),
+                if (widget.exerciseFooterBuilder != null)
+                  widget.exerciseFooterBuilder!(context, exercise),
               ],
             ),
           ),

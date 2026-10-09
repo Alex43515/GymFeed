@@ -104,6 +104,10 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
   String? _uploading;
   bool _saving = false;
 
+  /// Bumped on every upload change so the open day editor rebuilds its
+  /// per-exercise video rows.
+  final _videoRevision = ValueNotifier<int>(0);
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +127,7 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
   void dispose() {
     _title.dispose();
     _description.dispose();
+    _videoRevision.dispose();
     super.dispose();
   }
 
@@ -141,6 +146,7 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
   Future<void> _runUpload(String slot, Future<void> Function() upload) async {
     if (_uploading != null) return;
     setState(() => _uploading = slot);
+    _videoRevision.value++;
     try {
       await upload();
     } catch (error) {
@@ -150,13 +156,15 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
           : 'The upload did not finish. Please try again.');
     } finally {
       if (mounted) setState(() => _uploading = null);
+      _videoRevision.value++;
     }
   }
 
-  Future<void> _uploadExerciseVideo(String exerciseName) =>
+  Future<void> _uploadExerciseVideo(BuildContext uploadContext,
+          String exerciseName) =>
       _runUpload(exerciseName, () async {
         final video = await (widget.videoUploader ?? uploadPlanExerciseVideo)(
-            context, exerciseName);
+            uploadContext, exerciseName);
         if (video != null && mounted) {
           setState(() => _videos[trainingPlanExerciseKey(exerciseName)] = video);
         }
@@ -200,6 +208,12 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                 createdAt: DateTime.now(),
               ),
         onSaved: (routine) => result = routine,
+        exerciseFooterBuilder: (editorContext, exercise) =>
+            ValueListenableBuilder<int>(
+          valueListenable: _videoRevision,
+          builder: (context, _, __) =>
+              _exerciseVideoFooter(editorContext, exercise.name),
+        ),
       ),
     ));
     final routine = result;
@@ -217,12 +231,6 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
     final day = await _buildWorkout(null);
     if (day == null || !mounted) return;
     setState(() => _days.add(day));
-    final missing = day.exercises.where((e) => !_hasVideo(e.name)).length;
-    if (missing > 0) {
-      _message(missing == 1
-          ? 'Now add the video for the new exercise on Day ${day.day}.'
-          : 'Now add a video for each of the $missing new exercises on Day ${day.day}.');
-    }
   }
 
   void _addRest() {
@@ -470,20 +478,18 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
     );
   }
 
-  Widget _exerciseRow(TrainingPlanDay day, RoutineExercise exercise) {
-    final name = exercise.name;
+  /// Shown under each exercise inside the day editor: its explanation video.
+  Widget _exerciseVideoFooter(BuildContext editorContext, String name) {
     final video = _videoFor(name);
     final ok = video != null && !video.failed;
     final otherDays = _days
-        .where((other) =>
-            other.day != day.day &&
-            other.exercises.any((e) =>
-                trainingPlanExerciseKey(e.name) == trainingPlanExerciseKey(name)))
-        .map((other) => other.day)
+        .where((day) => day.exercises.any(
+            (e) => trainingPlanExerciseKey(e.name) == trainingPlanExerciseKey(name)))
+        .map((day) => day.day)
         .toList();
     return Container(
-      key: ValueKey('plan-exercise-row-d${day.day}-$name'),
-      margin: const EdgeInsets.only(top: 8),
+      key: ValueKey('exercise-video-footer-$name'),
+      margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
       decoration: BoxDecoration(
         color: const Color(0xFF101010),
@@ -492,19 +498,18 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
       ),
       child: Row(
         children: [
-          _thumb(video, width: 34, height: 44),
+          _thumb(video, width: 30, height: 38),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: planText(size: 13, weight: FontWeight.w600)),
+                Text('Explanation video',
+                    style: planText(size: 12, weight: FontWeight.w600)),
                 Text(
-                    '${exercise.setCount} sets · ${_videoStatus(video)}'
-                    '${ok && otherDays.isNotEmpty ? ' · also day ${otherDays.join(', ')}' : ''}',
+                    ok && otherDays.isNotEmpty
+                        ? '${_videoStatus(video)} · used on day ${otherDays.join(', ')}'
+                        : _videoStatus(video),
                     maxLines: 2,
                     style:
                         planText(size: 10, color: ok ? planMuted : planAmber)),
@@ -517,14 +522,41 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-              onPressed: () => showExerciseVideo(context,
+              onPressed: () => showExerciseVideo(editorContext,
                   exerciseName: name, videoUrl: video.playbackUrl),
               icon: const Icon(Icons.play_circle_outline_rounded,
                   color: planMuted, size: 21),
             ),
           _uploadButton(name, ok ? 'Replace' : 'Upload',
-              () => _uploadExerciseVideo(name),
-              key: ValueKey('upload-plan-video-d${day.day}-$name')),
+              () => _uploadExerciseVideo(editorContext, name),
+              key: ValueKey('upload-exercise-video-$name')),
+        ],
+      ),
+    );
+  }
+
+  /// Read-only line in the plan's day card; uploads happen in the day editor.
+  Widget _exerciseSummary(TrainingPlanDay day, RoutineExercise exercise) {
+    final ok = _hasVideo(exercise.name);
+    return Padding(
+      key: ValueKey('plan-exercise-row-d${day.day}-${exercise.name}'),
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Icon(ok ? Icons.check_circle_rounded : Icons.videocam_off_outlined,
+              color: ok ? planGreen : planAmber, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(exercise.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: planText(size: 12)),
+          ),
+          Text(
+              ok
+                  ? '${exercise.setCount} sets'
+                  : '${exercise.setCount} sets · video needed',
+              style: planText(size: 10, color: ok ? planMuted : planAmber)),
         ],
       ),
     );
@@ -578,7 +610,25 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
               ),
             ],
           ),
-          ...day.exercises.map((exercise) => _exerciseRow(day, exercise)),
+          ...day.exercises.map((exercise) => _exerciseSummary(day, exercise)),
+          if (!day.isRest &&
+              day.exercises.any((exercise) => !_hasVideo(exercise.name)))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextButton.icon(
+                key: ValueKey('add-videos-day-${day.day}'),
+                onPressed: () => _editDay(index),
+                style: TextButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding: EdgeInsets.zero,
+                ),
+                icon: const Icon(Icons.videocam_rounded,
+                    color: planGreen, size: 17),
+                label: Text('Open day to add exercise videos',
+                    style: planText(
+                        size: 12, color: planGreen, weight: FontWeight.w700)),
+              ),
+            ),
         ],
       ),
     );
@@ -710,8 +760,9 @@ class _TrainingPlanBuilderWidgetState extends State<TrainingPlanBuilderWidget> {
                       ],
                     ),
                     Text(
-                      'Every exercise needs a short video (up to 60 s) showing how to do it. '
-                      'An exercise used on several days shares one video.',
+                      'Open a day to add its exercises. Every exercise gets a short video '
+                      '(up to 60 s) right under it showing how to do it; an exercise used '
+                      'on several days shares one video.',
                       style: planText(size: 11, color: planMuted),
                     ),
                     const SizedBox(height: 10),
