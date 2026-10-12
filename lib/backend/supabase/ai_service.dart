@@ -58,6 +58,7 @@ class AiService {
     int? maxTokens,
     double? temperature,
     bool jsonObject = false,
+    Map<String, dynamic>? jsonSchema,
   }) async {
     final system = messages
         .where((message) => message['role'] == 'system')
@@ -86,7 +87,9 @@ class AiService {
         'generationConfig': {
           if (maxTokens != null) 'maxOutputTokens': maxTokens,
           if (temperature != null) 'temperature': temperature,
-          if (jsonObject) 'responseMimeType': 'application/json',
+          if (jsonObject || jsonSchema != null)
+            'responseMimeType': 'application/json',
+          if (jsonSchema != null) 'responseJsonSchema': jsonSchema,
         },
       },
     );
@@ -140,6 +143,7 @@ class AiService {
     double? temperature,
     String? reasoningEffort,
     bool jsonObject = false,
+    Map<String, dynamic>? jsonSchema,
   }) async {
     final selectedModel = model ?? _openAiChatModel;
     final usesReasoningParameters = selectedModel.startsWith('gpt-5') ||
@@ -160,7 +164,17 @@ class AiService {
         if (temperature != null && !usesReasoningParameters)
           'temperature': temperature,
         if (reasoningEffort != null) 'reasoning_effort': reasoningEffort,
-        if (jsonObject) 'response_format': const {'type': 'json_object'},
+        if (jsonSchema != null)
+          'response_format': {
+            'type': 'json_schema',
+            'json_schema': {
+              'name': 'gymfeed_coach_plan',
+              'strict': true,
+              'schema': jsonSchema,
+            },
+          }
+        else if (jsonObject)
+          'response_format': const {'type': 'json_object'},
       },
     );
     final choices = json['choices'];
