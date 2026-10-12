@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import '/backend/supabase/ai_service.dart';
+import 'coach_plan_actions.dart';
+import 'coach_plan_repository.dart';
 import '/backend/supabase/repositories/meal_repository.dart';
 import '/backend/supabase/supabase.dart';
 import '/workout/routines/workout_routine_models.dart';
@@ -14,6 +16,7 @@ const String aiCoachDisclosure =
     'medical condition, injury, are pregnant, or take medication.';
 
 const String _workoutProposalMarker = '\n\n[[GYMFEED_WORKOUT_PROPOSAL:';
+const String _planActionMarker = '\n\n[[GYMFEED_PLAN_ACTION:';
 
 typedef WorkoutActionAiCall = Future<String?> Function(
   List<Map<String, dynamic>> messages,
@@ -32,6 +35,8 @@ class AiCoachMessage {
     required this.content,
     required this.createdAt,
     this.workoutProposal,
+    this.planAction,
+    this.planActionId,
   });
 
   final int id;
@@ -39,11 +44,28 @@ class AiCoachMessage {
   final String content;
   final DateTime createdAt;
   final AiCoachWorkoutProposal? workoutProposal;
+  final CoachPlanAction? planAction;
+  final String? planActionId;
 
   bool get fromUser => role == 'user';
 
   factory AiCoachMessage.fromRow(Map<String, dynamic> row) {
-    final decoded = _decodeCoachContent((row['content'] ?? '').toString());
+    var raw = (row['content'] ?? '').toString();
+    String? actionId;
+    final marker = raw.lastIndexOf(_planActionMarker);
+    if (row['role'] != 'user' && marker >= 0 && raw.endsWith(']]')) {
+      final candidate =
+          raw.substring(marker + _planActionMarker.length, raw.length - 2);
+      if (RegExp(
+              r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+          .hasMatch(candidate)) {
+        actionId = candidate;
+        raw = raw.substring(0, marker);
+      }
+    }
+    final decoded = row['role'] == 'user'
+        ? _DecodedCoachContent(raw, null)
+        : _decodeCoachContent(raw);
     return AiCoachMessage(
       id: (row['id'] as num?)?.toInt() ?? 0,
       role: (row['role'] ?? 'assistant').toString(),
@@ -52,12 +74,31 @@ class AiCoachMessage {
           DateTime.tryParse((row['created_at'] ?? '').toString())?.toLocal() ??
               DateTime.now(),
       workoutProposal: decoded.proposal,
+      planActionId: actionId,
     );
   }
 
+  AiCoachMessage withPlanAction(CoachPlanAction? action) => AiCoachMessage(
+        id: id,
+        role: role,
+        content: content,
+        createdAt: createdAt,
+        workoutProposal: workoutProposal,
+        planAction: action,
+        planActionId: action?.id ?? planActionId,
+      );
+
   Map<String, dynamic> toAiMessage() => {
         'role': fromUser ? 'user' : 'assistant',
-        'content': content,
+        'content': planAction != null
+            ? '$content\nAPP PLAN DATA: ${jsonEncode({
+                    'id': planAction!.id,
+                    'status': planAction!.status,
+                    ...planAction!.toJson()
+                  })}'
+            : workoutProposal != null
+                ? '$content\nAPP WORKOUT PROPOSAL DATA: ${jsonEncode(workoutProposal!.toJson())}'
+                : content,
       };
 }
 
@@ -101,15 +142,6 @@ class _DecodedCoachContent {
   final AiCoachWorkoutProposal? proposal;
 }
 
-String _encodeCoachContent(
-  String content,
-  AiCoachWorkoutProposal? proposal,
-) {
-  if (proposal == null) return content;
-  final encoded = base64Url.encode(utf8.encode(jsonEncode(proposal.toJson())));
-  return '$content$_workoutProposalMarker$encoded]]';
-}
-
 _DecodedCoachContent _decodeCoachContent(String raw) {
   final markerIndex = raw.lastIndexOf(_workoutProposalMarker);
   if (markerIndex < 0 || !raw.endsWith(']]')) {
@@ -139,6 +171,7 @@ class AiCoachContext {
     required this.recentWorkouts,
     required this.recentMeals,
     required this.latestProgress,
+    this.plannedMeals = const [],
   });
 
   final Map<String, dynamic> profile;
@@ -148,6 +181,7 @@ class AiCoachContext {
   final List<Map<String, dynamic>> recentWorkouts;
   final List<Map<String, dynamic>> recentMeals;
   final Map<String, dynamic> latestProgress;
+  final List<Map<String, dynamic>> plannedMeals;
 
   Map<String, dynamic> toJson() => {
         'athlete_profile': profile,
@@ -156,6 +190,7 @@ class AiCoachContext {
         'current_workout_schedule': workoutSchedule,
         'recent_completed_workouts': recentWorkouts,
         'recent_logged_meals': recentMeals,
+        'current_dated_planned_meals': plannedMeals,
         'latest_progress_measurement': latestProgress,
       };
 }
@@ -769,7 +804,7 @@ PERSONALIZATION:
 - current_workout_schedule is a dated 14-day source-of-truth window. Every day explicitly contains scheduled_workouts, completed_workouts, and a status.
 - Never infer that a routine is scheduled from the generated plan, routine list, or workout history. A completed workout is historical evidence, not a future booking.
 - If a dated day has status "unscheduled", clearly say there is no workout scheduled. Never fill it with a previous, nearby, or random workout.
-- Workout scheduling requests are intercepted by the application's private action compiler and require an explicit Implement tap. Never claim a calendar write succeeded unless a later application action receipt says it did. Do not tell the athlete that GymFeed is technically unable to add workouts.
+- Workout and meal scheduling requests use the application's structured plan actions. The athlete can confirm with Implement OR a clear written approval in any language. Ask for confirmation once only. Never claim a write succeeded unless an application action receipt says it did.
 - When an AUTHORITATIVE FACTS FOR THIS QUESTION message is present, copy exact names and numbers from it. It is a deterministic lookup from the saved plan and overrides guesses or similar meals/routines elsewhere in the context.
 - Use the exact exercises, dates, sets, reps, and weights when the question refers to "my plan", "today", or a specific routine.
 - Use the generated meal plan, current calorie/macro targets, allergies, recent logged meals, and latest measurements when discussing nutrition.
@@ -807,12 +842,10 @@ List<Map<String, dynamic>> buildAiCoachMessages({
       ),
     },
   ];
-  final questionAlreadyLast = recentHistory.isNotEmpty &&
-      recentHistory.last.fromUser &&
-      recentHistory.last.content.trim() == question.trim();
-  final historyBeforeQuestion = questionAlreadyLast
-      ? recentHistory.take(recentHistory.length - 1)
-      : recentHistory;
+  final historyBeforeQuestion = List<AiCoachMessage>.of(recentHistory);
+  final currentIndex = historyBeforeQuestion.lastIndexWhere((message) =>
+      message.fromUser && message.content.trim() == question.trim());
+  if (currentIndex >= 0) historyBeforeQuestion.removeAt(currentIndex);
   messages
       .addAll(historyBeforeQuestion.map((message) => message.toAiMessage()));
 
@@ -823,13 +856,17 @@ List<Map<String, dynamic>> buildAiCoachMessages({
       'content': 'AUTHORITATIVE FACTS FOR THIS QUESTION:\n$evidence',
     });
   }
-  messages.add(questionAlreadyLast
-      ? recentHistory.last.toAiMessage()
-      : {'role': 'user', 'content': question.trim()});
+  messages.add({'role': 'user', 'content': question.trim()});
   return messages;
 }
 
 String _authoritativeQuestionEvidence(AiCoachContext context, String question) {
+  if (context.plannedMeals.isNotEmpty) {
+    return jsonEncode({
+      'current_dated_planned_meals': context.plannedMeals,
+      'current_editable_train_routines': context.currentRoutines,
+    });
+  }
   final query = question.toLowerCase();
   final facts = <String, dynamic>{};
   final plan = _stringMap(context.starterPlan['plan']).isNotEmpty
@@ -998,6 +1035,9 @@ String? answerExactSavedPlanQuestion(AiCoachContext context, String question) {
       query.contains('dinner') ||
       query.contains('snack');
   if (!isMealLookup) return null;
+  // Dated coach additions supplement the starter plan. Do not answer using
+  // only the older starter meals when newer diary entries are also present.
+  if (context.plannedMeals.isNotEmpty) return null;
 
   int? dayIndex;
   final dayMatch = RegExp(r'\bday\s*(\d{1,2})\b').firstMatch(query);
@@ -1170,13 +1210,20 @@ class AiCoachRepository {
     AiService? aiService,
     MealRepository? meals,
     WorkoutActionAiCall? workoutActionAiCall,
+    CoachPlanAssistant? planAssistant,
+    CoachPlanRepository? plans,
   })  : _aiService = aiService ?? AiService(),
         _meals = meals ?? MealRepository(),
-        _workoutActionAiCall = workoutActionAiCall;
+        _workoutActionAiCall = workoutActionAiCall,
+        _planAssistant =
+            planAssistant ?? CoachPlanAssistant(aiService: aiService),
+        _plans = plans ?? CoachPlanRepository();
 
   final AiService _aiService;
   final MealRepository _meals;
   final WorkoutActionAiCall? _workoutActionAiCall;
+  final CoachPlanAssistant _planAssistant;
+  final CoachPlanRepository _plans;
 
   SupabaseClient get _db => supabase;
   String? get _uid => _db.auth.currentUser?.id;
@@ -1191,11 +1238,33 @@ class AiCoachRepository {
           .eq('user_id', uid)
           .order('id', ascending: false)
           .limit(limit);
-      return (rows as List)
+      final messages = (rows as List)
           .map((row) => AiCoachMessage.fromRow(row as Map<String, dynamic>))
           .toList()
           .reversed
           .toList();
+      final actions = await _plans.byIds(messages
+          .map((message) => message.planActionId)
+          .whereType<String>()
+          .toList());
+      final result = messages
+          .map((message) =>
+              message.withPlanAction(actions[message.planActionId]))
+          .toList();
+      final latest = await _plans.latest();
+      if (latest != null &&
+          latest.pending &&
+          !result.any((message) => message.planActionId == latest.id)) {
+        // Recover a saved proposal even if writing its chat bubble failed.
+        result.add(AiCoachMessage(
+            id: 0,
+            role: 'assistant',
+            content: 'Your prepared plan is ready. Review it below.',
+            createdAt: DateTime.now(),
+            planAction: latest,
+            planActionId: latest.id));
+      }
+      return result;
     } on PostgrestException catch (error) {
       if (_isMissingTable(error)) return const [];
       rethrow;
@@ -1361,7 +1430,8 @@ Rules:
     }
   }
 
-  Future<AiCoachMessage> ask(String rawQuestion) async {
+  Future<AiCoachMessage> ask(String rawQuestion,
+      {String? expectedPlanId}) async {
     final uid = _requireUid();
     var question = rawQuestion.trim();
     if (question.isEmpty) throw ArgumentError('The coach question is empty.');
@@ -1391,40 +1461,75 @@ Rules:
       question: question,
       memorySummary: (thread['memory_summary'] ?? '').toString(),
     );
-    final workoutActionReply = await createWorkoutActionProposal(
-      context: context,
-      recentHistory: history,
+    final latest = await _plans.latest();
+    final decision = await _planAssistant.respond(
+      systemPrompt: messages.first['content'] as String,
+      history: messages.skip(1).take(messages.length - 2).toList(),
       question: question,
+      now: DateTime.now(),
+      latestAction: latest,
+      foodAllergies:
+          (context.profile['food_allergies_and_exclusions'] ?? '').toString(),
     );
-    final scheduleReply =
-        workoutActionReply ?? answerScheduleAwareQuestion(context, question);
-    final exactSavedPlanAnswer =
-        answerExactSavedPlanQuestion(context, question);
-    final rawAnswer = scheduleReply?.text.trim() ??
-        exactSavedPlanAnswer?.trim() ??
-        (await _callCoach(messages))?.trim() ??
-        '';
-    if (rawAnswer.isEmpty) throw StateError('The AI Coach returned no answer.');
-    final answer = ensureAiCoachDisclosure(rawAnswer);
-    final row = await _db
-        .from('ai_coach_messages')
-        .insert({
-          'user_id': uid,
-          'role': 'assistant',
-          'content': _encodeCoachContent(answer, scheduleReply?.proposal),
-        })
-        .select()
-        .single();
-    await _db.from('ai_coach_threads').update({
-      'last_message_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('user_id', uid);
-
+    if (decision.intent == 'confirm' &&
+        expectedPlanId != null &&
+        expectedPlanId != latest?.id) {
+      return _recordPlanReply(
+          'Your pending plan changed on another session. '
+          'Review the updated plan below before confirming it.',
+          latest);
+    }
+    final outcome = await executeCoachPlanDecision(decision,
+        plans: _plans, latestAction: latest);
+    final text = decision.intent == 'chat'
+        ? answerExactSavedPlanQuestion(context, question) ?? outcome.text
+        : outcome.text;
+    final reply = await _recordPlanReply(text, outcome.action);
     unawaited(_refreshMemory(uid).catchError((_) {}));
-    return AiCoachMessage.fromRow(row);
+    return reply;
   }
+
+  Future<AiCoachMessage> _recordPlanReply(
+      String text, CoachPlanAction? action) async {
+    final answer = ensureAiCoachDisclosure(text);
+    try {
+      final row = await _db
+          .from('ai_coach_messages')
+          .insert({
+            'user_id': _requireUid(),
+            'role': 'assistant',
+            'content': action == null
+                ? answer
+                : '$answer$_planActionMarker${action.id}]]',
+          })
+          .select()
+          .single();
+      return AiCoachMessage.fromRow(row).withPlanAction(action);
+    } catch (_) {
+      // The plan itself is already persisted. A chat-sync failure must not
+      // hide Implement, report a successful write as failed, or create copies.
+      if (action == null) rethrow;
+      return AiCoachMessage(
+          id: 0,
+          role: 'assistant',
+          content: answer,
+          createdAt: DateTime.now(),
+          planAction: action,
+          planActionId: action.id);
+    }
+  }
+
+  Future<AiCoachMessage> implementPlanAndConfirm(CoachPlanAction action) async {
+    final saved = await _plans.implement(action);
+    return _recordPlanReply(saved.receipt, saved);
+  }
+
+  Future<CoachPlanAction> skipPlan(CoachPlanAction action) =>
+      _plans.setStatus(action.id, 'skipped');
 
   Future<AiCoachContext> loadContext() async {
     final uid = _requireUid();
+    await _plans.syncWorkouts();
     final publicRow = await _db
         .from('profiles')
         .select('display_name, username')
@@ -1433,6 +1538,7 @@ Rules:
     final privateRow =
         await _db.from('profile_private').select().eq('id', uid).maybeSingle();
     final private = privateRow ?? const <String, dynamic>{};
+    final localToday = _dateOnly(DateTime.now());
 
     final optionalResults = await Future.wait<dynamic>([
       _loadStarterPlan(uid),
@@ -1441,6 +1547,8 @@ Rules:
       WorkoutRoutineStore.loadRoutines(),
       WorkoutRoutineStore.loadSchedule(),
       WorkoutRoutineStore.loadHistory(),
+      _plans.mealsForWindow(
+          localToday, localToday.add(const Duration(days: 13))),
     ]);
     final starter = optionalResults[0] as Map<String, dynamic>;
     final latestProgress = optionalResults[1] as Map<String, dynamic>;
@@ -1501,11 +1609,14 @@ Rules:
           .toList(),
       recentMeals: recentMeals,
       latestProgress: latestProgress,
+      plannedMeals: optionalResults[6] as List<Map<String, dynamic>>,
     );
   }
 
   Future<void> clearConversation() async {
     final uid = _requireUid();
+    final latest = await _plans.latest();
+    if (latest?.pending == true) await _plans.setStatus(latest!.id, 'skipped');
     await _db.from('ai_coach_messages').delete().eq('user_id', uid);
     await _db.from('ai_coach_threads').delete().eq('user_id', uid);
   }
@@ -1600,33 +1711,6 @@ Rules:
           maxTokens: 2600,
           temperature: 0.1,
           jsonObject: true,
-        );
-      }
-    }
-  }
-
-  Future<String?> _callCoach(List<Map<String, dynamic>> messages) async {
-    try {
-      return await _aiService.openAiChat(
-        messages,
-        model: 'gpt-5-mini',
-        maxTokens: 3000,
-        reasoningEffort: 'low',
-      );
-    } catch (_) {
-      try {
-        return await _aiService.geminiChat(
-          messages,
-          model: 'gemini-3.6-flash',
-          maxTokens: 2200,
-          temperature: 0.25,
-        );
-      } catch (_) {
-        return _aiService.geminiChat(
-          messages,
-          model: 'gemini-3.5-flash-lite',
-          maxTokens: 2200,
-          temperature: 0.25,
         );
       }
     }

@@ -5,6 +5,7 @@ import '/backend/api_requests/api_calls.dart';
 import '/ai_workout/premium/ai_usage_gate.dart';
 import '/backend/firebase_storage/storage.dart';
 import '/backend/supabase/repositories/ai_coach_repository.dart';
+import '/backend/supabase/repositories/coach_plan_repository.dart';
 import '/backend/supabase/repositories/body_scan_repository.dart';
 import '/backend/supabase/repositories/coach_activity_repository.dart';
 import '/backend/supabase/repositories/coach_vision_repository.dart';
@@ -1006,19 +1007,23 @@ class _TrainerMessage {
     this.text, {
     this.fromUser = false,
     this.workoutProposal,
+    this.planAction,
     this.proposalStatus = _ProposalStatus.pending,
   });
 
   final String text;
   final bool fromUser;
   final AiCoachWorkoutProposal? workoutProposal;
+  final CoachPlanAction? planAction;
   final _ProposalStatus proposalStatus;
 
-  _TrainerMessage copyWith({_ProposalStatus? proposalStatus}) =>
+  _TrainerMessage copyWith(
+          {_ProposalStatus? proposalStatus, CoachPlanAction? planAction}) =>
       _TrainerMessage(
         text,
         fromUser: fromUser,
         workoutProposal: workoutProposal,
+        planAction: planAction ?? this.planAction,
         proposalStatus: proposalStatus ?? this.proposalStatus,
       );
 }
@@ -1034,6 +1039,8 @@ class CoachTrainerWidget extends StatefulWidget {
     this.conversationLoader,
     this.questionSender,
     this.proposalImplementer,
+    this.planImplementer,
+    this.planSkipper,
   });
 
   static String routeName = 'coachTrainer';
@@ -1046,6 +1053,8 @@ class CoachTrainerWidget extends StatefulWidget {
   final Future<AiCoachMessage> Function(String question)? questionSender;
   final Future<void> Function(AiCoachWorkoutProposal proposal)?
       proposalImplementer;
+  final Future<void> Function(CoachPlanAction action)? planImplementer;
+  final Future<void> Function(CoachPlanAction action)? planSkipper;
 
   @override
   State<CoachTrainerWidget> createState() => _CoachTrainerWidgetState();
@@ -1078,6 +1087,7 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
           AiCoachRepository().loadConversation());
       final schedule = await WorkoutRoutineStore.loadSchedule();
       if (!mounted) return;
+      final shownPlanIds = <String>{};
       setState(() {
         _messages
           ..clear()
@@ -1093,6 +1103,10 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
               message.content,
               fromUser: message.fromUser,
               workoutProposal: proposal,
+              planAction: message.planAction != null &&
+                      shownPlanIds.add(message.planAction!.id)
+                  ? message.planAction
+                  : null,
               proposalStatus: implemented
                   ? _ProposalStatus.implemented
                   : _ProposalStatus.pending,
@@ -1132,13 +1146,24 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
   Future<void> _send([String? suggestion]) async {
     final question = (suggestion ?? _controller.text).trim();
     if (question.isEmpty || _sending) return;
-    final decision = await (widget.useGate?.call() ?? AiUsageGate().claimUse());
-    if (!mounted) return;
-    if (!await handleDeniedAiUse(
-      context,
-      decision,
-      upgradeOpener: widget.upgradeOpener,
-    )) {
+    // Close the send gate before its first asynchronous call, so a quick
+    // double tap cannot spend two uses or submit the same confirmation twice.
+    setState(() => _sending = true);
+    late final AiUseDecision decision;
+    try {
+      decision = await (widget.useGate?.call() ?? AiUsageGate().claimUse());
+      if (!mounted) return;
+      if (!await handleDeniedAiUse(context, decision,
+          upgradeOpener: widget.upgradeOpener)) {
+        if (mounted) setState(() => _sending = false);
+        return;
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not check Coach access. Please try again.')));
+      }
       return;
     }
     _controller.clear();
@@ -1149,12 +1174,13 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
     _scrollToBottom();
     try {
       final reply = await (widget.questionSender?.call(question) ??
-          AiCoachRepository().ask(question));
+          AiCoachRepository().ask(question,
+              expectedPlanId: _messages.reversed
+                  .map((message) => message.planAction?.id)
+                  .whereType<String>()
+                  .firstOrNull));
       if (!mounted) return;
-      setState(() => _messages.add(_TrainerMessage(
-            reply.content,
-            workoutProposal: reply.workoutProposal,
-          )));
+      setState(() => _appendReply(reply));
     } catch (_) {
       if (decision.consumedFreeUse) {
         await (widget.refundUse?.call() ?? AiUsageGate().refundUse());
@@ -1175,6 +1201,179 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
         decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
         child: const Icon(Icons.auto_awesome_rounded, color: _bg, size: 15),
       );
+
+  void _appendReply(AiCoachMessage reply) {
+    final action = reply.planAction;
+    var hasCard = false;
+    for (var index = 0; index < _messages.length; index++) {
+      final previous = _messages[index].planAction;
+      if (action != null && previous?.id == action.id) {
+        _messages[index] = _messages[index].copyWith(planAction: action);
+        hasCard = true;
+      } else if (action?.pending == true && previous?.pending == true) {
+        _messages[index] = _messages[index]
+            .copyWith(planAction: previous!.withStatus('superseded'));
+      }
+    }
+    _messages.add(_TrainerMessage(reply.content,
+        workoutProposal: reply.workoutProposal,
+        planAction: hasCard ? null : action));
+  }
+
+  Future<void> _implementPlan(int index) async {
+    final action = _messages[index].planAction;
+    if (action == null || !action.pending || _sending) return;
+    setState(() => _sending = true);
+    try {
+      late final AiCoachMessage reply;
+      if (widget.planImplementer != null) {
+        await widget.planImplementer!(action);
+        reply = AiCoachMessage(
+            id: 0,
+            role: 'assistant',
+            content: action.receipt,
+            createdAt: DateTime.now(),
+            planAction: action.withStatus('implemented'));
+      } else {
+        reply = await AiCoachRepository().implementPlanAndConfirm(action);
+      }
+      if (!mounted) return;
+      setState(() => _appendReply(reply));
+      _scrollToBottom();
+    } on CoachPlanUnavailableException catch (error) {
+      if (!mounted) return;
+      setState(() => _messages[index] =
+          _messages[index].copyWith(planAction: error.action));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'This proposal is no longer pending. Review the latest plan.')));
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Could not finish adding the plan. Retry to complete it safely.')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _skipPlan(int index) async {
+    final action = _messages[index].planAction;
+    if (action == null || !action.pending || _sending) return;
+    setState(() => _sending = true);
+    try {
+      var saved = action.withStatus('skipped');
+      if (widget.planSkipper != null) {
+        await widget.planSkipper!(action);
+      } else {
+        saved = await AiCoachRepository().skipPlan(action);
+      }
+      if (!mounted) return;
+      setState(() =>
+          _messages[index] = _messages[index].copyWith(planAction: saved));
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not skip the plan. Please try again.')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Widget _planCard(_TrainerMessage message, int index) {
+    final action = message.planAction!;
+    final first = WorkoutRoutineStore.dateKey(action.dates.first);
+    final last = WorkoutRoutineStore.dateKey(action.dates.last);
+    return Container(
+      key: ValueKey('coach-plan-action-${action.id}'),
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+          color: const Color(0xFF101B15),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF1E6C40))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('YOUR DATED PLAN',
+            style: _toolText(size: 10, color: _green, weight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Text(first == last ? first : '$first – $last',
+            style: _toolText(size: 12)),
+        Text(
+            '${action.workouts.length} workouts · ${action.meals.length} planned meals',
+            style: _toolText(size: 11, color: _muted)),
+        const SizedBox(height: 10),
+        if (action.pending)
+          Row(children: [
+            Expanded(
+                child: OutlinedButton(
+              key: ValueKey('skip-plan-${action.id}'),
+              onPressed: _sending ? null : () => _skipPlan(index),
+              child: const Text('Skip'),
+            )),
+            const SizedBox(width: 8),
+            Expanded(
+                child: FilledButton(
+              key: ValueKey('implement-plan-${action.id}'),
+              onPressed: _sending ? null : () => _implementPlan(index),
+              style: FilledButton.styleFrom(
+                  backgroundColor: _green, foregroundColor: _bg),
+              child: const Text('Implement'),
+            )),
+          ])
+        else
+          Text(
+              switch (action.status) {
+                'implemented' => 'Plan added',
+                'superseded' => 'Replaced by a newer proposal',
+                _ => 'Plan skipped',
+              },
+              style: _toolText(size: 11, color: _green)),
+        ExpansionTile(
+          key: ValueKey('plan-details-${action.id}'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          iconColor: _green,
+          collapsedIconColor: _green,
+          title: Text('Review plan', style: _toolText(size: 12)),
+          children: [
+            for (final workout in action.workouts)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          '${WorkoutRoutineStore.dateKey(workout.date)} · ${workout.routine.name}',
+                          style: _toolText(size: 12, color: _green)),
+                      for (final exercise in workout.routine.exercises)
+                        Text(
+                            '${exercise.name}: ${exercise.setTargets.map((set) => '${set.weightKg} kg × ${set.reps}').join(', ')}',
+                            style: _toolText(size: 11)),
+                    ]),
+              ),
+            for (final entry in action.meals)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          '${WorkoutRoutineStore.dateKey(entry.date)} · ${entry.meal.mealType}',
+                          style: _toolText(size: 12, color: _green)),
+                      Text(entry.meal.name, style: _toolText(size: 12)),
+                      Text(
+                          '${entry.meal.calories} kcal · P ${entry.meal.proteinG}g · '
+                          'C ${entry.meal.carbsG}g · F ${entry.meal.fatG}g',
+                          style: _toolText(size: 10)),
+                      Text(entry.meal.description,
+                          style: _toolText(size: 11, color: _muted)),
+                    ]),
+              ),
+          ],
+        ),
+      ]),
+    );
+  }
 
   Future<void> _implementProposal(int index) async {
     if (index < 0 || index >= _messages.length) return;
@@ -1364,6 +1563,7 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
                           _toolText(size: 13, color: const Color(0xFFF1F1F1))),
                   if (message.workoutProposal != null)
                     _proposalCard(message, index),
+                  if (message.planAction != null) _planCard(message, index),
                 ],
               ),
             ),
