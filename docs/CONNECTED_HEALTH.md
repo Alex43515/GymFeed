@@ -96,6 +96,19 @@ Android privacy activity opened without an AndroidRuntime crash. iOS validation
 is run by `.github/workflows/validate-connected-health.yml` on macOS without
 store deployment.
 
+Final iOS validation on October 13, 2026: all validation steps passed in
+[GitHub Actions run 38456618081](https://github.com/Alex43515/GymFeed/actions/runs/38456618081)
+at commit `6961502`. This includes static analysis, the full unit/widget suite,
+the unsigned main iOS Simulator build, matching app/notification-extension
+metadata, and installation/execution of the native health availability/UI smoke
+test on an iPhone Simulator. The test restores its platform override before
+Flutter checks debug invariants. This is not a signed IPA, TestFlight upload or
+physical-watch synchronization test.
+
+Publication is on hold pending the user's explicit approval. No further Git
+pushes, main merges or store deployments are authorized by the completion of
+this validation. This result note is retained locally until approval.
+
 The isolated feature-validation job uses macos-15 with Xcode 26.2 selected
 explicitly after macos-26 runner-capacity delays. Store publishing workflows
 are unchanged. A FirebaseFunctions Git download reset was an infrastructure
