@@ -105,9 +105,19 @@ test on an iPhone Simulator. The test restores its platform override before
 Flutter checks debug invariants. This is not a signed IPA, TestFlight upload or
 physical-watch synchronization test.
 
-Publication is on hold pending the user's explicit approval. No further Git
-pushes, main merges or store deployments are authorized by the completion of
-this validation. This result note is retained locally until approval.
+The user subsequently approved testing deployment. Release `3.0.7` combines
+this feature with the newer `release/3.0.6` Coach and billing changes. Only the
+release branch is sent to Android internal testing and iOS TestFlight; `main`
+and production remain unchanged. The Apple workflow checks/enables HealthKit
+on the exact existing App ID before fetching signing profiles, and stops if
+the protected credentials cannot access it. It uses the same macos-15/Xcode
+26.2 toolchain that passed native health validation.
+
+After merging the newer testing release, the combined local Flutter suite
+passed 268 tests with four opt-in live tests skipped; focused health analysis
+also passed. Android marketing version is 3.0.7, while the publishing workflow
+allocates its next Google Play build code from the live uploaded bundles. iOS
+uses the same marketing version with a unique timestamp-based build number.
 
 The isolated feature-validation job uses macos-15 with Xcode 26.2 selected
 explicitly after macos-26 runner-capacity delays. Store publishing workflows

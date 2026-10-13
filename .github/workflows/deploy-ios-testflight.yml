@@ -34,12 +34,13 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  APP_STORE_WHATS_NEW: GymFeed 3.0.2 removes third-party Google sign-in from iOS, restores the GymFeed app icon, and keeps completed workout sets saved between visits.
+  APP_STORE_WHATS_NEW: GymFeed 3.0.7 adds optional private Connected health, Coach plan actions, and premium billing fixes.
+  DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
 jobs:
   validate-ios:
     name: Test and build iOS Simulator app
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 60
 
     steps:
@@ -89,6 +90,7 @@ jobs:
             --debug \
             --no-pub
           test -d build/ios/iphonesimulator/Runner.app
+          python3 scripts/validate_ios_extension_versions.py build/ios/iphonesimulator/Runner.app
 
       - name: Upload Simulator build
         uses: actions/upload-artifact@v4
@@ -101,7 +103,7 @@ jobs:
   publish-ios:
     name: Build signed IPA and deploy to Apple
     needs: validate-ios
-    runs-on: macos-26
+    runs-on: macos-15
     environment: app-store-connect
     timeout-minutes: 90
 
@@ -178,7 +180,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/codemagic-cli"
           "$RUNNER_TEMP/codemagic-cli/bin/python" -m pip install \
             --disable-pip-version-check \
-            codemagic-cli-tools
+            codemagic-cli-tools 'PyJWT[crypto]==2.10.1'
           echo "$RUNNER_TEMP/codemagic-cli/bin" >> "$GITHUB_PATH"
 
       - name: Run Flutter tests
@@ -220,6 +222,19 @@ jobs:
             -check \
             -noout
 
+      - name: Ensure HealthKit on the existing GymFeed App ID
+        shell: bash
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/codemagic-cli/bin/python" scripts/ios_health_capability.py \
+            --key-file "$RUNNER_TEMP/app-store-connect-key.p8" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --enable
+
       - name: Configure App Store signing and build IPA
         id: build-ipa
         shell: bash
@@ -235,11 +250,13 @@ jobs:
           app-store-connect fetch-signing-files "$IOS_BUNDLE_ID" \
             --platform IOS \
             --type IOS_APP_STORE \
+            --strict-match-identifier \
             --certificate-key="@file:$RUNNER_TEMP/ios-distribution-private-key.pem" \
             --create
           app-store-connect fetch-signing-files "$IOS_EXTENSION_BUNDLE_ID" \
             --platform IOS \
             --type IOS_APP_STORE \
+            --strict-match-identifier \
             --certificate-key="@file:$RUNNER_TEMP/ios-distribution-private-key.pem" \
             --create
           keychain add-certificates
@@ -268,6 +285,7 @@ jobs:
             exit 1
           fi
           codesign --verify --deep --strict "$archive_app"
+          python3 scripts/validate_ios_extension_versions.py "$archive_app"
 
       - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4
