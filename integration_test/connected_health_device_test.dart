@@ -16,34 +16,39 @@ void main() {
       (tester) async {
     // Flutter test environments can otherwise default platform styling to Android.
     // This smoke test must exercise the real host's native health bridge.
+    final originalPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride =
         Platform.isIOS ? TargetPlatform.iOS : TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    final gateway = DeviceHealthGateway();
-    final availability = await gateway.availability();
-    expect(
-        availability,
-        gateway.isIOS
-            ? anyOf(
-                HealthAvailability.available, HealthAvailability.unsupported)
-            : HealthAvailability.available);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('connected_health_opt_in_v1_native-smoke-test');
-    final controller = ConnectedHealthController(
-        gateway: gateway, userId: 'native-smoke-test', preferences: prefs);
-    await tester.pumpWidget(MaterialApp(
-        home: ConnectedHealthWidget(
-            userId: 'native-smoke-test', controller: controller)));
-    await tester.pumpAndSettle();
-    if (availability == HealthAvailability.available) {
-      expect(find.text('Connect ${gateway.providerName}'), findsOneWidget);
-    } else {
-      expect(find.textContaining('Available in the GymFeed'), findsOneWidget);
+    try {
+      final gateway = DeviceHealthGateway();
+      final availability = await gateway.availability();
+      expect(
+          availability,
+          gateway.isIOS
+              ? anyOf(
+                  HealthAvailability.available, HealthAvailability.unsupported)
+              : HealthAvailability.available);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('connected_health_opt_in_v1_native-smoke-test');
+      final controller = ConnectedHealthController(
+          gateway: gateway, userId: 'native-smoke-test', preferences: prefs);
+      await tester.pumpWidget(MaterialApp(
+          home: ConnectedHealthWidget(
+              userId: 'native-smoke-test', controller: controller)));
+      await tester.pumpAndSettle();
+      if (availability == HealthAvailability.available) {
+        expect(find.text('Connect ${gateway.providerName}'), findsOneWidget);
+      } else {
+        expect(find.textContaining('Available in the GymFeed'), findsOneWidget);
+      }
+      expect(controller.summary, null);
+      expect(controller.optedIn, false);
+      expect(tester.takeException(), null);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    } finally {
+      // The binding checks debug invariants before addTearDown callbacks run.
+      debugDefaultTargetPlatformOverride = originalPlatform;
     }
-    expect(controller.summary, null);
-    expect(controller.optedIn, false);
-    expect(tester.takeException(), null);
-    await tester.pumpWidget(const SizedBox.shrink());
-    controller.dispose();
   });
 }
