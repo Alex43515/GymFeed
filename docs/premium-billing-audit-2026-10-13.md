@@ -3,10 +3,11 @@
 ## Result and scope
 
 The mobile paywall uses RevenueCat's current monthly package, with the
-`premium_features` entitlement controlling premium Coach access. The deployed
-3.0.6 test build contains a cached-access bug; fixes in this branch are not yet
-in any published build. No real purchase, refund, store configuration change,
-or production release was performed during this audit.
+`premium_features` entitlement controlling premium Coach access. The initial
+3.0.6 test build contained a cached-access bug. Fixes were prepared in this
+audit and subsequently uploaded to both test channels, as recorded below.
+No real purchase, refund, store configuration change, or production release
+was performed during this audit or the subsequent test deployment.
 
 This is a code/SDK contract test plus read-only checks against live services.
 It is **not** a completed StoreKit/Google Play checkout test. Native store
@@ -118,3 +119,26 @@ tests without supplied credentials). Scoped analysis: no issues. `git diff
 The user's purchased/tested account and platform were requested during this
 audit to check actual receipt dates. No such account was supplied before this
 report was prepared.
+
+## Subsequent test deployment — 2026-10-13
+
+At the user's request, source commit
+`2f9666950ac9a33c55ea0dee87719a83f83d4b61` was deployed from `release/3.0.6`:
+
+| Platform | Version | Build | Confirmed destination |
+| --- | --- | --- | --- |
+| Android | 3.0.6 | 222 | Google Play `internal` |
+| iOS | 3.0.6 | 202610131418 | Apple TestFlight upload |
+
+The [Android run](https://github.com/Alex43515/GymFeed/actions/runs/38408517750)
+completed successfully and reported `track: internal, versionCode: 222` after
+the Play edit was committed. Artifact ID: `11820412845`.
+
+The [iOS run](https://github.com/Alex43515/GymFeed/actions/runs/38408516889)
+completed both validation and signed upload successfully, with `UPLOAD
+SUCCEEDED with no errors` at 14:28:28 UTC. IPA artifact ID: `11821489666`.
+Apple processing and actual tester availability were not independently
+confirmed. No main merge or production store deployment was performed.
+
+This deployment does not substitute for the remaining native sandbox purchase
+and receipt/webhook verification described above.
