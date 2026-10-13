@@ -96,6 +96,11 @@ Android privacy activity opened without an AndroidRuntime crash. iOS validation
 is run by `.github/workflows/validate-connected-health.yml` on macOS without
 store deployment.
 
+The isolated feature-validation job uses macos-15 with Xcode 26.2 selected
+explicitly after macos-26 runner-capacity delays. Store publishing workflows
+are unchanged. A FirebaseFunctions Git download reset was an infrastructure
+failure, not an application compile/test failure; the validation was retried.
+
 The first macOS run compiled successfully, but actual Simulator installation
 exposed a pre-existing notification-extension metadata defect: ImageNotification
 used `FLUTTER_BUILD_NAME` / `FLUTTER_BUILD_NUMBER` in its plist without inheriting
