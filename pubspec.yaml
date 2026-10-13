@@ -97,6 +97,7 @@ dependencies:
   google_maps_flutter_platform_interface: 2.9.2
   google_maps_flutter_web: 0.5.10
   html: 0.15.4
+  health: 12.2.1
   http: 1.2.2
   image: 4.5.4
   image_picker: 1.1.2

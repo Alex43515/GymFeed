@@ -18,6 +18,7 @@ import '/custom_code/widgets/animated_splash.dart';
 
 import '/index.dart';
 import '/workout/plans/training_plan_detail_widget.dart';
+import '/health/connected_health_widget.dart';
 
 export 'package:go_router/go_router.dart';
 export 'serialization_util.dart';
@@ -423,6 +424,13 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
               path: CoachHomeWidget.routePath,
               requireAuth: true,
               builder: (context, params) => CoachHomeWidget(),
+            ),
+            FFRoute(
+              name: ConnectedHealthWidget.routeName,
+              path: ConnectedHealthWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => ConnectedHealthWidget(
+                  userId: AppStateNotifier.instance.user?.uid ?? ''),
             ),
             FFRoute(
               name: CoachEventsWidget.routeName,

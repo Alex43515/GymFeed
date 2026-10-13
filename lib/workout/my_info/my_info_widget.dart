@@ -8,6 +8,7 @@ import '/backend/supabase/repositories/progress_repository.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/upload_data.dart';
 import '/workout/training_home/training_home_widget.dart';
+import '/health/connected_health_widget.dart';
 
 const _progressBackground = Color(0xFF080808);
 const _progressSurface = Color(0xFF151515);
@@ -293,6 +294,10 @@ class _MyInfoWidgetState extends State<MyInfoWidget> {
                                 onTap: () => _editOverview(data.overview),
                               ),
                               const SizedBox(height: 19),
+                              ConnectedHealthEntryCard(
+                                  onTap: () => context.pushNamed(
+                                      ConnectedHealthWidget.routeName)),
+                              const SizedBox(height: 19),
                               const _SectionTitle('Your plans'),
                               const SizedBox(height: 9),
                               _PlanCard(
@@ -541,15 +546,15 @@ class _OverviewMetric extends StatelessWidget {
                       Text(value,
                           key: ValueKey('progress-$label-value'),
                           maxLines: 1,
-                          style: _progressText(
-                              size: 27, weight: FontWeight.w700)),
+                          style:
+                              _progressText(size: 27, weight: FontWeight.w700)),
                       const SizedBox(width: 4),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 3),
                         child: Text(unit,
                             key: ValueKey('progress-$label-unit'),
-                            style: _progressText(
-                                size: 11, color: _progressMuted)),
+                            style:
+                                _progressText(size: 11, color: _progressMuted)),
                       ),
                     ],
                   ),

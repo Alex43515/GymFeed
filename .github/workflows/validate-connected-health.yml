@@ -1,0 +1,45 @@
+name: Validate connected health
+
+on:
+  push:
+    branches: [codex/connected-health]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connected-health-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-simulator:
+    name: Test health integration and compile iOS
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install repository Flutter version
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --branch 3.27.4 --depth 1 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" config --no-analytics
+          "$RUNNER_TEMP/flutter/bin/flutter" precache --ios
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          pod install --project-directory=ios --repo-update
+      - name: Verify health feature
+        run: |
+          flutter analyze lib/health test/connected_health_test.dart test/device_health_gateway_test.dart
+          flutter test --no-pub
+      - name: Compile unsigned iOS Simulator app
+        run: flutter build ios --simulator --debug --no-pub
+      - name: Save Simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: connected-health-ios-simulator
+          path: build/ios/iphonesimulator/Runner.app
+          retention-days: 7

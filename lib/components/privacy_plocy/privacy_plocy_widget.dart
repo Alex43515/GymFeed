@@ -77,6 +77,13 @@ class _PrivacyPlocyWidgetState extends State<PrivacyPlocyWidget> {
                 mainAxisSize: MainAxisSize.max,
                 children: [
                   Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Connected health\n\nIf you connect Apple Health or Android Health Connect, GymFeed reads steps, active calories and heart rate to show your daily activity. Access is optional and read-only. Health records stay in memory on this phone while the Connected health screen is open. They are never uploaded to GymFeed, shared on your profile, sent to AI, sold or used for advertising. Only your connection preference is saved locally. You can disconnect in GymFeed and revoke permissions in your health app.',
+                      style: FlutterFlowTheme.of(context).bodyMedium,
+                    ),
+                  ),
+                  Padding(
                     padding:
                         EdgeInsetsDirectional.fromSTEB(10.0, 10.0, 10.0, 10.0),
                     child: Text(
