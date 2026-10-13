@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -12,6 +14,11 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('native health availability and optional connection UI',
       (tester) async {
+    // Flutter test environments can otherwise default platform styling to Android.
+    // This smoke test must exercise the real host's native health bridge.
+    debugDefaultTargetPlatformOverride =
+        Platform.isIOS ? TargetPlatform.iOS : TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final gateway = DeviceHealthGateway();
     final availability = await gateway.availability();
     expect(

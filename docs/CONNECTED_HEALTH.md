@@ -96,6 +96,14 @@ Android privacy activity opened without an AndroidRuntime crash. iOS validation
 is run by `.github/workflows/validate-connected-health.yml` on macOS without
 store deployment.
 
+The first macOS run compiled successfully, but actual Simulator installation
+exposed a pre-existing notification-extension metadata defect: ImageNotification
+used `FLUTTER_BUILD_NAME` / `FLUTTER_BUILD_NUMBER` in its plist without inheriting
+Generated.xcconfig. All three extension configurations now inherit the generated
+Flutter settings. `scripts/validate_ios_extension_versions.py` checks the compiled
+main/extension version fields and identity before installation. The full main
+Simulator app is archived before the integration-test harness rebuilds Runner.
+
 The Flutter integration-test installer automatically replaced the emulator's
 previous app because its signature differed, removing its local app data. The
 full new application was reinstalled after the smoke test. No live account or
