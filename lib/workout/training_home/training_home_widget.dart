@@ -5,6 +5,7 @@ import '/ai_workout/coach_events/event_details_sheet.dart';
 import '/ai_workout/starter_plan/starter_plan_service.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/supabase/repositories/training_repository.dart';
+import '/backend/supabase/repositories/coach_plan_repository.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
@@ -122,6 +123,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
         _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
     unawaited(_ensureStarterPlan());
     unawaited(_syncTrainingPlans());
+    unawaited(_syncCoachPlans());
   }
 
   @override
@@ -146,6 +148,11 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
 
   Future<void> _refresh() async {
     try {
+      await CoachPlanRepository().syncWorkouts();
+    } catch (_) {
+      // Previously imported routines remain available offline.
+    }
+    try {
       await StarterPlanService().ensureRequestedPlan();
     } catch (_) {
       // Pull-to-refresh still refreshes local workouts while AI is unavailable.
@@ -162,6 +169,15 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
       _historyFuture,
       _scheduleFuture,
     ]);
+  }
+
+  Future<void> _syncCoachPlans() async {
+    try {
+      await CoachPlanRepository().syncWorkouts();
+      if (mounted) await _refreshLocal();
+    } catch (_) {
+      // The existing local calendar is usable without a network connection.
+    }
   }
 
   Future<void> _ensureStarterPlan() async {
@@ -213,8 +229,8 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                 color: const Color(0xFF123821),
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: const Icon(Icons.event_note_rounded,
-                  color: _green, size: 21),
+              child:
+                  const Icon(Icons.event_note_rounded, color: _green, size: 21),
             ),
             const SizedBox(width: 13),
             Expanded(
