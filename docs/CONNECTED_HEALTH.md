@@ -84,9 +84,29 @@ concurrent refresh, calendar boundaries, system aggregation, duplicate samples,
 invalid numeric readings, UI actions and unsupported platforms.
 
 `integration_test/connected_health_device_test.dart` is a real native-plugin
-smoke test for an Android 14+ emulator with Health Connect. It verifies provider
+smoke test for an Android 14+ emulator with Health Connect or an iPhone Simulator.
+It verifies provider
 availability and renders the connect screen without login/backend writes or
 requesting health permissions. It does not simulate a physical watch.
+
+Local verification: 217 unit/widget tests passed (one existing live-backend test
+was skipped); static analysis passed; Android debug APK and Flutter web release
+build passed; native Health Connect availability/UI smoke passed on API 34;
+Android privacy activity opened without an AndroidRuntime crash. iOS validation
+is run by `.github/workflows/validate-connected-health.yml` on macOS without
+store deployment.
+
+The Flutter integration-test installer automatically replaced the emulator's
+previous app because its signature differed, removing its local app data. The
+full new application was reinstalled after the smoke test. No live account or
+backend data was modified.
+
+`scripts/ios_health_capability.py` can inspect the existing GymFeed bundle ID or
+enable HealthKit with an explicit `--enable` argument. On this date, inspection
+with the previously downloaded local Apple API key did not find the GymFeed
+bundle ID in that key's visible bundle-ID list. No Apple portal setting was
+changed. HealthKit on the current signing team's App ID remains to be confirmed;
+the signing credentials in GitHub may belong to a different/current team.
 
 Before a store release:
 
