@@ -56,6 +56,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C0DE20261013000000000001 /* NotificationExtension.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = NotificationExtension.Debug.xcconfig; path = Flutter/NotificationExtension.Debug.xcconfig; sourceTree = "<group>"; };
+		C0DE20261013000000000002 /* NotificationExtension.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = NotificationExtension.Release.xcconfig; path = Flutter/NotificationExtension.Release.xcconfig; sourceTree = "<group>"; };
+		C0DE20261013000000000003 /* NotificationExtension.Profile.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = NotificationExtension.Profile.xcconfig; path = Flutter/NotificationExtension.Profile.xcconfig; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
@@ -125,6 +128,9 @@
 		9740EEB11CF90186004384FC /* Flutter */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE20261013000000000001 /* NotificationExtension.Debug.xcconfig */,
+				C0DE20261013000000000002 /* NotificationExtension.Release.xcconfig */,
+				C0DE20261013000000000003 /* NotificationExtension.Profile.xcconfig */,
 				3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */,
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
@@ -519,7 +525,7 @@
 		};
 		6430E642270005EF009BEAC7 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			baseConfigurationReference = C0DE20261013000000000001 /* NotificationExtension.Debug.xcconfig */;
 			buildSettings = {
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -550,7 +556,7 @@
 		};
 		6430E643270005EF009BEAC7 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			baseConfigurationReference = C0DE20261013000000000002 /* NotificationExtension.Release.xcconfig */;
 			buildSettings = {
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -578,7 +584,7 @@
 		};
 		6430E644270005EF009BEAC7 /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			baseConfigurationReference = C0DE20261013000000000003 /* NotificationExtension.Profile.xcconfig */;
 			buildSettings = {
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
