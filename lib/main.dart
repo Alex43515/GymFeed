@@ -50,6 +50,8 @@ void main() async {
       loadDataAfterLaunch: true,
     ),
   ]);
+  // Bind a restored session before any premium access or native checkout.
+  await revenue_cat.login(supabase.auth.currentUser?.id);
   await initializePushNotifications();
   if (kIsWeb) {
     await captureMarketingAttribution(Uri.base);

@@ -43,14 +43,15 @@ class AiUseDecision {
 }
 
 class AiUsageGate {
-  SupabaseClient get _db => supabase;
+  AiUsageGate({SupabaseClient? client}) : _client = client;
+
+  final SupabaseClient? _client;
+  SupabaseClient get _db => _client ?? supabase;
   String? get _uid => _db.auth.currentUser?.id;
 
   Future<bool> isPremium() async {
     if (hasPremiumTesterOverride(_uid)) return true;
-    if (revenue_cat.activeEntitlementIds.contains(premiumEntitlementId)) {
-      return true;
-    }
+    if (_uid == null || !await revenue_cat.login(_uid)) return false;
     return await revenue_cat.isEntitled(premiumEntitlementId) ?? false;
   }
 
