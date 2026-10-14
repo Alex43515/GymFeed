@@ -119,6 +119,45 @@ also passed. Android marketing version is 3.0.7, while the publishing workflow
 allocates its next Google Play build code from the live uploaded bundles. iOS
 uses the same marketing version with a unique timestamp-based build number.
 
+### Testing deployment follow-up (October 14, 2026)
+
+- Android AAB `3.0.7 (223)` built and passed signature verification in Actions,
+  but API edit commits initially returned a health-declaration 403. The existing
+  declaration only exposed the legacy ACTIVITY_RECOGNITION/BODY_SENSORS fields.
+- The same signed AAB was uploaded through **Internal testing**, release 40,
+  and published through that track's own Save and publish flow. Play Console
+  explicitly confirmed **Available to internal testers** for 3.0.7 (223).
+  Tester opt-in: https://play.google.com/apps/internaltest/4701756315095498192.
+- Uploading the bundle exposed the missing READ_STEPS,
+  READ_ACTIVE_CALORIES_BURNED and READ_HEART_RATE declaration fields. All three
+  were completed with the implemented read-only/local-memory use cases and
+  submitted for review. The corrected form then passed the API deployment:
+  [run 38532797876](https://github.com/Alex43515/GymFeed/actions/runs/38532797876)
+  completed successfully and committed **3.0.7 (224)** to the internal track.
+  Play Console independently confirmed **Available to internal testers** for
+  build 224 (release 41). Build 224 supersedes the initial manual build 223.
+- The unrelated pending production rollout for 3.0.6 (222) was neither
+  published, removed, nor returned to draft. The global Publish changes control
+  was cancelled. No main push or production deployment was performed.
+- iOS network failure while downloading SwiftyGif was retried. The subsequent
+  HealthKit lookup errors were fixed and locally verified against the existing
+  App ID, as described below.
+  The signing job generated a new ACTIVE Runner profile (`2DQTDF4SQP`); its
+  signed profile content was read back and confirmed to contain the exact
+  existing application identifier and `com.apple.developer.healthkit = true`.
+- [iOS deployment run 38530431988](https://github.com/Alex43515/GymFeed/actions/runs/38530431988)
+  passed both jobs and uploaded **3.0.7 (202610140811)**. Apple upload state
+  became COMPLETE with no errors/warnings; build resource
+  `d92e597a-ed67-428b-802a-b673bde9946f` was confirmed VALID, not expired, with
+  export compliance answered (`usesNonExemptEncryption = false`). The matching
+  pre-release version is 3.0.7 / IOS, and build beta details report
+  **IN_BETA_TESTING** for the existing internal `testers` group
+  (`557e5c84-ac50-4919-950e-3a3ed6801825`, access to all builds, auto-notify on).
+  The external/public TestFlight group was not changed or submitted for beta
+  review; use the existing internal tester account to install this build.
+- Both testing deliveries are verified. No physical watch/phone installation
+  was performed by these deployment checks, and production/main remain untouched.
+
 The isolated feature-validation job uses macos-15 with Xcode 26.2 selected
 explicitly after macos-26 runner-capacity delays. Store publishing workflows
 are unchanged. A FirebaseFunctions Git download reset was an infrastructure
