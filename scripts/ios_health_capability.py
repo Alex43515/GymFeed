@@ -15,6 +15,41 @@ from urllib.request import Request, urlopen
 import jwt
 
 
+def find_existing_bundle(request, identifier):
+    """Require an exact identifier, including when Apple's filter misses it."""
+    filtered = request('/bundleIds?' + urlencode({
+        'filter[identifier]': identifier}))['data']
+    matches = [item for item in filtered
+               if item['attributes']['identifier'] == identifier]
+    if len(matches) == 1:
+        return matches[0]['id']
+    if len(matches) > 1:
+        raise RuntimeError('Multiple exact GymFeed bundle IDs found')
+
+    # Some accounts return an empty filtered result despite listing the exact
+    # existing ID. Never register a replacement or match by display name.
+    path = '/bundleIds?limit=200'
+    seen = set()
+    while path:
+        if path in seen or len(seen) >= 50:
+            raise RuntimeError('Invalid Apple bundle-ID pagination')
+        seen.add(path)
+        page = request(path)
+        matches.extend(item for item in page['data']
+                       if item['attributes']['identifier'] == identifier)
+        next_url = page.get('links', {}).get('next')
+        if next_url:
+            prefix = 'https://api.appstoreconnect.apple.com/v1/bundleIds?'
+            if not next_url.startswith(prefix):
+                raise RuntimeError('Unexpected Apple bundle-ID pagination URL')
+            path = '/bundleIds?' + next_url[len(prefix):]
+        else:
+            path = None
+    if len(matches) != 1:
+        raise RuntimeError('Expected exactly one existing GymFeed bundle ID')
+    return matches[0]['id']
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--key-file', required=True)
@@ -42,12 +77,8 @@ def main():
             raise RuntimeError('Apple API error ' + str(error.code) + ': ' +
                                error.read().decode()[:1500]) from None
 
-    bundle_ids = request('/bundleIds?' + urlencode({
-        'filter[identifier]': 'com.flutterflow.gymfeedofficial'}))['data']
-    if len(bundle_ids) != 1:
-        raise RuntimeError('Expected exactly one existing GymFeed bundle ID')
-    bundle_id = bundle_ids[0]['id']
-    path = '/bundleIds/' + bundle_id + '/bundleIdCapabilities?limit=200'
+    bundle_id = find_existing_bundle(request, 'com.flutterflow.gymfeedofficial')
+    path = '/bundleIds/' + bundle_id + '/bundleIdCapabilities'
     capabilities = request(path)['data']
     enabled = any(c['attributes']['capabilityType'] == 'HEALTHKIT' for c in capabilities)
     print(json.dumps({'bundleId': 'com.flutterflow.gymfeedofficial',

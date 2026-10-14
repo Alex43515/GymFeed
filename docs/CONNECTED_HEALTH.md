@@ -142,8 +142,17 @@ backend data was modified.
 enable HealthKit with an explicit `--enable` argument. On this date, inspection
 with the previously downloaded local Apple API key did not find the GymFeed
 bundle ID in that key's visible bundle-ID list. No Apple portal setting was
-changed. HealthKit on the current signing team's App ID remains to be confirmed;
-the signing credentials in GitHub may belong to a different/current team.
+changed during that initial inspection. Follow-up deployment diagnostics found
+that Apple's identifier filter returned no matches despite the exact existing
+ID being present in the unfiltered list. The lookup now has a paginated,
+exact-identifier fallback and rejects ambiguous IDs or unexpected pagination
+hosts. Five read-only fixture tests cover this behavior. The capabilities
+relationship also rejects a `limit` query parameter, so that parameter was
+removed. HealthKit was then successfully enabled on the existing GymFeed App
+ID `5GC64Y7SGV`, verified by a second API read. Existing Runner profiles became
+invalid and the deployment's normal `fetch-signing-files --create` step must
+create a compatible replacement; no existing profiles or certificates were
+deleted by these diagnostics.
 
 Before a store release:
 
