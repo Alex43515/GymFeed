@@ -154,6 +154,9 @@ class AiService {
       'openai/v1/chat/completions',
       {
         'model': selectedModel,
+        // Do not opt Coach requests into provider-side stored completions.
+        // This does not remove the provider's separate abuse-monitoring retention.
+        'store': false,
         'messages': messages,
         if (maxTokens != null && usesReasoningParameters)
           'max_completion_tokens': maxTokens,

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>NSHealthShareUsageDescription</key>
-    <string>GymFeed reads your steps, active calories and heart rate from Apple Health to show your daily activity. Your health data stays on this device.</string>
+    <string>GymFeed reads steps, active calories and heart rate to show your daily activity. If you separately enable AI sharing, today's summary is also sent to AI Coach when you ask a question.</string>
     <key>NSHealthUpdateUsageDescription</key>
     <string>GymFeed uses a read-only health connection and does not add or change your health records.</string>
 	<key>CFBundleDevelopmentRegion</key>

@@ -34,10 +34,15 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  APP_STORE_WHATS_NEW: GymFeed 3.0.7 adds optional private Connected health, Coach plan actions, and premium billing fixes.
+  APP_STORE_WHATS_NEW: GymFeed 3.0.8 adds separately consented daily activity context for AI Coach, with private read-only Connected health and clearer data-use controls.
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
 jobs:
+  publish-health-privacy:
+    name: Publish current health privacy notice only
+    uses: ./.github/workflows/deploy-health-privacy.yml
+    secrets: inherit
+
   validate-ios:
     name: Test and build iOS Simulator app
     runs-on: macos-15
@@ -102,7 +107,7 @@ jobs:
 
   publish-ios:
     name: Build signed IPA and deploy to Apple
-    needs: validate-ios
+    needs: [validate-ios, publish-health-privacy]
     runs-on: macos-15
     environment: app-store-connect
     timeout-minutes: 90

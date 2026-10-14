@@ -39,8 +39,8 @@ abstract class ConnectedHealthGateway {
   Future<bool> openSettings();
 }
 
-/// Only the user's opt-in is persisted. Health samples never enter preferences,
-/// Firestore, Supabase, logs, analytics, AI prompts or public profile records.
+/// Readings stay in page memory. A separate, explicit AI-sharing consent allows
+/// Coach to read a fresh daily summary for a question, never this page's cache.
 class ConnectedHealthController extends ChangeNotifier {
   ConnectedHealthController({
     required this.gateway,
@@ -63,8 +63,25 @@ class ConnectedHealthController extends ChangeNotifier {
   String? message;
   bool _disposed = false;
   int _generation = 0;
-  String get _key => 'connected_health_opt_in_v1_$userId';
+  static String connectionKey(String userId) =>
+      'connected_health_opt_in_v1_$userId';
+  static String aiConsentKey(String userId) =>
+      'connected_health_ai_consent_v1_$userId';
+  String get _key => connectionKey(userId);
   bool get optedIn => userId.isNotEmpty && preferences.getBool(_key) == true;
+  bool get aiSharingEnabled =>
+      optedIn && preferences.getBool(aiConsentKey(userId)) == true;
+
+  Future<void> setAiSharing(bool enabled) async {
+    if (busy || !optedIn) return;
+    if (enabled) {
+      await preferences.setBool(aiConsentKey(userId), true);
+    } else {
+      await preferences.remove(aiConsentKey(userId));
+    }
+    _notify();
+  }
+
   static DateTime day(DateTime date) =>
       DateTime(date.year, date.month, date.day);
   static DateTime nextDay(DateTime date) =>
@@ -167,6 +184,7 @@ class ConnectedHealthController extends ChangeNotifier {
   Future<void> disconnect() async {
     // UI disables this while a native request is pending.
     if (busy) return;
+    await preferences.remove(aiConsentKey(userId));
     await preferences.remove(_key);
     summary = null;
     state = HealthConnectionState.disconnected;

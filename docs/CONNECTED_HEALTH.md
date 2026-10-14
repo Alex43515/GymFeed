@@ -61,12 +61,13 @@ Source inspected without editing:
 - Queries use local midnight and next calendar midnight, including DST changes,
   and stop at current time for today. Refreshes cannot overlap. Read requests
   time out after 25 seconds and can be retried.
-- Only an account-scoped connection-preference boolean is saved locally. All
-  health readings live in page memory; no Firestore, Supabase, AI, analytics,
-  profile or cloud-cache integration. Disconnect clears that preference and
-  page data, but users revoke OS permissions separately in their health app.
+- Connection and separate AI-sharing consent are account-scoped booleans saved
+  locally. Readings stay in memory by default; optional AI sharing is described
+  below. No health cache, public profile or analytics integration. Disconnect
+  clears both preferences and page data; OS permissions are revoked separately.
 - There is no background worker. A connected page syncs on open, resume or
-  manual refresh. Closing it ends the feature's automatic reads.
+  manual refresh. Closing it ends automatic reads. Separately consented Coach
+  questions may also read today's summary while the app is in use.
 - Android uses FlutterFragmentActivity, provider availability checks, a native
   permissions-settings link and an independent scrollable privacy explanation
   for both Android 13 and Android 14+ health permission entry points.
@@ -77,6 +78,67 @@ Source inspected without editing:
   8 can run GymFeed, but gets an unsupported health-connection message.
 
 ## Verification and release requirements
+
+### Optional AI Coach context (2026-10-14, release 3.0.8)
+
+- Branch `codex/health-coach-context`, based on the successful 3.0.7 testing
+  release, promoted to `release/3.0.8` after the user approved testing publication.
+  No merge/push to main or production application rollout is authorized.
+- **Connected health → Use activity in AI Coach** is OFF by default, including
+  for previously connected users. Turning it on opens a separate disclosure
+  naming Supabase, OpenAI and Google Gemini, the data types, purpose, retention,
+  private-history persistence and withdrawal behavior. Cancel does not consent.
+- AI Coach has a Manage/status strip linking back to Connected health. Merely
+  opening Coach reads only preferences, not health records or OS permissions.
+- `health_ai_context.dart` reads a fresh, today-only summary per question after
+  both consents and authenticated account match. No permission prompt, background
+  task or saved health cache. A six-second timeout prevents slow health reads
+  blocking coaching; an expired availability check cannot start a late read.
+- AI context contains daily steps, estimated active kcal, latest recorded pulse,
+  local date, read time, UTC offset and pulse measurement time. No raw samples,
+  source/device IDs, sleep, HRV or invented recovery scores. Null means unknown;
+  invalid/future pulse readings and wrong-day snapshots are omitted. Read time
+  is not claimed to be the watch's sync time. Pulse is explicitly not live.
+- Context is added only to the question's prompt, not `AiCoachContext.toJson()`
+  (also used by saved plan tools). Existing authenticated `ai-proxy` supplies
+  provider keys server-side; no new tables, permissions or credentials needed.
+  OpenAI requests explicitly use `store: false`. This is NOT Zero Data Retention:
+  provider processing/abuse-monitoring and platform invocation retention apply.
+- Questions and answers while sharing is enabled receive an internal storage
+  marker, hidden on display. These private chat turns may quote the readings,
+  as disclosed. They are deterministically excluded from rolling-memory input,
+  and from future request history when sharing is off. Raw summaries are never
+  separately saved to a GymFeed health table. User-approved plans still use the
+  existing review/Implement workflow; raw readings are forbidden in plan metadata.
+- Turning sharing off stops future request context but does not erase existing
+  private history/plans. Disconnect also clears AI consent; reconnecting does
+  not re-enable it. Mid-read account changes/revocation discard results.
+- In-app privacy, Android permission explanation, iOS purpose string and staged
+  website privacy text have been updated together. Before any deployment,
+  publish that policy and update Play Health apps/Data safety and Apple App
+  Privacy disclosures (the existing declaration describes the local-only build).
+  Verify provider data-handling agreements/settings; do not market zero retention.
+- Testing deployment 3.0.8 adds a reusable privacy prerequisite to both mobile
+  workflows. It publishes ONLY `website/public_html/privacy/index.html`, with a
+  recoverable previous-file backup and exact-byte HTTPS verification. It never
+  syncs/deletes web app assets or invokes the production web-app workflow.
+  Store Health/Data safety/App Privacy verification is tracked separately; do
+  not treat a successful build/upload as approval of changed declarations.
+- Tests use synthetic data and mocked AI transport only. No real health readings
+  are uploaded during verification. Physical-watch AI verification remains a
+  separate test on an installed build, with that user's explicit consent.
+- Verification: 24 new health/Coach unit and widget tests passed, including the
+  complete `ask` pipeline with a mock authenticated database and AI transport
+  (consent on, off and revoked before dispatch). Full suite: 292 passed, four
+  pre-existing live/backend/device tests skipped. Targeted static analysis,
+  iOS plist XML validation, local Android debug compilation and web release
+  compilation passed. No new iOS signed build was produced on Windows. The web
+  check needed regeneration of stale local Flutter web-entrypoint/plugin-cache
+  files; no dependency versions or Google sign-in source were changed.
+- References: [Apple privacy/health rules](https://developer.apple.com/app-store/review/guidelines/#privacy),
+  [Google Health Connect limited use](https://support.google.com/googleplay/android-developer/answer/9888170),
+  [OpenAI API data controls](https://developers.openai.com/api/docs/guides/your-data),
+  [Supabase invocation logging](https://supabase.com/docs/guides/functions/logging).
 
 Automated coverage includes optional consent, denial, partial/revoked access,
 account separation, reconnect, empty iOS data, failures/retry, disconnect,

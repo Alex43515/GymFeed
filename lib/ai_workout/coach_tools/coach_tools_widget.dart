@@ -1,4 +1,5 @@
 import 'dart:async';
+import '/health/health_coach_notice.dart';
 
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/api_requests/api_calls.dart';
@@ -1598,6 +1599,7 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
                 ),
               ),
               const Divider(height: 1, color: _border),
+              HealthCoachNotice(userId: currentUserUid),
               Expanded(
                 child: ListView.builder(
                   controller: _scroll,

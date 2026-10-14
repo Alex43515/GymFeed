@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'connected_health_controller.dart';
 import 'device_health_gateway.dart';
+import 'health_ai_context.dart';
 
 const _green = Color(0xFF1FE276);
 const _surface = Color(0xFF151515);
@@ -87,7 +88,7 @@ class _ConnectedHealthWidgetState extends State<ConnectedHealthWidget>
               title: const Text('Disconnect health?',
                   style: TextStyle(color: Colors.white)),
               content: const Text(
-                  'This stops sync and clears this screen. To revoke access completely, also turn off GymFeed permissions in your health app.',
+                  'This stops sync, turns off AI health sharing and clears this screen. Existing private Coach history and plans are not deleted. To revoke system access completely, also turn off GymFeed permissions in your health app.',
                   style: TextStyle(color: _muted)),
               actions: [
                 TextButton(
@@ -100,6 +101,34 @@ class _ConnectedHealthWidgetState extends State<ConnectedHealthWidget>
               ],
             ));
     if (confirmed == true) await _controller!.disconnect();
+  }
+
+  Future<void> _changeAiSharing(bool enabled) async {
+    if (!enabled) {
+      await _controller!.setAiSharing(false);
+      return;
+    }
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _surface,
+        title: const Text('Share daily activity with AI Coach?',
+            style: TextStyle(color: Colors.white)),
+        content: const SingleChildScrollView(
+            child: Text(healthAiConsentText,
+                style: TextStyle(color: _muted, height: 1.5))),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Not now')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Allow AI sharing',
+                  style: TextStyle(color: _green))),
+        ],
+      ),
+    );
+    if (accepted == true && mounted) await _controller!.setAiSharing(true);
   }
 
   @override
@@ -321,6 +350,70 @@ class _ConnectedHealthWidgetState extends State<ConnectedHealthWidget>
                             const SizedBox(height: 22),
                             _panel(
                                 child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [
+                                  const Icon(Icons.auto_awesome, color: _green),
+                                  const SizedBox(width: 10),
+                                  const Expanded(
+                                      child: Text('Use activity in AI Coach',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 16))),
+                                  Switch.adaptive(
+                                    key: const ValueKey('health-ai-sharing'),
+                                    value: c.aiSharingEnabled,
+                                    activeColor: _green,
+                                    onChanged: connected && !c.busy
+                                        ? _changeAiSharing
+                                        : null,
+                                  ),
+                                ]),
+                                const SizedBox(height: 8),
+                                Text(
+                                    connected
+                                        ? 'Optional and off by default. With your permission, Coach reads today’s steps, active calories and recorded heart rate when you ask a question. Questions and answers stay in your private Coach history.'
+                                        : 'Connect your health app first. Sharing daily activity with AI is a separate choice, never automatic.',
+                                    style: const TextStyle(
+                                        color: _muted, height: 1.5)),
+                                if (c.aiSharingEnabled)
+                                  const Padding(
+                                      padding: EdgeInsets.only(top: 10),
+                                      child: Text(
+                                          'AI sharing on · Today only · Not live monitoring',
+                                          style: TextStyle(
+                                              color: _green, fontSize: 12))),
+                                TextButton(
+                                    onPressed: () => showDialog<void>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                              backgroundColor: _surface,
+                                              title: const Text(
+                                                  'How AI sharing works',
+                                                  style: TextStyle(
+                                                      color: Colors.white)),
+                                              content:
+                                                  const SingleChildScrollView(
+                                                      child: Text(
+                                                          healthAiConsentText,
+                                                          style: TextStyle(
+                                                              color: _muted,
+                                                              height: 1.5))),
+                                              actions: [
+                                                TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(context),
+                                                    child: const Text('Close'))
+                                              ],
+                                            )),
+                                    child: const Text('Data use and privacy',
+                                        style: TextStyle(color: _green))),
+                              ],
+                            )),
+                            const SizedBox(height: 22),
+                            _panel(
+                                child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
@@ -354,7 +447,7 @@ class _ConnectedHealthWidgetState extends State<ConnectedHealthWidget>
                             ]),
                             const SizedBox(height: 8),
                             const Text(
-                                'Health data stays on this phone. It is never uploaded to GymFeed, sent to AI, used for ads or shared on your profile. Only your connection preference is saved. Sync runs while this screen is open; you can disconnect anytime.',
+                                'Health readings stay on this phone unless you separately enable AI sharing above. With that consent, today’s summary is sent through GymFeed to OpenAI or Google Gemini when you ask Coach a question. Private questions, replies and plans may contain these numbers; they are not added to rolling AI memory. Health data is never used for ads or shared on your public profile. Only connection and AI-sharing preferences are saved locally. Disconnect turns both off.',
                                 style: TextStyle(
                                     color: _muted, height: 1.5, fontSize: 12)),
                             if (c.optedIn)
