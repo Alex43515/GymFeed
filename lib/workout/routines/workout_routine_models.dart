@@ -224,6 +224,16 @@ class WorkoutHistoryItem {
   final int durationSeconds;
   final List<CompletedExercise> exercises;
 
+  WorkoutHistoryItem copyWith({List<CompletedExercise>? exercises}) =>
+      WorkoutHistoryItem(
+        id: id,
+        routineId: routineId,
+        name: name,
+        startedAt: startedAt,
+        durationSeconds: durationSeconds,
+        exercises: exercises ?? this.exercises,
+      );
+
   int get setsDone => exercises.fold<int>(
       0,
       (sum, exercise) =>
@@ -238,7 +248,7 @@ class WorkoutHistoryItem {
         'id': id,
         'routineId': routineId,
         'name': name,
-        'startedAt': startedAt.toIso8601String(),
+        'startedAt': startedAt.toUtc().toIso8601String(),
         'durationSeconds': durationSeconds,
         'exercises': exercises.map((item) => item.toJson()).toList(),
       };
@@ -249,8 +259,9 @@ class WorkoutHistoryItem {
       id: (json['id'] ?? '').toString(),
       routineId: (json['routineId'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
-      startedAt: DateTime.tryParse((json['startedAt'] ?? '').toString()) ??
-          DateTime.now(),
+      startedAt:
+          DateTime.tryParse((json['startedAt'] ?? '').toString())?.toLocal() ??
+              DateTime.now(),
       durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 0,
       exercises: rawExercises is List
           ? rawExercises
@@ -261,4 +272,11 @@ class WorkoutHistoryItem {
           : const [],
     );
   }
+}
+
+class SavedWorkoutProgress {
+  const SavedWorkoutProgress({required this.workout, required this.completed});
+
+  final WorkoutHistoryItem workout;
+  final bool completed;
 }
