@@ -89,8 +89,7 @@ class WorkoutRoutineStore {
   }
 
   static String get _planSyncKey => 'gymfeed_training_plan_sync_v1_$_scope';
-  static String get _planVideosKey =>
-      'gymfeed_training_plan_videos_v1_$_scope';
+  static String get _planVideosKey => 'gymfeed_training_plan_videos_v1_$_scope';
   static final _planRoutineId = RegExp(r'^(plan-.+)-v\d+-d\d+$');
 
   static Future<Map<String, Map<String, String>>> _loadPlanVideos(
@@ -271,26 +270,45 @@ class WorkoutRoutineStore {
   /// An unfinished workout is kept separately from completed history.
   /// Reopening a workout completed earlier today also shows its logged sets.
   static Future<WorkoutHistoryItem?> loadWorkoutProgress(
+          String routineId, DateTime day) async =>
+      (await loadWorkoutState(routineId, day))?.workout;
+
+  static Future<SavedWorkoutProgress?> loadWorkoutState(
       String routineId, DateTime day) async {
     final preferences = await SharedPreferences.getInstance();
     final encoded = preferences.getString(_progressKey(routineId));
+    WorkoutHistoryItem? draft;
     if (encoded != null) {
       try {
         final item = WorkoutHistoryItem.fromJson(
             (jsonDecode(encoded) as Map).cast<String, dynamic>());
         if (item.routineId == routineId) {
-          return item;
+          draft = item;
         }
       } catch (_) {
         // A damaged draft must not prevent the routine from opening.
       }
-      await preferences.remove(_progressKey(routineId));
+      if (draft == null) await preferences.remove(_progressKey(routineId));
     }
     final history = await loadHistory();
+    if (draft != null) {
+      // Finish may have saved history just before the OS terminated the app.
+      // A leftover draft must never restart that completed workout's timer.
+      final completedIndex = history.indexWhere(
+          (item) => item.id == draft!.id && item.routineId == routineId);
+      if (completedIndex < 0) {
+        return SavedWorkoutProgress(workout: draft, completed: false);
+      }
+      await preferences.remove(_progressKey(routineId));
+      final completed = history[completedIndex];
+      if (dateKey(completed.startedAt) == dateKey(day)) {
+        return SavedWorkoutProgress(workout: completed, completed: true);
+      }
+    }
     for (final item in history) {
       if (item.routineId == routineId &&
           dateKey(item.startedAt) == dateKey(day)) {
-        return item;
+        return SavedWorkoutProgress(workout: item, completed: true);
       }
     }
     return null;
@@ -298,13 +316,32 @@ class WorkoutRoutineStore {
 
   static Future<void> saveWorkoutProgress(WorkoutHistoryItem item) async {
     final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_progressKey(item.routineId),
-        jsonEncode(item.toJson()));
+    await preferences.setString(
+        _progressKey(item.routineId), jsonEncode(item.toJson()));
   }
 
   static Future<void> clearWorkoutProgress(String routineId) async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_progressKey(routineId));
+  }
+
+  static Future<WorkoutRoutine> removeRoutineExercise(
+      WorkoutRoutine routine, int index) async {
+    final exercises = List<RoutineExercise>.from(routine.exercises);
+    final removed = exercises.removeAt(index);
+    final updated = routine.copyWith(exercises: exercises);
+    await saveRoutine(updated);
+    final state = await loadWorkoutState(routine.id, DateTime.now());
+    if (state != null && !state.completed) {
+      final active = List<CompletedExercise>.from(state.workout.exercises);
+      final activeIndex =
+          active.indexWhere((item) => item.name == removed.name);
+      if (activeIndex >= 0) {
+        active.removeAt(activeIndex);
+        await saveWorkoutProgress(state.workout.copyWith(exercises: active));
+      }
+    }
+    return updated;
   }
 
   static Future<Map<String, List<String>>> loadSchedule() async {
