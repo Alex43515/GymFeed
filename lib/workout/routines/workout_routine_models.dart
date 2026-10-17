@@ -2,20 +2,25 @@ class RoutineSetTarget {
   const RoutineSetTarget({
     required this.weightKg,
     required this.reps,
+    this.durationSeconds,
   });
 
   final double weightKg;
   final int reps;
+  final int? durationSeconds;
+  bool get isTimed => (durationSeconds ?? 0) > 0;
 
   Map<String, dynamic> toJson() => {
         'weightKg': weightKg,
         'reps': reps,
+        if (isTimed) 'durationSeconds': durationSeconds,
       };
 
   factory RoutineSetTarget.fromJson(Map<String, dynamic> json) =>
       RoutineSetTarget(
         weightKg: (json['weightKg'] as num?)?.toDouble() ?? 0,
         reps: (json['reps'] as num?)?.toInt() ?? 10,
+        durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
       );
 }
 
@@ -25,6 +30,7 @@ class RoutineExercise {
     this.setCount = 3,
     this.defaultWeightKg = 0,
     this.defaultReps = 10,
+    this.defaultDurationSeconds,
     this.setTargets = const [],
   });
 
@@ -32,6 +38,7 @@ class RoutineExercise {
   final int setCount;
   final double defaultWeightKg;
   final int defaultReps;
+  final int? defaultDurationSeconds;
   final List<RoutineSetTarget> setTargets;
 
   List<RoutineSetTarget> get plannedSets => setTargets.isNotEmpty
@@ -41,6 +48,7 @@ class RoutineExercise {
           (_) => RoutineSetTarget(
             weightKg: defaultWeightKg,
             reps: defaultReps,
+            durationSeconds: defaultDurationSeconds,
           ),
         );
 
@@ -49,6 +57,7 @@ class RoutineExercise {
     int? setCount,
     double? defaultWeightKg,
     int? defaultReps,
+    int? defaultDurationSeconds,
     List<RoutineSetTarget>? setTargets,
   }) =>
       RoutineExercise(
@@ -56,6 +65,9 @@ class RoutineExercise {
         setCount: setCount ?? this.setCount,
         defaultWeightKg: defaultWeightKg ?? this.defaultWeightKg,
         defaultReps: defaultReps ?? this.defaultReps,
+        defaultDurationSeconds: setTargets != null && setTargets.isNotEmpty
+            ? setTargets.first.durationSeconds
+            : defaultDurationSeconds ?? this.defaultDurationSeconds,
         setTargets: setTargets ?? this.setTargets,
       );
 
@@ -64,6 +76,8 @@ class RoutineExercise {
         'setCount': setCount,
         'defaultWeightKg': defaultWeightKg,
         'defaultReps': defaultReps,
+        if (defaultDurationSeconds != null)
+          'defaultDurationSeconds': defaultDurationSeconds,
         'setTargets': setTargets.map((item) => item.toJson()).toList(),
       };
 
@@ -82,6 +96,7 @@ class RoutineExercise {
       setCount: targets.isEmpty ? legacySetCount : targets.length,
       defaultWeightKg: (json['defaultWeightKg'] as num?)?.toDouble() ?? 0,
       defaultReps: (json['defaultReps'] as num?)?.toInt() ?? 10,
+      defaultDurationSeconds: (json['defaultDurationSeconds'] as num?)?.toInt(),
       setTargets: targets,
     );
   }
@@ -106,7 +121,16 @@ class WorkoutRoutine {
 
   int get estimatedMinutes => exercises.isEmpty
       ? 0
-      : exercises.fold<int>(0, (sum, item) => sum + item.setCount * 3);
+      : (exercises.fold<int>(
+                  0,
+                  (sum, item) =>
+                      sum +
+                      item.plannedSets.fold<int>(
+                          0,
+                          (seconds, set) =>
+                              seconds + (set.durationSeconds ?? 180))) /
+              60)
+          .ceil();
 
   WorkoutRoutine copyWith({
     String? id,
@@ -160,24 +184,29 @@ class CompletedSet {
     required this.weightKg,
     required this.reps,
     required this.completed,
+    this.durationSeconds,
   });
 
   final double weightKg;
   final int reps;
   final bool completed;
+  final int? durationSeconds;
+  bool get isTimed => (durationSeconds ?? 0) > 0;
 
-  double get volume => completed ? weightKg * reps : 0;
+  double get volume => completed && !isTimed ? weightKg * reps : 0;
 
   Map<String, dynamic> toJson() => {
         'weightKg': weightKg,
         'reps': reps,
         'completed': completed,
+        if (isTimed) 'durationSeconds': durationSeconds,
       };
 
   factory CompletedSet.fromJson(Map<String, dynamic> json) => CompletedSet(
         weightKg: (json['weightKg'] as num?)?.toDouble() ?? 0,
         reps: (json['reps'] as num?)?.toInt() ?? 0,
         completed: json['completed'] == true,
+        durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
       );
 }
 
@@ -233,6 +262,14 @@ class WorkoutHistoryItem {
       0,
       (sum, exercise) =>
           sum + exercise.sets.fold<double>(0, (s, item) => s + item.volume));
+
+  int get timedSeconds => exercises.fold<int>(
+      0,
+      (total, exercise) =>
+          total +
+          exercise.sets
+              .where((set) => set.completed)
+              .fold<int>(0, (sum, set) => sum + (set.durationSeconds ?? 0)));
 
   Map<String, dynamic> toJson() => {
         'id': id,

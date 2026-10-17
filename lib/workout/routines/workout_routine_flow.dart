@@ -7,6 +7,8 @@ import '/components/send_post/send_post_widget.dart';
 import 'exercise_video_sheet.dart';
 import 'workout_routine_models.dart';
 import 'workout_routine_store.dart';
+import 'workout_unit_selector.dart';
+import 'workout_units.dart';
 
 const _routineBg = Color(0xFF090909);
 const _routineSurface = Color(0xFF151515);
@@ -27,6 +29,9 @@ const workoutExerciseLibrary = [
   'Bicep Curl',
   'Triceps Pushdown',
   'Lateral Raise',
+  'Plank',
+  'Side Plank',
+  'Yoga Flow',
 ];
 
 TextStyle _routineText({
@@ -229,18 +234,25 @@ Future<String?> showWorkoutExerciseLibrary(
 
 class _RoutineSetDraft {
   _RoutineSetDraft(RoutineSetTarget target)
-      : weightController = TextEditingController(
-            text: target.weightKg == 0
-                ? '0'
-                : target.weightKg
-                    .toStringAsFixed(target.weightKg % 1 == 0 ? 0 : 1)),
-        repsController = TextEditingController(text: '${target.reps}');
+      : weightController =
+            WorkoutWeightController(target.weightKg, WorkoutWeightUnit.lb),
+        repsController = TextEditingController(
+            text: '${target.reps > 0 ? target.reps : 10}'),
+        minutesController = TextEditingController(
+            text: formatWorkoutNumber((target.durationSeconds ?? 60) / 60));
 
-  final TextEditingController weightController;
+  final WorkoutWeightController weightController;
   final TextEditingController repsController;
+  final TextEditingController minutesController;
 
-  RoutineSetTarget? toTarget() {
-    final weight = double.tryParse(weightController.text.trim());
+  RoutineSetTarget? toTarget({required bool timed}) {
+    if (timed) {
+      final seconds = workoutDurationFromMinutes(minutesController.text);
+      return seconds == null
+          ? null
+          : RoutineSetTarget(weightKg: 0, reps: 0, durationSeconds: seconds);
+    }
+    final weight = weightController.kilograms;
     final reps = int.tryParse(repsController.text.trim());
     if (weight == null || weight < 0 || reps == null || reps <= 0) return null;
     return RoutineSetTarget(weightKg: weight, reps: reps);
@@ -249,6 +261,7 @@ class _RoutineSetDraft {
   void dispose() {
     weightController.dispose();
     repsController.dispose();
+    minutesController.dispose();
   }
 }
 
@@ -268,6 +281,8 @@ class RoutineSetEditorWidget extends StatefulWidget {
 
 class _RoutineSetEditorWidgetState extends State<RoutineSetEditorWidget> {
   late final List<_RoutineSetDraft> _sets;
+  bool _timed = false;
+  WorkoutWeightUnit _unit = WorkoutWeightUnit.lb;
 
   @override
   void initState() {
@@ -276,6 +291,7 @@ class _RoutineSetEditorWidgetState extends State<RoutineSetEditorWidget> {
         ? const [RoutineSetTarget(weightKg: 0, reps: 10)]
         : widget.initialSets;
     _sets = initial.map(_RoutineSetDraft.new).toList();
+    _timed = initial.any((set) => set.isTimed);
   }
 
   @override
@@ -288,9 +304,11 @@ class _RoutineSetEditorWidgetState extends State<RoutineSetEditorWidget> {
 
   void _addSet() {
     if (_sets.length >= 10) return;
-    final previous =
-        _sets.last.toTarget() ?? const RoutineSetTarget(weightKg: 0, reps: 10);
-    setState(() => _sets.add(_RoutineSetDraft(previous)));
+    final previous = _sets.last.toTarget(timed: _timed) ??
+        const RoutineSetTarget(weightKg: 0, reps: 10);
+    final draft = _RoutineSetDraft(previous)
+      ..weightController.changeUnit(_unit);
+    setState(() => _sets.add(draft));
   }
 
   void _removeSet(int index) {
@@ -301,10 +319,12 @@ class _RoutineSetEditorWidgetState extends State<RoutineSetEditorWidget> {
   }
 
   void _save() {
-    final targets = _sets.map((set) => set.toTarget()).toList();
+    final targets = _sets.map((set) => set.toTarget(timed: _timed)).toList();
     if (targets.any((target) => target == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Enter a valid weight and at least 1 rep for every set.'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_timed
+            ? 'Enter a duration greater than zero for every set.'
+            : 'Enter a valid weight and at least 1 rep for every set.'),
       ));
       return;
     }
@@ -379,22 +399,27 @@ class _RoutineSetEditorWidgetState extends State<RoutineSetEditorWidget> {
           ),
           Row(
             children: [
-              Expanded(
-                child: _field(
-                  fieldKey: ValueKey('routine-set-weight-${index + 1}'),
-                  controller: set.weightController,
-                  label: 'Weight',
-                  suffix: 'kg',
-                  decimal: true,
+              if (!_timed) ...[
+                Expanded(
+                  child: _field(
+                    fieldKey: ValueKey('routine-set-weight-${index + 1}'),
+                    controller: set.weightController,
+                    label: 'Weight',
+                    suffix: _unit.name,
+                    decimal: true,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: _field(
-                  fieldKey: ValueKey('routine-set-reps-${index + 1}'),
-                  controller: set.repsController,
-                  label: 'Reps',
-                  suffix: 'reps',
+                  fieldKey: ValueKey(
+                      'routine-set-${_timed ? 'minutes' : 'reps'}-${index + 1}'),
+                  controller:
+                      _timed ? set.minutesController : set.repsController,
+                  label: _timed ? 'Duration' : 'Reps',
+                  suffix: _timed ? 'min' : 'reps',
+                  decimal: _timed,
                 ),
               ),
             ],
@@ -457,9 +482,34 @@ class _RoutineSetEditorWidgetState extends State<RoutineSetEditorWidget> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                   children: [
-                    Text(
-                      'Set the target weight and repetitions. These values will be ready when you start the workout.',
-                      style: _routineText(size: 12, color: _routineMuted),
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        SegmentedButton<bool>(
+                          key: const ValueKey('routine-tracking-mode'),
+                          segments: const [
+                            ButtonSegment(value: false, label: Text('Reps')),
+                            ButtonSegment(value: true, label: Text('Time'))
+                          ],
+                          selected: {_timed},
+                          showSelectedIcon: false,
+                          onSelectionChanged: (selected) =>
+                              setState(() => _timed = selected.single),
+                          style: SegmentedButton.styleFrom(
+                              foregroundColor: _routineMuted,
+                              selectedForegroundColor: _routineBg,
+                              selectedBackgroundColor: _routineGreen),
+                        ),
+                        WorkoutUnitSelector(onChanged: (unit) {
+                          for (final set in _sets) {
+                            set.weightController.changeUnit(unit);
+                          }
+                          setState(() => _unit = unit);
+                        }),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     ...List.generate(_sets.length, _setCard),
@@ -646,77 +696,81 @@ class _RoutineBuilderWidgetState extends State<RoutineBuilderWidget> {
             ),
             child: Column(
               children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF121B15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _routineBorder),
-                  ),
-                  child: const Icon(Icons.fitness_center_rounded,
-                      color: _routineGreen, size: 17),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(exercise.name,
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF121B15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _routineBorder),
+                      ),
+                      child: const Icon(Icons.fitness_center_rounded,
+                          color: _routineGreen, size: 17),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(exercise.name,
+                              style: _routineText(
+                                  size: 14, weight: FontWeight.w700)),
+                          Text(
+                              '${exercise.setCount} sets · ${exercise.plannedSets.first.isTimed ? 'Time' : 'Reps'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  _routineText(size: 10, color: _routineMuted)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      key: ValueKey('decrease-sets-${exercise.name}'),
+                      tooltip: 'Decrease sets',
+                      constraints:
+                          const BoxConstraints.tightFor(width: 32, height: 32),
+                      padding: EdgeInsets.zero,
+                      onPressed: exercise.setCount <= 1
+                          ? null
+                          : () => _changeSetCount(index, -1),
+                      icon: const Icon(Icons.remove_rounded, size: 18),
+                      color: Colors.white,
+                      disabledColor: const Color(0xFF4A4A4A),
+                    ),
+                    Container(
+                      width: 30,
+                      alignment: Alignment.center,
+                      child: Text('${exercise.setCount}',
                           style:
-                              _routineText(size: 14, weight: FontWeight.w700)),
-                      Text('${exercise.setCount} sets · Tap to edit kg & reps',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _routineText(size: 10, color: _routineMuted)),
-                    ],
-                  ),
+                              _routineText(size: 13, weight: FontWeight.w700)),
+                    ),
+                    IconButton(
+                      key: ValueKey('increase-sets-${exercise.name}'),
+                      tooltip: 'Increase sets',
+                      constraints:
+                          const BoxConstraints.tightFor(width: 32, height: 32),
+                      padding: EdgeInsets.zero,
+                      onPressed: exercise.setCount >= 10
+                          ? null
+                          : () => _changeSetCount(index, 1),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      color: _routineGreen,
+                    ),
+                    IconButton(
+                      key: ValueKey('remove-exercise-${exercise.name}'),
+                      tooltip: 'Remove exercise',
+                      constraints:
+                          const BoxConstraints.tightFor(width: 32, height: 32),
+                      padding: EdgeInsets.zero,
+                      onPressed: () =>
+                          setState(() => _exercises.removeAt(index)),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 19),
+                      color: _routineMuted,
+                    ),
+                  ],
                 ),
-                IconButton(
-                  key: ValueKey('decrease-sets-${exercise.name}'),
-                  tooltip: 'Decrease sets',
-                  constraints:
-                      const BoxConstraints.tightFor(width: 32, height: 32),
-                  padding: EdgeInsets.zero,
-                  onPressed: exercise.setCount <= 1
-                      ? null
-                      : () => _changeSetCount(index, -1),
-                  icon: const Icon(Icons.remove_rounded, size: 18),
-                  color: Colors.white,
-                  disabledColor: const Color(0xFF4A4A4A),
-                ),
-                Container(
-                  width: 30,
-                  alignment: Alignment.center,
-                  child: Text('${exercise.setCount}',
-                      style: _routineText(size: 13, weight: FontWeight.w700)),
-                ),
-                IconButton(
-                  key: ValueKey('increase-sets-${exercise.name}'),
-                  tooltip: 'Increase sets',
-                  constraints:
-                      const BoxConstraints.tightFor(width: 32, height: 32),
-                  padding: EdgeInsets.zero,
-                  onPressed: exercise.setCount >= 10
-                      ? null
-                      : () => _changeSetCount(index, 1),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  color: _routineGreen,
-                ),
-                IconButton(
-                  key: ValueKey('remove-exercise-${exercise.name}'),
-                  tooltip: 'Remove exercise',
-                  constraints:
-                      const BoxConstraints.tightFor(width: 32, height: 32),
-                  padding: EdgeInsets.zero,
-                  onPressed: () => setState(() => _exercises.removeAt(index)),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 19),
-                  color: _routineMuted,
-                ),
-              ],
-            ),
                 if (widget.exerciseFooterBuilder != null)
                   widget.exerciseFooterBuilder!(context, exercise),
               ],
@@ -799,7 +853,11 @@ class _RoutineBuilderWidgetState extends State<RoutineBuilderWidget> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 16),
+                    const Align(
+                        alignment: Alignment.centerRight,
+                        child: WorkoutUnitSelector()),
+                    const SizedBox(height: 16),
                     Text('Exercises',
                         style: _routineText(
                             size: 14,
@@ -975,6 +1033,9 @@ class _RoutineDetailWidgetState extends State<RoutineDetailWidget> {
                             size: 12,
                             color: _routineGreen,
                             weight: FontWeight.w600)),
+                    const Align(
+                        alignment: Alignment.centerRight,
+                        child: WorkoutUnitSelector()),
                     const SizedBox(height: 25),
                     Text('Exercises',
                         style: _routineText(
@@ -1025,7 +1086,7 @@ class _RoutineDetailWidgetState extends State<RoutineDetailWidget> {
                                                 size: 14,
                                                 weight: FontWeight.w700)),
                                         Text(
-                                            '${exercise.setCount} sets - Tap to edit kg & reps',
+                                            '${exercise.setCount} sets - ${exercise.plannedSets.first.isTimed ? 'Time' : 'Reps'}',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: _routineText(
@@ -1090,32 +1151,38 @@ class _EditableSet {
     required double weight,
     required int reps,
     this.completed = false,
-  })
-      : weightController = TextEditingController(
-            text: weight == 0
-                ? '0'
-                : weight.toStringAsFixed(weight % 1 == 0 ? 0 : 1)),
-        repsController = TextEditingController(text: '$reps');
+    int? durationSeconds,
+  })  : weightController =
+            WorkoutWeightController(weight, WorkoutWeightUnit.lb),
+        repsController = TextEditingController(text: '${reps > 0 ? reps : 10}'),
+        minutesController = TextEditingController(
+            text: formatWorkoutNumber((durationSeconds ?? 60) / 60));
 
-  final TextEditingController weightController;
+  final WorkoutWeightController weightController;
   final TextEditingController repsController;
+  final TextEditingController minutesController;
   bool completed;
 
   void dispose() {
     weightController.dispose();
     repsController.dispose();
+    minutesController.dispose();
   }
 }
 
 class _ActiveExercise {
   _ActiveExercise(this.exercise)
       : sets = exercise.plannedSets
-            .map((target) =>
-                _EditableSet(weight: target.weightKg, reps: target.reps))
-            .toList();
+            .map((target) => _EditableSet(
+                weight: target.weightKg,
+                reps: target.reps,
+                durationSeconds: target.durationSeconds))
+            .toList(),
+        isTimed = exercise.plannedSets.any((set) => set.isTimed);
 
   final RoutineExercise exercise;
   final List<_EditableSet> sets;
+  bool isTimed;
 
   void dispose() {
     for (final set in sets) {
@@ -1146,6 +1213,16 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
   int _elapsedSeconds = 0;
   int _restSeconds = 0;
   bool _finishing = false;
+  WorkoutWeightUnit _unit = WorkoutWeightUnit.lb;
+
+  void _changeUnit(WorkoutWeightUnit unit) {
+    for (final exercise in _exercises) {
+      for (final set in exercise.sets) {
+        set.weightController.changeUnit(unit);
+      }
+    }
+    setState(() => _unit = unit);
+  }
 
   /// Explanation videos for exercises of a training-plan day, by name.
   Map<String, String> _videoUrls = const {};
@@ -1195,11 +1272,12 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
       _historyId = saved.id;
       final remaining = List<CompletedExercise>.from(saved.exercises);
       for (final active in _exercises) {
-        final index = remaining.indexWhere(
-            (item) => item.name == active.exercise.name);
+        final index =
+            remaining.indexWhere((item) => item.name == active.exercise.name);
         if (index < 0) continue;
         final completed = remaining.removeAt(index);
         if (completed.sets.isEmpty) continue;
+        active.isTimed = completed.sets.any((set) => set.isTimed);
         for (final set in active.sets) {
           set.dispose();
         }
@@ -1208,12 +1286,15 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
           ..addAll(completed.sets.map((set) => _EditableSet(
               weight: set.weightKg,
               reps: set.reps,
-              completed: set.completed)));
+              durationSeconds: set.durationSeconds,
+              completed: set.completed)
+            ..weightController.changeUnit(_unit)));
       }
       for (final completed in remaining) {
         if (completed.sets.isEmpty) continue;
         final active = _ActiveExercise(RoutineExercise(
             name: completed.name, setCount: completed.sets.length));
+        active.isTimed = completed.sets.any((set) => set.isTimed);
         for (final set in active.sets) {
           set.dispose();
         }
@@ -1222,7 +1303,9 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
           ..addAll(completed.sets.map((set) => _EditableSet(
               weight: set.weightKg,
               reps: set.reps,
-              completed: set.completed)));
+              durationSeconds: set.durationSeconds,
+              completed: set.completed)
+            ..weightController.changeUnit(_unit)));
         _exercises.add(active);
       }
       _elapsedSeconds = saved.durationSeconds;
@@ -1241,9 +1324,16 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                   name: exercise.exercise.name,
                   sets: exercise.sets
                       .map((set) => CompletedSet(
-                            weightKg:
-                                double.tryParse(set.weightController.text) ?? 0,
-                            reps: int.tryParse(set.repsController.text) ?? 0,
+                            weightKg: exercise.isTimed
+                                ? 0
+                                : set.weightController.kilograms ?? 0,
+                            reps: exercise.isTimed
+                                ? 0
+                                : int.tryParse(set.repsController.text) ?? 0,
+                            durationSeconds: exercise.isTimed
+                                ? workoutDurationFromMinutes(
+                                    set.minutesController.text)
+                                : null,
                             completed: set.completed,
                           ))
                       .toList(),
@@ -1273,7 +1363,16 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
     });
   }
 
-  void _toggleSet(_EditableSet set) {
+  void _toggleSet(_ActiveExercise exercise, _EditableSet set) {
+    if (!set.completed &&
+        (exercise.isTimed
+            ? workoutDurationFromMinutes(set.minutesController.text) == null
+            : set.weightController.kilograms == null ||
+                (int.tryParse(set.repsController.text) ?? 0) < 1)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Enter valid set values before completing it.')));
+      return;
+    }
     setState(() => set.completed = !set.completed);
     _queueSave();
     if (set.completed) _startRest();
@@ -1304,13 +1403,25 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
       excluded: _exercises.map((item) => item.exercise.name),
     );
     if (selected == null || !mounted) return;
-    setState(() => _exercises
-        .add(_ActiveExercise(RoutineExercise(name: selected, setCount: 3))));
+    final active =
+        _ActiveExercise(RoutineExercise(name: selected, setCount: 3));
+    for (final set in active.sets) {
+      set.weightController.changeUnit(_unit);
+    }
+    setState(() => _exercises.add(active));
     _queueSave();
   }
 
   Future<void> _finish() async {
     if (_finishing) return;
+    if (_exercises.any((exercise) => exercise.sets.any((set) => exercise.isTimed
+        ? workoutDurationFromMinutes(set.minutesController.text) == null
+        : set.weightController.kilograms == null ||
+            (int.tryParse(set.repsController.text) ?? 0) < 1))) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Check the set values before finishing.')));
+      return;
+    }
     setState(() => _finishing = true);
     await _pendingSave;
     final history = _snapshot();
@@ -1403,6 +1514,30 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
             ],
           ),
           const SizedBox(height: 10),
+          SegmentedButton<bool>(
+            key: ValueKey('active-tracking-${exercise.name}'),
+            segments: const [
+              ButtonSegment(value: false, label: Text('Reps')),
+              ButtonSegment(value: true, label: Text('Time'))
+            ],
+            selected: {activeExercise.isTimed},
+            showSelectedIcon: false,
+            onSelectionChanged: (value) {
+              setState(() {
+                activeExercise.isTimed = value.single;
+                for (final set in activeExercise.sets) {
+                  set.completed = false;
+                }
+              });
+              _queueSave();
+            },
+            style: SegmentedButton.styleFrom(
+                foregroundColor: _routineMuted,
+                selectedForegroundColor: _routineBg,
+                selectedBackgroundColor: _routineGreen,
+                textStyle: _routineText(size: 11)),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               SizedBox(
@@ -1413,15 +1548,16 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                 child: Text('PREVIOUS',
                     style: _routineText(size: 9, color: _routineMuted)),
               ),
+              if (!activeExercise.isTimed)
+                SizedBox(
+                  width: 70,
+                  child: Text(_unit.name.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: _routineText(size: 9, color: _routineMuted)),
+                ),
               SizedBox(
                 width: 70,
-                child: Text('KG',
-                    textAlign: TextAlign.center,
-                    style: _routineText(size: 9, color: _routineMuted)),
-              ),
-              SizedBox(
-                width: 70,
-                child: Text('REPS',
+                child: Text(activeExercise.isTimed ? 'MIN' : 'REPS',
                     textAlign: TextAlign.center,
                     style: _routineText(size: 9, color: _routineMuted)),
               ),
@@ -1436,9 +1572,11 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
             final target = entry.key < plannedSets.length
                 ? plannedSets[entry.key]
                 : plannedSets.last;
-            final previous = target.weightKg == 0
-                ? '—'
-                : '${target.weightKg.toStringAsFixed(target.weightKg % 1 == 0 ? 0 : 1)}×${target.reps}';
+            final previous = target.isTimed
+                ? workoutMinutesLabel(target.durationSeconds!)
+                : target.weightKg == 0
+                    ? '—'
+                    : '${_unit.format(target.weightKg)}×${target.reps}';
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
@@ -1453,22 +1591,25 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                     child: Text(previous,
                         style: _routineText(size: 11, color: _routineMuted)),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: _numberField(
-                      set.weightController,
-                      'Weight',
-                      fieldKey: ValueKey(
-                          'active-set-weight-${exercise.name}-${entry.key + 1}'),
+                  if (!activeExercise.isTimed)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: _numberField(
+                        set.weightController,
+                        'Weight',
+                        fieldKey: ValueKey(
+                            'active-set-weight-${exercise.name}-${entry.key + 1}'),
+                      ),
                     ),
-                  ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: _numberField(
-                      set.repsController,
-                      'Repetitions',
+                      activeExercise.isTimed
+                          ? set.minutesController
+                          : set.repsController,
+                      activeExercise.isTimed ? 'Minutes' : 'Repetitions',
                       fieldKey: ValueKey(
-                          'active-set-reps-${exercise.name}-${entry.key + 1}'),
+                          'active-set-${activeExercise.isTimed ? 'minutes' : 'reps'}-${exercise.name}-${entry.key + 1}'),
                     ),
                   ),
                   SizedBox(
@@ -1495,7 +1636,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                           'complete-${exercise.name}-${entry.key + 1}'),
                       tooltip: set.completed ? 'Set complete' : 'Complete set',
                       padding: EdgeInsets.zero,
-                      onPressed: () => _toggleSet(set),
+                      onPressed: () => _toggleSet(activeExercise, set),
                       icon: Container(
                         width: 30,
                         height: 30,
@@ -1529,8 +1670,12 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
               key: ValueKey('add-set-${exercise.name}'),
               onPressed: () {
                 final lastTarget = exercise.plannedSets.last;
-                setState(() => activeExercise.sets.add(_EditableSet(
-                    weight: lastTarget.weightKg, reps: lastTarget.reps)));
+                final added = _EditableSet(
+                    weight: lastTarget.weightKg,
+                    reps: lastTarget.reps,
+                    durationSeconds: lastTarget.durationSeconds)
+                  ..weightController.changeUnit(_unit);
+                setState(() => activeExercise.sets.add(added));
                 _queueSave();
               },
               style: TextButton.styleFrom(
@@ -1568,28 +1713,37 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
           children: [
             TextButton(
               key: const ValueKey('rest-minus-15'),
+              style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 6)),
               onPressed: () => setState(() =>
                   _restSeconds = (_restSeconds - 15).clamp(0, 600).toInt()),
               child: Text('−15',
                   style: _routineText(size: 13, weight: FontWeight.w700)),
             ),
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('REST',
-                      style: _routineText(size: 9, color: _routineMuted)),
-                  Text(workoutDurationLabel(_restSeconds),
-                      style: _routineText(
-                          size: 22,
-                          color: _routineGreen,
-                          weight: FontWeight.w700,
-                          height: 1.05)),
-                ],
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('REST',
+                        style: _routineText(size: 9, color: _routineMuted)),
+                    Text(workoutDurationLabel(_restSeconds),
+                        style: _routineText(
+                            size: 22,
+                            color: _routineGreen,
+                            weight: FontWeight.w700,
+                            height: 1.05)),
+                  ],
+                ),
               ),
             ),
             TextButton(
               key: const ValueKey('rest-plus-15'),
+              style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 6)),
               onPressed: () => setState(() =>
                   _restSeconds = (_restSeconds + 15).clamp(0, 600).toInt()),
               child: Text('+15',
@@ -1690,6 +1844,8 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                       ListView(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 105),
                         children: [
+                          WorkoutUnitSelector(onChanged: _changeUnit),
+                          const SizedBox(height: 12),
                           ..._exercises.map(_exerciseCard),
                           OutlinedButton.icon(
                             key: const ValueKey('active-add-exercise'),
@@ -1722,10 +1878,18 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
   }
 }
 
-class WorkoutSummaryWidget extends StatelessWidget {
+class WorkoutSummaryWidget extends StatefulWidget {
   const WorkoutSummaryWidget({super.key, required this.history});
 
   final WorkoutHistoryItem history;
+
+  @override
+  State<WorkoutSummaryWidget> createState() => _WorkoutSummaryWidgetState();
+}
+
+class _WorkoutSummaryWidgetState extends State<WorkoutSummaryWidget> {
+  WorkoutHistoryItem get history => widget.history;
+  WorkoutWeightUnit _unit = WorkoutWeightUnit.lb;
 
   Future<void> _share(BuildContext context) => showModalBottomSheet<void>(
         context: context,
@@ -1763,86 +1927,111 @@ class WorkoutSummaryWidget extends StatelessWidget {
       child: Scaffold(
         backgroundColor: _routineBg,
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 30, 20, 20),
-            child: Column(
-              children: [
-                const Spacer(),
-                Container(
-                  width: 78,
-                  height: 78,
-                  decoration: const BoxDecoration(
-                      color: _routineGreen, shape: BoxShape.circle),
-                  child: const Icon(Icons.check_rounded,
-                      color: _routineBg, size: 42),
-                ),
-                const SizedBox(height: 22),
-                Text('Workout complete',
-                    textAlign: TextAlign.center,
-                    style: _routineText(size: 25, weight: FontWeight.w700)),
-                const SizedBox(height: 5),
-                Text(history.name,
-                    textAlign: TextAlign.center,
-                    style: _routineText(size: 13, color: _routineMuted)),
-                const SizedBox(height: 28),
-                Row(
-                  children: [
-                    _summaryMetric('Duration',
-                        workoutDurationLabel(history.durationSeconds)),
-                    const SizedBox(width: 9),
-                    _summaryMetric(
-                        'Total volume', '${history.totalVolume.round()} kg'),
-                  ],
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  children: [
-                    _summaryMetric('Sets done', '${history.setsDone}'),
-                    const SizedBox(width: 9),
-                    _summaryMetric('Exercises', '${history.exercises.length}'),
-                  ],
-                ),
-                const Spacer(flex: 2),
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: FilledButton(
-                    key: const ValueKey('workout-summary-done'),
-                    onPressed: () => Navigator.pop(context, true),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _routineGreen,
-                      foregroundColor: _routineBg,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(27)),
-                    ),
-                    child: Text('Done',
-                        style: _routineText(
-                            size: 14,
-                            color: _routineBg,
-                            weight: FontWeight.w700)),
+          child: LayoutBuilder(builder: (context, constraints) {
+            return SingleChildScrollView(
+                child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 30, 20, 20),
+                  child: Column(
+                    children: [
+                      Align(
+                          alignment: Alignment.centerRight,
+                          child: WorkoutUnitSelector(
+                              onChanged: (unit) =>
+                                  setState(() => _unit = unit))),
+                      const Spacer(),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: 78,
+                        height: 78,
+                        decoration: const BoxDecoration(
+                            color: _routineGreen, shape: BoxShape.circle),
+                        child: const Icon(Icons.check_rounded,
+                            color: _routineBg, size: 42),
+                      ),
+                      const SizedBox(height: 22),
+                      Text('Workout complete',
+                          textAlign: TextAlign.center,
+                          style:
+                              _routineText(size: 25, weight: FontWeight.w700)),
+                      const SizedBox(height: 5),
+                      Text(history.name,
+                          textAlign: TextAlign.center,
+                          style: _routineText(size: 13, color: _routineMuted)),
+                      const SizedBox(height: 28),
+                      Row(
+                        children: [
+                          _summaryMetric('Duration',
+                              workoutDurationLabel(history.durationSeconds)),
+                          const SizedBox(width: 9),
+                          _summaryMetric('Total volume',
+                              '${_unit.fromKg(history.totalVolume).round()} ${_unit.name}'),
+                        ],
+                      ),
+                      const SizedBox(height: 9),
+                      Row(
+                        children: [
+                          _summaryMetric('Sets done', '${history.setsDone}'),
+                          const SizedBox(width: 9),
+                          _summaryMetric(
+                              'Exercises', '${history.exercises.length}'),
+                        ],
+                      ),
+                      if (history.timedSeconds > 0) ...[
+                        const SizedBox(height: 9),
+                        Row(children: [
+                          _summaryMetric('Timed work',
+                              workoutDurationLabel(history.timedSeconds))
+                        ]),
+                      ],
+                      const SizedBox(height: 24),
+                      const Spacer(flex: 2),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: FilledButton(
+                          key: const ValueKey('workout-summary-done'),
+                          onPressed: () => Navigator.pop(context, true),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _routineGreen,
+                            foregroundColor: _routineBg,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(27)),
+                          ),
+                          child: Text('Done',
+                              style: _routineText(
+                                  size: 14,
+                                  color: _routineBg,
+                                  weight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('share-workout'),
+                          onPressed: () => _share(context),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: _routineBorder),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25)),
+                          ),
+                          icon: const Icon(Icons.ios_share_rounded,
+                              color: Colors.white, size: 18),
+                          label: Text('Share workout',
+                              style: _routineText(
+                                  size: 13, weight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('share-workout'),
-                    onPressed: () => _share(context),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: _routineBorder),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25)),
-                    ),
-                    icon: const Icon(Icons.ios_share_rounded,
-                        color: Colors.white, size: 18),
-                    label: Text('Share workout',
-                        style: _routineText(size: 13, weight: FontWeight.w600)),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            ));
+          }),
         ),
       ),
     );

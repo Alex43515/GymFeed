@@ -15,6 +15,8 @@ import '/workout/plans/training_plans_widget.dart';
 import '/workout/routines/workout_routine_flow.dart';
 import '/workout/routines/workout_routine_models.dart';
 import '/workout/routines/workout_routine_store.dart';
+import '/workout/routines/workout_unit_selector.dart';
+import '/workout/routines/workout_units.dart';
 import 'package:flutter/material.dart';
 import 'training_home_model.dart';
 export 'training_home_model.dart';
@@ -67,6 +69,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
   late DateTime _visibleWeekStart;
 
   int _tab = 0;
+  WorkoutWeightUnit _weightUnit = WorkoutWeightUnit.lb;
 
   static const _bg = Color(0xFF0B0B0B);
   static const _card = Color(0xFF141414);
@@ -349,7 +352,9 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          WorkoutUnitSelector(
+              onChanged: (unit) => setState(() => _weightUnit = unit)),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
             decoration: BoxDecoration(
@@ -1058,8 +1063,12 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
             children: [
               _historyMetric(
                   'Duration', workoutDurationLabel(item.durationSeconds)),
-              _historyMetric('Volume', '${item.totalVolume.round()} kg'),
+              _historyMetric('Volume',
+                  '${_weightUnit.fromKg(item.totalVolume).round()} ${_weightUnit.name}'),
               _historyMetric('Sets', '${item.setsDone}'),
+              if (item.timedSeconds > 0)
+                _historyMetric(
+                    'Timed', workoutDurationLabel(item.timedSeconds)),
             ],
           ),
         ],

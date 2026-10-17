@@ -183,14 +183,19 @@ Food allergies or exclusions: $foodAllergies''';
 }
 
 class StarterPlanSet {
-  const StarterPlanSet({required this.weightKg, required this.reps});
+  const StarterPlanSet(
+      {required this.weightKg, required this.reps, this.durationSeconds});
 
   final double weightKg;
   final int reps;
+  final int? durationSeconds;
 
   factory StarterPlanSet.fromJson(Map<String, dynamic> json) => StarterPlanSet(
         weightKg: _doubleValue(json['weight_kg']).clamp(0, 500),
         reps: _intValue(json['reps'], 10).clamp(1, 100),
+        durationSeconds: _intValue(json['duration_seconds']) > 0
+            ? _intValue(json['duration_seconds']).clamp(1, 86400)
+            : null,
       );
 }
 
@@ -673,6 +678,7 @@ Rules:
 - If the frequency is a range, use its lower number (for example, 3-4 means 3 days per week).
 - Every workout must contain 3-6 exercises and every exercise 1-6 explicit sets.
 - Set kg and reps individually for every set so the routine is ready to start and edit.
+- For timed holds or yoga, use {"duration_seconds":60} instead of weight_kg/reps. Use integer seconds from 1 to 86400, and the same tracking mode for every set of an exercise.
 - Progress safely across weeks instead of duplicating identical sessions.
 - Names and categories must be concise. No extra keys or prose outside JSON.'''
         }
@@ -747,12 +753,22 @@ Rules:
         final sets = _list(exercise['sets'])
             .map(_map)
             .take(6)
-            .map((set) => {
-                  'weight_kg': _doubleValue(set['weight_kg']).clamp(0, 500),
-                  'reps': _intValue(set['reps'], 10).clamp(1, 100),
-                })
+            .map((set) => _intValue(set['duration_seconds']) > 0
+                ? {
+                    'duration_seconds':
+                        _intValue(set['duration_seconds']).clamp(1, 86400)
+                  }
+                : {
+                    'weight_kg': _doubleValue(set['weight_kg']).clamp(0, 500),
+                    'reps': _intValue(set['reps'], 10).clamp(1, 100),
+                  })
             .toList();
         if (sets.isEmpty) continue;
+        if (sets.any((set) => set.containsKey('duration_seconds')) &&
+            sets.any((set) => !set.containsKey('duration_seconds'))) {
+          throw const FormatException(
+              'An exercise must use one set tracking mode.');
+        }
         exercises.add({
           'name': _text(exercise['name'], 'Exercise'),
           'sets': sets,

@@ -37,7 +37,12 @@ final coachPlanResponseSchema = _object({
     'category': _string,
     'exercises': _array(_object({
       'name': _string,
-      'sets': _array(_object({'weight_kg': _number, 'reps': _integer})),
+      'sets': _array({
+        'anyOf': [
+          _object({'weight_kg': _number, 'reps': _integer}),
+          _object({'duration_seconds': _integer}),
+        ],
+      }),
     })),
   })),
   'meals': _array(_object({
@@ -191,6 +196,16 @@ CoachPlanDecision parseCoachPlanDecision(
       final rawSets = _planItems(exercise['sets'], 10);
       if (rawSets.isEmpty) throw const FormatException('Exercise has no sets.');
       final targets = rawSets.map((set) {
+        if (set.containsKey('duration_seconds')) {
+          if (set.containsKey('weight_kg') || set.containsKey('reps')) {
+            throw const FormatException('A set must use one tracking mode.');
+          }
+          return RoutineSetTarget(
+              weightKg: 0,
+              reps: 0,
+              durationSeconds:
+                  _planInt(set['duration_seconds'], 86400, minimum: 1));
+        }
         final weight = set['weight_kg'];
         if (weight is! num || !weight.isFinite || weight < 0 || weight > 500) {
           throw const FormatException('Invalid workout weight.');
@@ -199,11 +214,17 @@ CoachPlanDecision parseCoachPlanDecision(
             weightKg: weight.toDouble(),
             reps: _planInt(set['reps'], 100, minimum: 1));
       }).toList();
+      if (targets.any((set) => set.isTimed) &&
+          targets.any((set) => !set.isTimed)) {
+        throw const FormatException(
+            'An exercise must use one set tracking mode.');
+      }
       exercises.add(RoutineExercise(
         name: _planText(exercise['name'], 80),
         setCount: targets.length,
         defaultWeightKg: targets.first.weightKg,
         defaultReps: targets.first.reps,
+        defaultDurationSeconds: targets.first.durationSeconds,
         setTargets: targets,
       ));
     }
@@ -283,6 +304,7 @@ Return the JSON schema only. intent is:
 A changed date, scope, exercise, food or portion is propose with the revised COMPLETE entries, not confirm of the old payload. Unrelated chat preserves the pending proposal. Confirm/cancel refer only to the CURRENT app state below, never an old proposal in the transcript. Repeated approval after status implemented should acknowledge it was already added and create no new proposal. If no pending plan exists, ask which plan to add, once.
 No model response may claim a write succeeded. Only the app's persisted action receipt can do that. Do not ask the user to type a particular keyword: the Implement button and clear natural-language confirmation are equivalent.
 For workouts use 1-12 exercises, each with 1-10 explicit sets, weight_kg 0-500 (convert pounds to kg), integer reps 1-100. Use 0 for bodyweight/unspecified loads. If repetitions are unspecified choose a conservative 8-10 reps, never ask the user to supply reps or choose training to failure. Preserve the requested number of sets; default to 3 only when no set count is given. Training must respect injuries, equipment, level and requested duration/frequency; include rest days by omitting workouts on those dates.
+For timed holds, yoga or other duration-based exercises, use sets with integer duration_seconds 1-86400 instead of weight_kg/reps. Convert requested minutes to seconds. Use the same tracking mode for every set in one exercise; never turn a timed hold into repetitions.
 For meals include requested meals per day, English canonical meal_type, concise English names and descriptions with actual ingredients/portions and preparation instructions, calories 1-5000, protein_g 0-500, carbs_g 0-750, fat_g 0-300. Respect allergies and exclusions in any language. These are planned meals, NEVER logged as already eaten. Do not replace existing plans unless explicitly requested; current action support adds dated entries.
 For chat, clarify, confirm and cancel both arrays MUST be empty.
 CURRENT APP ACTION STATE:

@@ -101,6 +101,56 @@ class TestMeals extends MealRepository {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test(
+      'timed Coach plans preserve seconds through payload storage and Train import',
+      () async {
+    final payload = planJson();
+    payload['workouts'][0]['exercises'][0]['name'] = 'Plank';
+    payload['workouts'][0]['exercises'][0]['sets'] = [
+      {'duration_seconds': 90},
+      {'duration_seconds': 60}
+    ];
+    final action = parseCoachPlanDecision(jsonEncode(payload),
+            now: today, actionId: actionId)
+        .proposal!;
+    final stored = CoachPlanAction.fromRow(
+        {'id': actionId, 'status': 'implemented', 'payload': action.toJson()});
+    await CoachPlanRepository.materializeWorkouts(stored);
+    final routines = await WorkoutRoutineStore.loadRoutines();
+    final routine = routines
+        .singleWhere((item) => item.id == action.workouts.single.routine.id);
+    expect(
+        routine.exercises.single.plannedSets.map((set) => set.durationSeconds),
+        [90, 60]);
+    expect(routine.exercises.single.plannedSets.first.reps, 0);
+  });
+
+  test('timed Coach plans reject invalid durations and mixed modes', () {
+    for (final sets in [
+      [
+        {'duration_seconds': 0}
+      ],
+      [
+        {'duration_seconds': 1.5}
+      ],
+      [
+        {'duration_seconds': 86401}
+      ],
+      [
+        {'duration_seconds': 60},
+        {'weight_kg': 0, 'reps': 10}
+      ],
+      [
+        {'duration_seconds': 60, 'reps': 10}
+      ],
+    ]) {
+      final payload = planJson();
+      payload['workouts'][0]['exercises'][0]['sets'] = sets;
+      expect(() => parseCoachPlanDecision(jsonEncode(payload), now: today),
+          throwsFormatException);
+    }
+  });
+
   test('one proposal preserves exact dates, sets and distinct planned meals',
       () {
     final action = prepared();

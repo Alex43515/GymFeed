@@ -9,7 +9,8 @@ import 'package:gym_feed/workout/training_home/training_home_widget.dart';
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues(
+        {'gymfeed_workout_weight_unit_v1_guest': 'kg'});
   });
 
   void configurePhone(WidgetTester tester) {

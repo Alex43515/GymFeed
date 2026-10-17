@@ -9,6 +9,7 @@ import 'package:gym_feed/ai_workout/premium/ai_usage_gate.dart';
 import 'package:gym_feed/backend/supabase/repositories/ai_coach_repository.dart';
 import 'package:gym_feed/workout/routines/workout_routine_models.dart';
 import 'package:gym_feed/workout/routines/workout_routine_store.dart';
+import 'package:gym_feed/workout/routines/workout_units.dart';
 
 void main() {
   setUp(() {
@@ -16,6 +17,7 @@ void main() {
   });
 
   AiCoachContext context() => const AiCoachContext(
+        weightUnit: WorkoutWeightUnit.kg,
         profile: {
           'name': 'Alex',
           'height_cm': 182,
@@ -131,6 +133,7 @@ void main() {
   }) {
     final routines = [pushRoutine, legRoutine];
     return AiCoachContext(
+      weightUnit: WorkoutWeightUnit.kg,
       profile: {
         'name': 'Alex',
         'workouts_per_week': weeklyTarget,

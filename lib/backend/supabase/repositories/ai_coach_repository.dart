@@ -10,6 +10,7 @@ import '/backend/supabase/repositories/meal_repository.dart';
 import '/backend/supabase/supabase.dart';
 import '/workout/routines/workout_routine_models.dart';
 import '/workout/routines/workout_routine_store.dart';
+import '/workout/routines/workout_units.dart';
 
 const String aiCoachDisclosure =
     'Disclosure: GymFeed AI Coach provides general fitness and nutrition '
@@ -190,6 +191,7 @@ class AiCoachContext {
     required this.recentMeals,
     required this.latestProgress,
     this.plannedMeals = const [],
+    this.weightUnit = WorkoutWeightUnit.lb,
   });
 
   final Map<String, dynamic> profile;
@@ -200,6 +202,7 @@ class AiCoachContext {
   final List<Map<String, dynamic>> recentMeals;
   final Map<String, dynamic> latestProgress;
   final List<Map<String, dynamic>> plannedMeals;
+  final WorkoutWeightUnit weightUnit;
 
   Map<String, dynamic> toJson() => {
         'athlete_profile': profile,
@@ -210,6 +213,7 @@ class AiCoachContext {
         'recent_logged_meals': recentMeals,
         'current_dated_planned_meals': plannedMeals,
         'latest_progress_measurement': latestProgress,
+        'preferred_workout_weight_unit': weightUnit.name,
       };
 }
 
@@ -442,7 +446,7 @@ AiCoachScheduleReply? answerScheduleAwareQuestion(
       return _missingWorkoutReply(context, today, today, noNextSession: true);
     }
     final day = upcoming.first;
-    return AiCoachScheduleReply(_scheduledWorkoutText(day));
+    return AiCoachScheduleReply(_scheduledWorkoutText(day, context.weightUnit));
   }
 
   final date = targetDate!;
@@ -461,7 +465,7 @@ AiCoachScheduleReply? answerScheduleAwareQuestion(
   }
   final scheduled = _mapList(day['scheduled_workouts']);
   if (scheduled.isNotEmpty) {
-    return AiCoachScheduleReply(_scheduledWorkoutText(day));
+    return AiCoachScheduleReply(_scheduledWorkoutText(day, context.weightUnit));
   }
   final completed = _mapList(day['completed_workouts']);
   if (completed.isNotEmpty) {
@@ -674,7 +678,7 @@ Map<String, dynamic>? _weekSummaryFor(
   return null;
 }
 
-String _scheduledWorkoutText(Map<String, dynamic> day) {
+String _scheduledWorkoutText(Map<String, dynamic> day, WorkoutWeightUnit unit) {
   final date = DateTime.tryParse((day['date'] ?? '').toString());
   final label = date == null ? day['date'].toString() : _friendlyDate(date);
   final workouts = _mapList(day['scheduled_workouts']);
@@ -689,22 +693,23 @@ String _scheduledWorkoutText(Map<String, dynamic> day) {
       final targets = _mapList(exercise['setTargets']);
       if (targets.isNotEmpty) {
         final sets = targets.map((target) {
+          final seconds = (target['durationSeconds'] as num?)?.toInt() ?? 0;
+          if (seconds > 0) return workoutMinutesLabel(seconds);
           final weight = (target['weightKg'] as num?)?.toDouble() ?? 0;
           final reps = (target['reps'] as num?)?.round() ?? 0;
-          final weightText = weight % 1 == 0
-              ? weight.round().toString()
-              : weight.toStringAsFixed(1);
-          return '$weightText kg x $reps';
+          return '${unit.format(weight)} ${unit.name} x $reps';
         }).join(', ');
         return '$exerciseName: $sets';
       }
       final setCount = (exercise['setCount'] as num?)?.round() ?? 0;
+      final seconds =
+          (exercise['defaultDurationSeconds'] as num?)?.toInt() ?? 0;
+      if (seconds > 0) {
+        return '$exerciseName: $setCount sets at ${workoutMinutesLabel(seconds)}';
+      }
       final weight = (exercise['defaultWeightKg'] as num?)?.toDouble() ?? 0;
       final reps = (exercise['defaultReps'] as num?)?.round() ?? 0;
-      final weightText = weight % 1 == 0
-          ? weight.round().toString()
-          : weight.toStringAsFixed(1);
-      return '$exerciseName: $setCount sets at $weightText kg x $reps';
+      return '$exerciseName: $setCount sets at ${unit.format(weight)} ${unit.name} x $reps';
     }).join('\n');
     return '$name\n$exerciseText';
   }).join('\n\n');
@@ -827,6 +832,7 @@ PERSONALIZATION:
 - Workout and meal scheduling requests use the application's structured plan actions. The athlete can confirm with Implement OR a clear written approval in any language. Ask for confirmation once only. Never claim a write succeeded unless an application action receipt says it did.
 - When an AUTHORITATIVE FACTS FOR THIS QUESTION message is present, copy exact names and numbers from it. It is a deterministic lookup from the saved plan and overrides guesses or similar meals/routines elsewhere in the context.
 - Use the exact exercises, dates, sets, reps, and weights when the question refers to "my plan", "today", or a specific routine.
+- Respect preferred_workout_weight_unit when displaying weights; stored weightKg/weight_kg values are always kilograms and must be converted for lb. durationSeconds/defaultDurationSeconds denote timed sets: describe their duration, not zero reps.
 - Use the generated meal plan, current calorie/macro targets, allergies, recent logged meals, and latest measurements when discussing nutrition.
 - Use the athlete's name naturally when useful. Do not expose private context verbatim unless it directly answers the question.
 - Preserve continuity with the rolling memory and recent messages. Do not pretend to remember information that is absent.
@@ -1023,7 +1029,12 @@ String? answerExactSavedPlanQuestion(AiCoachContext context, String question) {
   final query = question.toLowerCase();
   final isExactSetLookup = (query.contains('set') || query.contains('rep')) &&
       (query.contains('kg') ||
+          query.contains('lb') ||
           query.contains('weight') ||
+          query.contains('minute') ||
+          query.contains('second') ||
+          query.contains('duration') ||
+          query.contains('long') ||
           query.contains('rep'));
   if (isExactSetLookup) {
     for (final routine in context.currentRoutines) {
@@ -1052,14 +1063,22 @@ String? answerExactSavedPlanQuestion(AiCoachContext context, String question) {
             : <String, dynamic>{
                 'weightKg': exercise['defaultWeightKg'],
                 'reps': exercise['defaultReps'],
+                'durationSeconds': exercise['defaultDurationSeconds'],
               };
+        final seconds = (target['durationSeconds'] as num?)?.toInt() ?? 0;
+        if (seconds > 0) {
+          return 'In your saved $routineName routine, set ${setIndex + 1} of '
+              '$exerciseName lasts ${workoutMinutesLabel(seconds)}.';
+        }
         final weight = (target['weightKg'] as num?)?.toDouble() ?? 0;
         final reps = (target['reps'] as num?)?.round() ?? 0;
-        final weightText = weight % 1 == 0
-            ? weight.round().toString()
-            : weight.toStringAsFixed(1);
+        final unit = query.contains('kg')
+            ? WorkoutWeightUnit.kg
+            : query.contains('lb')
+                ? WorkoutWeightUnit.lb
+                : context.weightUnit;
         return 'In your saved $routineName routine, set ${setIndex + 1} of '
-            '$exerciseName is $weightText kg for $reps reps.';
+            '$exerciseName is ${unit.format(weight)} ${unit.name} for $reps reps.';
       }
     }
   }
@@ -1184,6 +1203,18 @@ AiCoachScheduleReply parseWorkoutActionResponse(
     }
     final targets = <RoutineSetTarget>[];
     for (final rawSet in rawSets) {
+      final rawDuration =
+          rawSet['duration_seconds'] ?? rawSet['durationSeconds'];
+      if (rawDuration != null) {
+        final seconds = int.tryParse(rawDuration.toString());
+        if (seconds == null || seconds < 1 || seconds > 86400) {
+          throw const FormatException(
+              'Workout action has an invalid duration.');
+        }
+        targets.add(
+            RoutineSetTarget(weightKg: 0, reps: 0, durationSeconds: seconds));
+        continue;
+      }
       final rawWeight = rawSet['weight_kg'] ?? rawSet['weightKg'] ?? 0;
       final rawReps = rawSet['reps'];
       final weight = rawWeight is num
@@ -1193,6 +1224,7 @@ AiCoachScheduleReply parseWorkoutActionResponse(
           ? rawReps.round()
           : int.tryParse(rawReps?.toString() ?? '');
       if (weight == null ||
+          !weight.isFinite ||
           reps == null ||
           weight < 0 ||
           weight > 500 ||
@@ -1202,11 +1234,17 @@ AiCoachScheduleReply parseWorkoutActionResponse(
       }
       targets.add(RoutineSetTarget(weightKg: weight, reps: reps));
     }
+    if (targets.any((set) => set.isTimed) &&
+        targets.any((set) => !set.isTimed)) {
+      throw const FormatException(
+          'An exercise must use one set tracking mode.');
+    }
     exercises.add(RoutineExercise(
       name: exerciseName,
       setCount: targets.length,
       defaultWeightKg: targets.first.weightKg,
       defaultReps: targets.first.reps,
+      defaultDurationSeconds: targets.first.durationSeconds,
       setTargets: List<RoutineSetTarget>.unmodifiable(targets),
     ));
   }
@@ -1435,6 +1473,7 @@ Rules:
 - requires_confirmation must be true. The mobile app, never you, performs the write after the athlete taps Implement.
 - Include 1-12 exercises and 1-10 explicit sets per exercise.
 - Weight must be 0-500 kg; use 0 for bodyweight/unknown. Reps must be 1-100.
+- For timed holds, yoga, or other duration-based sets, use {"duration_seconds": 60} instead of weight/reps. Duration must be an integer from 1 to 86400 seconds. Keep every set in an exercise in the same tracking mode.
 - Respect injuries, allergies, stated goals, training level, equipment, session length, and the existing weekly plan.
 - Never include markdown or commentary outside the JSON.''',
       },
@@ -1619,6 +1658,7 @@ Rules:
       WorkoutRoutineStore.loadHistory(),
       _plans.mealsForWindow(
           localToday, localToday.add(const Duration(days: 13))),
+      WorkoutRoutineStore.loadWeightUnit(),
     ]);
     final starter = optionalResults[0] as Map<String, dynamic>;
     final latestProgress = optionalResults[1] as Map<String, dynamic>;
@@ -1626,6 +1666,7 @@ Rules:
     final routines = optionalResults[3] as List<WorkoutRoutine>;
     final schedule = optionalResults[4] as Map<String, List<String>>;
     final history = optionalResults[5] as List<WorkoutHistoryItem>;
+    final weightUnit = optionalResults[7] as WorkoutWeightUnit;
 
     final now = DateTime.now();
     final recentCutoff = _dateOnly(now).subtract(const Duration(days: 13));
@@ -1638,6 +1679,7 @@ Rules:
     );
 
     return AiCoachContext(
+      weightUnit: weightUnit,
       profile: {
         'name': (publicRow?['display_name'] ?? '').toString(),
         'username': (publicRow?['username'] ?? '').toString(),

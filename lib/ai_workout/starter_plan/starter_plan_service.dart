@@ -83,8 +83,9 @@ class StarterPlanService {
           .map((exercise) {
             final targets = exercise.sets
                 .map((set) => RoutineSetTarget(
-                      weightKg: set.weightKg,
-                      reps: set.reps,
+                      weightKg: set.durationSeconds != null ? 0 : set.weightKg,
+                      reps: set.durationSeconds != null ? 0 : set.reps,
+                      durationSeconds: set.durationSeconds,
                     ))
                 .toList();
             if (targets.isEmpty) return null;
@@ -93,6 +94,7 @@ class StarterPlanService {
               setCount: targets.length,
               defaultWeightKg: targets.first.weightKg,
               defaultReps: targets.first.reps,
+              defaultDurationSeconds: targets.first.durationSeconds,
               setTargets: List<RoutineSetTarget>.unmodifiable(targets),
             );
           })
