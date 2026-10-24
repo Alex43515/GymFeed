@@ -94,7 +94,8 @@ class _PrivacyPlocyWidgetState extends State<PrivacyPlocyWidget> {
                         ),
                         const SizedBox(height: 16),
                         TextButton.icon(
-                          onPressed: () => launchURL('https://gymfeed.io/privacy/'),
+                          onPressed: () =>
+                              launchURL('https://gymfeed.io/privacy/'),
                           icon: const Icon(Icons.open_in_new),
                           label: const Text('Read Privacy Policy'),
                         ),
