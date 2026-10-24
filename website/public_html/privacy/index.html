@@ -1,15 +1,106 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080808"><meta name="description" content="GymFeed Privacy Policy"><link rel="canonical" href="https://gymfeed.io/privacy/"><link rel="icon" href="/assets/app-icon.png"><link rel="stylesheet" href="/assets/site.css"><title>Privacy Policy · GymFeed</title></head><body><main class="legal-shell"><header class="legal-head"><a class="brand" href="/"><img src="/assets/app-icon.png" alt="" width="42" height="42"><span>GymFeed</span></a><a href="/">Back home</a></header><h1>Privacy Policy</h1><p class="updated">Last updated October 14, 2026</p><article>
-<p>This Privacy Policy explains how GymFeed, operated by Aleksandar Zivkovic (“GymFeed”, “we”, “us”), handles information when you use the GymFeed mobile application and website.</p>
-<h2>Connected health</h2><p>If you choose to connect Apple Health or Android Health Connect, GymFeed requests read-only access to steps, active calories and heart rate to display your daily activity. Readings stay on your phone unless you separately enable AI sharing in Connected health. With that explicit consent, when you send an AI Coach question, today’s daily summary and measurement times are transmitted securely through GymFeed’s Supabase service to OpenAI or Google Gemini for personalized fitness and nutrition guidance. Provider retention policies apply. The raw summary is not stored in a GymFeed health database. Your private questions, answers and plans may contain these numbers and are saved in Coach history or plans; health-assisted turns are excluded from rolling AI memory. Turning sharing off stops future sharing but does not delete existing history or plans. Health data is not sold, used for advertising or shared on public profiles. Only connection and AI-sharing preferences are saved locally per account. Disconnect turns both off; you can revoke system access in Apple Health or Health Connect. Watch compatibility depends on your watch companion app sharing records with the relevant health service.</p>
-<h2>Information we handle</h2><p>Depending on the features you use, GymFeed may process:</p><ul><li>Account and profile information, including your name, username, email address, profile photo and fitness preferences.</li><li>Social content, including posts, comments, likes, follows, stories, messages, photos and videos you choose to upload.</li><li>Fitness and nutrition information, including workouts, exercises, sets, repetitions, weight, goals, meal entries, calorie and macro information, progress photos and body-composition inputs.</li><li>Camera, photo-library and microphone content when you choose features that require media capture or upload.</li><li>Purchase and subscription status. Payments are processed by the relevant app store and subscription providers; GymFeed does not receive your full payment-card number.</li><li>Technical information needed to operate and secure the service, such as device identifiers, app version, diagnostic information and notification tokens.</li></ul>
-<h2>How we use information</h2><p>We use information to provide accounts and social features, save and display your workouts and nutrition diary, generate personalized fitness and meal guidance, analyze media when you request scanning features, process subscriptions, deliver notifications, prevent abuse, troubleshoot problems and comply with legal obligations.</p>
-<h2>AI-assisted features</h2><p>When you use AI Coach, meal scanning, equipment scanning, body analysis or plan generation, the information needed for your request may be sent to AI service providers for processing. Do not submit information you do not want processed for that purpose. AI fitness and nutrition output is general informational guidance and is not medical advice.</p>
-<h2>Service providers</h2><p>GymFeed uses service providers for application hosting, databases, authentication, file delivery, notifications, analytics, AI processing and subscriptions. These providers process information on our behalf under their respective security and privacy commitments. Current product infrastructure may include Supabase, Firebase, Bunny CDN, OpenAI, Google and RevenueCat.</p>
-<h2>Sharing and public content</h2><p>Profile information and content you publish may be visible to other users according to the product’s visibility controls. Direct messages are intended for their participants. We do not sell personal information. We may disclose information when required by law, to protect users or the service, or as part of a business transfer subject to appropriate safeguards.</p>
-<h2>Retention and deletion</h2><p>Information is retained for as long as needed to operate the service, meet legal obligations and resolve disputes. You may delete supported content or your account through the app. You may also contact us to request access, correction or deletion. Some limited records may be retained where legally required or necessary for security and fraud prevention.</p>
-<h2>Security</h2><p>We use administrative and technical safeguards designed to protect information, including encrypted network transport. No internet service can guarantee absolute security.</p>
-<h2>Your choices and rights</h2><p>Depending on where you live, you may have rights to access, correct, delete, restrict or obtain a copy of personal information, or object to certain processing. You can manage device permissions in your device settings and notification preferences in the app.</p>
-<h2>Children</h2><p>GymFeed is not directed to children who are below the minimum age permitted to use online services in their country. If you believe a child has provided information contrary to applicable law, contact us.</p>
-<h2>Changes</h2><p>We may update this policy as GymFeed changes. The date above identifies the latest version.</p>
-<h2>Contact</h2><p>For privacy questions or requests, email <a href="mailto:official@gymfeed.io">official@gymfeed.io</a>.</p>
-</article></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080808">
+  <meta name="description" content="GymFeed Privacy Policy: information we process, connected health, data retention, and how to request account and data deletion.">
+  <link rel="canonical" href="https://gymfeed.io/privacy/">
+  <link rel="icon" href="/assets/app-icon.png">
+  <link rel="stylesheet" href="/assets/site.css">
+  <link rel="stylesheet" href="/privacy/policy.css">
+  <title>Privacy Policy | GymFeed</title>
+</head>
+<body>
+  <main class="legal-shell privacy-policy">
+    <header class="legal-head">
+      <a class="brand" href="/"><img src="/assets/app-icon.png" alt="" width="42" height="42"><span>GymFeed</span></a>
+      <a href="/">Back home</a>
+    </header>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated <time datetime="2026-10-24">October 24, 2026</time></p>
+    <nav class="policy-nav" aria-label="Privacy policy sections">
+      <a href="#information">Information we handle</a>
+      <a href="#connected-health">Connected health</a>
+      <a href="#data-retention">Data retention</a>
+      <a href="#account-deletion">Request deletion</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <article>
+      <p>This Privacy Policy explains how GymFeed, operated by Aleksandar Zivkovic ("GymFeed", "we", "us"), handles information when you use the GymFeed mobile application and website.</p>
+
+      <h2 id="information">1. Information we handle</h2>
+      <p>Depending on the features you use, GymFeed may process:</p>
+      <ul>
+        <li><strong>Account and profile information:</strong> your name, username, email address, profile photo, authentication information, and fitness preferences.</li>
+        <li><strong>Social content:</strong> posts, comments, likes, follows, stories, messages, photos, and videos you choose to upload.</li>
+        <li><strong>Fitness and nutrition information:</strong> workouts, exercises, sets, repetitions, weights, durations, goals, meal entries, calorie and macro information, progress photos, and body-analysis inputs.</li>
+        <li><strong>Media and device permissions:</strong> camera, photo-library, and microphone content when you choose a feature that requires capture or upload. Device permissions can be managed in your operating system settings.</li>
+        <li><strong>Purchase and subscription information:</strong> purchase identifiers, subscription status, and entitlement information. Payments are processed by the relevant app store and subscription providers; GymFeed does not receive your full payment-card number.</li>
+        <li><strong>Technical information:</strong> device identifiers, app version, diagnostic information, and notification tokens needed to operate and secure the service.</li>
+      </ul>
+
+      <h2 id="use">2. How we use information</h2>
+      <p>We use information to provide accounts and social features, save and display your workouts and nutrition diary, generate personalized fitness and meal guidance, analyze media when you request scanning features, process subscriptions, deliver notifications, prevent abuse, troubleshoot problems, and comply with legal obligations.</p>
+
+      <h2 id="connected-health">3. Connected health</h2>
+      <p>If you choose to connect Apple Health or Android Health Connect, GymFeed requests read-only access to steps, active calories, and heart rate to display your daily activity. Readings stay on your phone unless you separately enable AI sharing in Connected health.</p>
+      <p>With that explicit consent, when you send an AI Coach question, today's daily summary and measurement times are transmitted securely through GymFeed's Supabase service to OpenAI or Google Gemini for personalized fitness and nutrition guidance. Provider retention policies apply. The raw summary is not stored in a GymFeed health database.</p>
+      <p>Your private questions, answers, and plans may contain these numbers and are saved in Coach history or plans; health-assisted turns are excluded from rolling AI memory. Turning sharing off stops future sharing but does not delete existing history or plans. Health data is not sold, used for advertising, or shared on public profiles.</p>
+      <p>Only connection and AI-sharing preferences are saved locally per account. Disconnect turns both off; you can revoke system access in Apple Health or Health Connect. Watch compatibility depends on your watch companion app sharing records with the relevant health service.</p>
+
+      <h2 id="ai">4. AI-assisted features</h2>
+      <p>When you use AI Coach, meal scanning, equipment scanning, body analysis, or plan generation, the information needed for your request may be sent to AI service providers for processing. This may include your question, selected images, fitness or nutrition context, and connected-health summaries only when you separately enable that sharing. Do not submit information you do not want processed for that purpose.</p>
+      <p>Saved questions, answers, reports, and plans are subject to the retention rules below. Processing by an AI provider is also subject to that provider's applicable retention and security terms. AI fitness and nutrition output is general informational guidance and is not medical advice.</p>
+
+      <h2 id="providers">5. Service providers and sharing</h2>
+      <p>GymFeed uses service providers for application hosting, databases, authentication, file delivery, notifications, analytics, AI processing, and subscriptions. Current product infrastructure may include Supabase, Firebase, Bunny CDN, OpenAI, Google, and RevenueCat. Providers process information needed for the services they supply.</p>
+      <p>Profile information and content you publish may be visible to other users according to the product's visibility controls. Direct messages are intended for their participants. Other users may retain copies of content you shared with them; deleting data from GymFeed cannot remove copies independently saved by others.</p>
+      <p>We do not sell personal information. We may disclose information when required by law, to protect users or the service, or as part of a business transfer subject to appropriate safeguards.</p>
+
+      <h2 id="data-retention">6. Data retention and deletion</h2>
+      <p><strong>GymFeed stores and retains user data.</strong> We retain each category for the purpose and period described below. Keeping an account inactive or uninstalling the app does not by itself delete information stored on our servers.</p>
+      <dl class="retention-list">
+        <dt>Account, authentication, and profile data</dt>
+        <dd>We retain this information while your GymFeed account exists so you can sign in and use the service. When a verified account-deletion request is processed, we delete the associated account and personal data from active service systems, except for the limited records described under legal and security retention below.</dd>
+        <dt>Posts, uploaded media, messages, and social activity</dt>
+        <dd>We retain content while it remains associated with your account and is needed to provide the feature you used. Where an individual deletion control is available, you can delete that content. You can also request deletion of content or your account using the process below. Independent copies kept by recipients are outside GymFeed's control.</dd>
+        <dt>Saved workouts, nutrition entries, Coach conversations, reports, and plans</dt>
+        <dd>Server-stored records are retained while your account exists to provide your history and saved results, until you delete a supported record or a verified deletion request is processed. Some workout schedules, history, and preferences are stored only on your device; those local records remain until you remove them or clear the app's local data. Your device's backup settings may also affect local copies.</dd>
+        <dt>Connected-health information</dt>
+        <dd>Steps, active calories, and heart-rate readings are read from your device's health service with your permission; GymFeed does not keep a separate server-side raw-health summary database. If you enable AI sharing, information included in a saved Coach conversation or plan follows the retention period for that conversation or plan. Revoking permission or disconnecting stops future access or sharing but does not erase previously saved history. Deleting your GymFeed data does not delete the original records in Apple Health or Health Connect.</dd>
+        <dt>Purchase, support, security, and compliance records</dt>
+        <dd>Purchase and subscription records are retained as needed to administer your purchase and meet applicable accounting obligations. Support correspondence is retained while needed to resolve your request. Limited records may be kept after account deletion when necessary to meet a legal obligation, resolve a dispute, or investigate fraud or abuse. We retain only the information needed for that purpose and remove or de-identify it when that requirement ends. These exceptions do not justify keeping all account data indefinitely.</dd>
+        <dt>Service-provider logs and backups</dt>
+        <dd>Our hosting and processing providers may maintain restricted logs or backup copies under their applicable retention and backup schedules. Removing information from active systems may not immediately erase those copies; they remain until the relevant retention or backup cycle expires. They are not a continuing active account. Contact us if you need information about a particular category or provider.</dd>
+      </dl>
+
+      <h2 id="account-deletion">7. Request account or data deletion</h2>
+      <p>You can request deletion without installing or signing in to the app. Email <a href="mailto:official@gymfeed.io?subject=GymFeed%20account%20deletion%20request">official@gymfeed.io</a> with the subject <strong>GymFeed account deletion request</strong>.</p>
+      <ol>
+        <li>Send the request from the email address associated with your GymFeed account, where possible. Include your username if you know it.</li>
+        <li>Tell us whether you want to delete your entire account and associated personal data, or identify specific data you want removed.</li>
+        <li>We may ask for information needed to verify ownership before processing the request. Do not send your password, payment-card details, or unnecessary health information.</li>
+      </ol>
+      <p>We process verified requests without undue delay and in accordance with applicable law. We will let you know if verification, a legal exception, or another issue prevents completion. The retention exceptions in section 6 apply to any limited information that must remain.</p>
+      <p>Deleting your GymFeed account or uninstalling the app does not automatically cancel an app-store subscription. Manage or cancel your subscription in Google Play or Apple account settings.</p>
+
+      <h2 id="security">8. Security</h2>
+      <p>We use administrative and technical safeguards designed to protect information, including encrypted network transport and access controls. No internet service can guarantee absolute security.</p>
+
+      <h2 id="rights">9. Your choices and rights</h2>
+      <p>Depending on where you live, you may have rights to access, correct, delete, restrict, or obtain a copy of personal information, or object to certain processing. Contact us to exercise these rights. You can manage device permissions in your device settings and notification preferences in the app.</p>
+
+      <h2 id="children">10. Children</h2>
+      <p>GymFeed is not directed to children below the minimum age permitted to use online services in their country. If you believe a child has provided information contrary to applicable law, contact us.</p>
+
+      <h2 id="changes">11. Changes to this policy</h2>
+      <p>We may update this policy as GymFeed changes. The date above identifies the latest version. This public page is GymFeed's current Privacy Policy.</p>
+
+      <h2 id="contact">12. Contact</h2>
+      <p>Developer: Aleksandar Zivkovic.<br>For privacy questions, access requests, or deletion requests, email <a href="mailto:official@gymfeed.io">official@gymfeed.io</a>.</p>
+    </article>
+    <footer class="policy-footer"><a href="/">GymFeed</a><a href="/terms/">Terms</a><a href="/support/">Support</a></footer>
+  </main>
+</body>
+</html>
