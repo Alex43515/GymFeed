@@ -1,0 +1,82 @@
+.privacy-policy {
+  max-width: 860px;
+  overflow-wrap: anywhere;
+}
+
+.privacy-policy,
+.privacy-policy * {
+  letter-spacing: 0;
+}
+
+.privacy-policy h1 {
+  font-size: 40px;
+  line-height: 1.2;
+}
+
+.privacy-policy .updated {
+  color: #b2b2b2;
+  font-size: 13px;
+  margin: 0 0 24px;
+}
+
+.privacy-policy article {
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.privacy-policy article h2 {
+  font-size: 22px;
+  line-height: 1.4;
+  scroll-margin-top: 24px;
+}
+
+.policy-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 20px 0;
+  margin-bottom: 30px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--green);
+}
+
+.privacy-policy a:hover {
+  text-decoration: underline;
+}
+
+.privacy-policy a:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
+}
+
+.retention-list dt {
+  color: var(--white);
+  font-weight: 600;
+  margin-top: 24px;
+}
+
+.retention-list dd {
+  margin: 8px 0 24px;
+}
+
+.privacy-policy .policy-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 24px 0;
+  margin-top: 48px;
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .privacy-policy h1 {
+    font-size: 32px;
+  }
+
+  .privacy-policy .legal-head {
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+}
