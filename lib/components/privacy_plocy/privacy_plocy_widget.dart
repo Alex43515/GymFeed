@@ -79,23 +79,34 @@ class _PrivacyPlocyWidgetState extends State<PrivacyPlocyWidget> {
                   Padding(
                     padding:
                         EdgeInsetsDirectional.fromSTEB(10.0, 10.0, 10.0, 10.0),
-                    child: Text(
-                      FFLocalizations.of(context)
-                          .getText(
-                            'dev5w4fg' /* GymFeed Privacy Policy
-
-Introd... */
-                            ,
-                          )
-                          .replaceAll(
-                            'aleksandar.zivkovc@gmail.com',
-                            'official@gymfeed.io',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'GymFeed Privacy Policy',
+                          style: FlutterFlowTheme.of(context).titleMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Read how GymFeed handles your information, connected '
+                          'health data, data retention, and account deletion.',
+                          style: FlutterFlowTheme.of(context).bodyMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        TextButton.icon(
+                          onPressed: () =>
+                              launchURL('https://gymfeed.io/privacy/'),
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('Read Privacy Policy'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => launchURL(
+                            'mailto:official@gymfeed.io?subject=GymFeed%20account%20deletion%20request',
                           ),
-                      style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            fontFamily: 'Poppins',
-                            fontSize: 15.0,
-                            letterSpacing: 0.0,
-                          ),
+                          icon: const Icon(Icons.mail_outline),
+                          label: const Text('Request data deletion'),
+                        ),
+                      ],
                     ),
                   ),
                 ],
