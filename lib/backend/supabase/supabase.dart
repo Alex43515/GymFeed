@@ -7,6 +7,7 @@ export 'package:supabase_flutter/supabase_flutter.dart'
         User,
         Session,
         AuthChangeEvent,
+        SignOutScope,
         AuthException,
         UserAttributes,
         OtpType,
