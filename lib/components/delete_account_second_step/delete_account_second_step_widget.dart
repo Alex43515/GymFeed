@@ -1,5 +1,4 @@
 import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -119,36 +118,8 @@ perman... */
                 mainAxisSize: MainAxisSize.max,
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  StreamBuilder<List<AdministrativeRecord>>(
-                    stream: queryAdministrativeRecord(
-                      singleRecord: true,
-                    ),
-                    builder: (context, snapshot) {
-                      // Customize what your widget looks like when it's loading.
-                      if (!snapshot.hasData) {
-                        return Center(
-                          child: SizedBox(
-                            width: 12.0,
-                            height: 12.0,
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-                      List<AdministrativeRecord>
-                          columnAdministrativeRecordList = snapshot.data!;
-                      // Return an empty Container when the item does not exist.
-                      if (snapshot.data!.isEmpty) {
-                        return Container();
-                      }
-                      final columnAdministrativeRecord =
-                          columnAdministrativeRecordList.isNotEmpty
-                              ? columnAdministrativeRecordList.first
-                              : null;
-
+                  Builder(
+                    builder: (context) {
                       return Column(
                         mainAxisSize: MainAxisSize.max,
                         children: [
@@ -156,9 +127,10 @@ perman... */
                             onPressed: () async {
                               // Account + all data are removed server-side by
                               // the delete-account Edge Function.
-                              await authManager.deleteUser(context);
+                              final deleted =
+                                  await authManager.deleteUser(context);
+                              if (!deleted || !context.mounted) return;
                               GoRouter.of(context).prepareAuthEvent();
-                              await authManager.signOut();
                               GoRouter.of(context).clearRedirectLocation();
 
                               context.goNamedAuth(
