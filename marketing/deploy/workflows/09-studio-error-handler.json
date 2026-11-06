@@ -1,0 +1,14 @@
+{
+  "id": "GFStudioErrorHandler001",
+  "name": "GymFeed 09 - Shared Error Handler",
+  "nodes": [
+    { "parameters": {}, "id": "studio-error-trigger", "name": "Workflow failure", "type": "n8n-nodes-base.errorTrigger", "typeVersion": 1, "position": [0, 0] },
+    { "parameters": { "method": "POST", "url": "http://marketing-worker:3000/v1/studio/incidents", "sendHeaders": true,
+      "headerParameters": { "parameters": [{ "name": "x-marketing-token", "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}" }] },
+      "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { workflow: $json.workflow?.name || $json.workflow?.id, executionId: $json.execution?.id, node: $json.execution?.lastNodeExecuted || $json.trigger?.error?.node?.name, message: $json.execution?.error?.message || $json.trigger?.error?.message || 'n8n workflow failed' } }}", "options": { "timeout": 30000 } },
+      "id": "studio-report-error", "name": "Record incident in Marketing Studio", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [320, 0],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 5000 }
+  ],
+  "connections": { "Workflow failure": { "main": [[{ "node": "Record incident in Marketing Studio", "type": "main", "index": 0 }]] } },
+  "active": false, "settings": { "executionOrder": "v1" }, "versionId": "29d7bd18-59f7-4ceb-8dc8-e6e473c4ff04", "tags": [], "pinData": {}
+}

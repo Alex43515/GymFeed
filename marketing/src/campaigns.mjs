@@ -97,8 +97,8 @@ export class MarketingCampaigns {
   }
 
   registerDay({ campaignId, date, contentIds }) {
-    if (!Array.isArray(contentIds) || contentIds.length !== 2 || new Set(contentIds).size !== 2) {
-      throw new Error("Register exactly one video and one carousel/image content ID per day");
+    if (!Array.isArray(contentIds) || ![2, 3].includes(contentIds.length) || new Set(contentIds).size !== contentIds.length) {
+      throw new Error("Register one video, one carousel and one single-image post content ID per day");
     }
     contentIds.forEach((id) => nonempty(id, "Content ID"));
     return this.command("register_day", {

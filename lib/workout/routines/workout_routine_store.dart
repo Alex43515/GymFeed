@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import '/auth/firebase_auth/auth_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'workout_routine_models.dart';
+import 'workout_units.dart';
 
 class WorkoutRoutineStore {
   WorkoutRoutineStore._();
@@ -10,6 +12,24 @@ class WorkoutRoutineStore {
   static String get _scope => currentUserUid.isEmpty ? 'guest' : currentUserUid;
   static String get _routineKey => 'gymfeed_routines_v1_$_scope';
   static String get _historyKey => 'gymfeed_workout_history_v1_$_scope';
+  static String get _weightUnitKey => 'gymfeed_workout_weight_unit_v1_$_scope';
+  static final weightUnitChanges = ValueNotifier<int>(0);
+
+  static Future<WorkoutWeightUnit> loadWeightUnit() async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getString(_weightUnitKey) == 'kg'
+        ? WorkoutWeightUnit.kg
+        : WorkoutWeightUnit.lb;
+  }
+
+  static Future<void> saveWeightUnit(WorkoutWeightUnit unit) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_weightUnitKey, unit.name);
+    weightUnitChanges.value++;
+  }
+
+  static String _progressKey(String routineId) =>
+      'gymfeed_workout_progress_v1_${_scope}_${base64Url.encode(utf8.encode(routineId))}';
   static String get _scheduleKey => 'gymfeed_workout_schedule_v1_$_scope';
   static String get _starterPlanSyncKey =>
       'gymfeed_starter_plan_sync_v1_$_scope';
@@ -86,6 +106,131 @@ class WorkoutRoutineStore {
     return true;
   }
 
+  static String get _planSyncKey => 'gymfeed_training_plan_sync_v1_$_scope';
+  static String get _planVideosKey => 'gymfeed_training_plan_videos_v1_$_scope';
+  static final _planRoutineId = RegExp(r'^(plan-.+)-v\d+-d\d+$');
+
+  static Future<Map<String, Map<String, String>>> _loadPlanVideos(
+      SharedPreferences preferences) async {
+    try {
+      final decoded = jsonDecode(preferences.getString(_planVideosKey) ?? '{}');
+      if (decoded is Map) {
+        return decoded.map((plan, videos) => MapEntry(
+            '$plan',
+            videos is Map
+                ? videos.map((name, url) => MapEntry('$name', '$url'))
+                : <String, String>{}));
+      }
+    } catch (_) {
+      // Missing videos only hide the "How to" button.
+    }
+    return <String, Map<String, String>>{};
+  }
+
+  /// Explanation video of [exerciseName] when [routineId] is a day of an
+  /// enrolled training plan, otherwise null.
+  static Future<String?> exerciseVideoUrl(
+      String routineId, String exerciseName) async {
+    final planKey = _planRoutineId.firstMatch(routineId)?.group(1);
+    if (planKey == null) return null;
+    final preferences = await SharedPreferences.getInstance();
+    final videos = await _loadPlanVideos(preferences);
+    final url = videos[planKey]?[exerciseName.trim().toLowerCase()];
+    return url == null || url.isEmpty ? null : url;
+  }
+
+  static Future<Map<String, String>> loadPlanSyncKeys() async {
+    final preferences = await SharedPreferences.getInstance();
+    try {
+      final decoded = jsonDecode(preferences.getString(_planSyncKey) ?? '{}');
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry('$key', '$value'));
+      }
+    } catch (_) {
+      // A damaged marker only means the plan is imported again.
+    }
+    return <String, String>{};
+  }
+
+  /// Materializes an enrolled community plan. Routines whose id starts with
+  /// [planKey] are replaced, and the plan's calendar entries from [today]
+  /// onward are rebuilt; past days stay as they were.
+  static Future<bool> importPlan({
+    required String planKey,
+    required String syncKey,
+    required List<WorkoutRoutine> routines,
+    required Map<String, List<String>> schedule,
+    Map<String, String> videos = const {},
+    bool force = false,
+    DateTime? today,
+  }) async {
+    if (planKey.isEmpty || syncKey.isEmpty) return false;
+    final preferences = await SharedPreferences.getInstance();
+    final syncKeys = await loadPlanSyncKeys();
+    if (!force && syncKeys[planKey] == syncKey) return false;
+
+    await _removePlanEntries(preferences, planKey, today ?? DateTime.now());
+    final current = await loadRoutines();
+    final incomingIds = routines.map((item) => item.id).toSet();
+    current.removeWhere((item) => incomingIds.contains(item.id));
+    current.insertAll(0, routines);
+    await _writeRoutines(preferences, current);
+
+    final currentSchedule = await loadSchedule();
+    for (final entry in schedule.entries) {
+      final ids = currentSchedule.putIfAbsent(entry.key, () => <String>[]);
+      for (final routineId in entry.value) {
+        if (!ids.contains(routineId)) ids.add(routineId);
+      }
+    }
+    await _writeSchedule(preferences, currentSchedule);
+    syncKeys[planKey] = syncKey;
+    await preferences.setString(_planSyncKey, jsonEncode(syncKeys));
+    final planVideos = await _loadPlanVideos(preferences);
+    planVideos[planKey] = {
+      for (final entry in videos.entries)
+        entry.key.trim().toLowerCase(): entry.value,
+    };
+    await preferences.setString(_planVideosKey, jsonEncode(planVideos));
+    return true;
+  }
+
+  /// Removes an enrolled plan's routines and its upcoming calendar days.
+  static Future<void> removePlan(String planKey, {DateTime? today}) async {
+    final preferences = await SharedPreferences.getInstance();
+    await _removePlanEntries(preferences, planKey, today ?? DateTime.now());
+    final syncKeys = await loadPlanSyncKeys();
+    syncKeys.remove(planKey);
+    await preferences.setString(_planSyncKey, jsonEncode(syncKeys));
+    final planVideos = await _loadPlanVideos(preferences);
+    if (planVideos.remove(planKey) != null) {
+      await preferences.setString(_planVideosKey, jsonEncode(planVideos));
+    }
+  }
+
+  static Future<void> _removePlanEntries(
+      SharedPreferences preferences, String planKey, DateTime today) async {
+    final prefix = '$planKey-';
+    final fromKey = dateKey(today);
+    final schedule = await loadSchedule();
+    final pastIds = <String>{};
+    for (final entry in schedule.entries) {
+      if (entry.key.compareTo(fromKey) >= 0) {
+        entry.value.removeWhere((id) => id.startsWith(prefix));
+      } else {
+        pastIds.addAll(entry.value.where((id) => id.startsWith(prefix)));
+      }
+    }
+    schedule.removeWhere((_, ids) => ids.isEmpty);
+    await _writeSchedule(preferences, schedule);
+    // Past calendar days keep the workout they showed; only unused plan
+    // routines are dropped.
+    final routines = await loadRoutines();
+    routines.removeWhere(
+        (item) => item.id.startsWith(prefix) && !pastIds.contains(item.id));
+    await _writeRoutines(preferences, routines);
+  }
+
   static Future<void> deleteRoutine(String routineId) async {
     final preferences = await SharedPreferences.getInstance();
     final routines = await loadRoutines();
@@ -138,6 +283,45 @@ class WorkoutRoutineStore {
     await preferences.setString(_historyKey,
         jsonEncode(history.map((entry) => entry.toJson()).toList()));
     await markRoutinePerformed(item.routineId, item.startedAt);
+  }
+
+  /// An unfinished workout is kept separately from completed history.
+  /// Reopening a workout completed earlier today also shows its logged sets.
+  static Future<WorkoutHistoryItem?> loadWorkoutProgress(
+      String routineId, DateTime day) async {
+    final preferences = await SharedPreferences.getInstance();
+    final encoded = preferences.getString(_progressKey(routineId));
+    if (encoded != null) {
+      try {
+        final item = WorkoutHistoryItem.fromJson(
+            (jsonDecode(encoded) as Map).cast<String, dynamic>());
+        if (item.routineId == routineId) {
+          return item;
+        }
+      } catch (_) {
+        // A damaged draft must not prevent the routine from opening.
+      }
+      await preferences.remove(_progressKey(routineId));
+    }
+    final history = await loadHistory();
+    for (final item in history) {
+      if (item.routineId == routineId &&
+          dateKey(item.startedAt) == dateKey(day)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  static Future<void> saveWorkoutProgress(WorkoutHistoryItem item) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+        _progressKey(item.routineId), jsonEncode(item.toJson()));
+  }
+
+  static Future<void> clearWorkoutProgress(String routineId) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_progressKey(routineId));
   }
 
   static Future<Map<String, List<String>>> loadSchedule() async {

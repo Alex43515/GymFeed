@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { redact } from "./studio-errors.mjs";
 import { preflightAppCaptures } from "./app-captures.mjs";
 
 function tokenFrom(request, name) {
@@ -32,23 +33,30 @@ export function buildApp({ config, orchestrator, cmo, captureIngestor, logger = 
     app.get("/v1/cmo/campaigns", async () => cmo.repository.campaignList());
     app.get("/v1/cmo/campaigns/:id", async (request) => cmo.campaigns.status(request.params.id));
     const approveImportAndStart = async (entry) => {
-      if (!captureIngestor) throw new Error("Capture intake is not configured");
+      if (entry.sourceContentReview) {
+        const source = entry.sourceContentReview;
+        const pending = await cmo.repository.contentById(entry.ideaId);
+        if (source.contentId !== pending.id || source.revision !== Number(pending.decision?.review_revision ?? 1)
+          || pending.status !== "planned" || pending.asset_urls?.length
+          || !pending.decision?.campaign?.production_blocked || pending.decision.campaign.production_block_kind !== "capture") {
+          return { action: "asset_generation_retry_skipped", contentId: pending.id, reason: "The blocked revision changed or production has already started" };
+        }
+        const marked = await cmo.approvalSheet.markContentGenerationRetry(source, "Pending: checking uploaded recordings. Final media will need a separate approval.");
+        if (!marked.marked) return { action: "asset_generation_retry_skipped", contentId: pending.id, reason: "The Content Review decision changed" };
+      }
       const approval = await cmo.ideaDecision(entry, { deferProduction: true, acknowledge: false });
       const content = await cmo.repository.contentById(entry.ideaId);
       if (cmo.progress) {
-        await cmo.repository.updateContent(content.id, { decision: { ...content.decision, campaign: { ...content.decision?.campaign, production_blocked: false, production_block_reason: null }, workflow: { stage: "intake", message: "Pending: checking Drive for the requested files.", at: new Date().toISOString() } } });
+        await cmo.repository.updateContent(content.id, { decision: { ...content.decision, campaign: { ...content.decision?.campaign, production_blocked: false, production_block_reason: null }, workflow: { stage: "intake", message: "Pending: checking recordings uploaded in Studio.", at: new Date().toISOString() } } });
         await cmo.sync(entry.campaignId);
       }
-      let assets;
+      let captures = [];
       try {
-        assets = await captureIngestor.importApprovedPlan({
-          driveFolderUrl: config.GOOGLE_DRIVE_ASSET_UPLOAD_URL,
-          plan: content.decision?.content,
-        });
-        if (content.content_type === "video") await preflightAppCaptures(content.decision.content, cmo.orchestrator?.appCaptureResolver);
+        if (content.content_type === "video") captures = await preflightAppCaptures(content.decision.content, orchestrator.appCaptureResolver);
       } catch (error) {
         const decision = {
           ...content.decision,
+          workflow: { ...content.decision?.workflow, stage: "blocked", message: error.message, at: new Date().toISOString() },
           campaign: {
             ...content.decision?.campaign,
             production_blocked: true,
@@ -58,7 +66,11 @@ export function buildApp({ config, orchestrator, cmo, captureIngestor, logger = 
           },
         };
         await cmo.repository.updateContent(content.id, { status: "planned", decision, failure_reason: error.message });
-        await cmo.approvalSheet.markIdeaDecision(entry, `Approved - Blocked: ${error.message}`);
+        if (cmo.approvalSheet.markIdeaRetryRequired) {
+          await cmo.approvalSheet.markIdeaRetryRequired(entry, `Generation failed: ${error.message} Select Approve again to retry this item.`);
+        } else {
+          await cmo.approvalSheet.markIdeaDecision(entry, `Approved - Blocked: ${error.message}`);
+        }
         const state = await cmo.sync(entry.campaignId);
         return { action: "idea_approved_blocked", blocked: true, reason: error.message, approval, campaign: state.campaign };
       }
@@ -77,15 +89,17 @@ export function buildApp({ config, orchestrator, cmo, captureIngestor, logger = 
         },
         failure_reason: null,
       });
-      const fingerprint = [...assets.captures, ...assets.images].map((asset) => asset.sha256).filter(Boolean).join(":") || `approved:${entry.version}`;
-      await cmo.progress?.(content.id, "generating", "Files downloaded and verified. Generation is starting.");
+      const assets = { captures, images: [] };
+      const fingerprint = captures.map(asset => asset.sha256).filter(Boolean).join(":") || `approved:${entry.version}`;
+      const approvalCycle = approval.approvalCycle ?? entry.fingerprint;
+      await cmo.progress?.(content.id, "generating", "Source recordings verified. Generation is starting.");
       let production;
       try {
         production = await cmo.execute({
           action: "start_item",
           campaignId: entry.campaignId,
           contentId: entry.ideaId,
-          requestKey: `item:${entry.ideaId}:${entry.version}:${fingerprint}`,
+          requestKey: `item:${entry.ideaId}:${entry.version}:${approvalCycle}:${fingerprint}`,
         });
         if (production.action === "batch_in_progress_or_needs_reconciliation") {
           throw new Error(production.reason ?? "Production needs operator reconciliation before it can resume");
@@ -93,6 +107,7 @@ export function buildApp({ config, orchestrator, cmo, captureIngestor, logger = 
       } catch (error) {
         const failed = await cmo.repository.contentById(content.id);
         await cmo.repository.updateContent(content.id, {
+          status: "failed",
           decision: {
             ...failed.decision,
             workflow: { stage: "blocked", message: error.message, at: new Date().toISOString() },
@@ -113,7 +128,7 @@ export function buildApp({ config, orchestrator, cmo, captureIngestor, logger = 
       const qaFailed = production.action === "item_qa_failed_pending_content_review";
       await cmo.approvalSheet.markIdeaDecision(entry, qaFailed
         ? `Idea approved; generated asset needs Content Review revision: ${production.reason}`
-        : "Idea approved; Drive assets verified and generation completed through QA. Review the asset in Content Review.");
+        : "Idea approved; source recordings verified and generation completed through QA. Review the asset in Content Review.");
       const state = await cmo.sync(entry.campaignId);
       return {
         action: qaFailed ? "idea_approved_qa_failed" : "idea_approved_generated",
@@ -217,8 +232,11 @@ export function buildApp({ config, orchestrator, cmo, captureIngestor, logger = 
   app.post("/v1/content/:id/publish", async (request) => guardedWork(request.params.id, "publish", () => orchestrator.publishContent(request.params.id)));
 
   app.setErrorHandler((error, request, reply) => {
-    request.log.error(error);
-    reply.code(error.statusCode && error.statusCode < 500 ? error.statusCode : 500).send({ error: error.message });
+    const secrets = Object.entries(config).filter(([key]) => /KEY|TOKEN|PASSWORD/.test(key)).map(([, value]) => value);
+    const message = redact(error.message, secrets);
+    request.log.error({ message, code: error.code, requestId: request.id });
+    reply.code(error.statusCode && error.statusCode < 500 ? error.statusCode : 500).send({ error: message,
+      ...(request.url.startsWith("/v1/studio/") ? { message, requestId: request.id } : {}) });
   });
   return app;
 }

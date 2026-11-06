@@ -37,7 +37,7 @@
         "options": { "waitForSubWorkflow": false }
       },
       "id": "5a000001-0000-4000-8000-000000000008",
-      "name": "Run automatic Drive intake and generation",
+      "name": "Check Studio recordings and start generation",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
       "position": [1040, 20]
@@ -142,7 +142,7 @@
         -410
       ],
       "parameters": {
-        "content": "## Human-decision dispatcher\nChecks **Idea Review** and **Content Review** every five minutes, or manually. Each row is independent.\n\nIdea Approve automatically runs workflow 06: Drive intake, local verification, generation and QA for only that item. A missing or invalid required file leaves the idea approved but changes Current status to **Approved - Blocked** with the exact reason. Blocked approvals are retried every five minutes.\n\nIdea Reject revises the same row and resets it to Pending. Content Reject regenerates only that finished asset, replaces links in the same row and resets it to Pending.",
+        "content": "## Human-decision dispatcher\nChecks **Idea Review** and **Content Review** every five minutes, or manually. Each row is independent.\n\nIdea Approve automatically runs workflow 06: Supabase Storage verification, generation and QA for only that item. A missing or invalid required file leaves the idea approved but changes Current status to **Approved - Blocked** with the exact reason. Blocked approvals are retried every five minutes.\n\nIdea Reject revises the same row and resets it to Pending. Content Reject regenerates only that finished asset, replaces links in the same row and resets it to Pending.",
         "height": 330,
         "width": 890,
         "color": 4
@@ -198,7 +198,7 @@
       "main": [
         [
           {
-            "node": "Run automatic Drive intake and generation",
+            "node": "Check Studio recordings and start generation",
             "type": "main",
             "index": 0
           }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { basename, extname, resolve } from "node:path";
@@ -96,11 +96,14 @@ export class CaptureIngestor {
     for (const scene of captureScenes) {
       if (seenCaptures.has(scene.capture_ref)) continue;
       seenCaptures.add(scene.capture_ref);
+      const matchingScenes = captureScenes.filter((candidate) => candidate.capture_ref === scene.capture_ref);
+      const requiredEnd = Math.max(...matchingScenes.map((candidate) => Number(candidate.source_start_seconds ?? 0) + Number(candidate.duration_seconds ?? 0)));
       const filename = `${scene.capture_ref.slice("requested:".length)}.mp4`;
-      const file = findFile(filename, "video/mp4");
-      if (!file) throw new Error(`Required Drive video is missing: ${filename}`);
+      const chosen = await this.chooseRecording(scene.capture_ref, filename, files, requiredEnd);
+      if (chosen.library) { captures.push(chosen.library); continue; }
       captures.push(await this.import({
-        driveFileId: file.id,
+        driveFileId: chosen.file.id,
+        prefetched: chosen.prefetched,
         captureRef: scene.capture_ref,
         filename,
         feature: plan.product_feature ?? plan.product_features?.[0] ?? scene.scene_id ?? "GymFeed app capture",
@@ -121,7 +124,44 @@ export class CaptureIngestor {
     return { captures, images: await this.importScreenshots(images) };
   }
 
-  async import({ driveFileId, captureRef, filename, feature, description, recordedInteractions }) {
+  // Several Drive uploads may share one requested name. Prefer the library copy
+  // or the newest upload that covers the planned window; otherwise the longest
+  // one. A window mismatch is fitted at render time instead of blocking.
+  async chooseRecording(captureRef, filename, files, requiredEnd) {
+    const covers = (duration) => !Number.isFinite(requiredEnd) || duration + 0.05 >= requiredEnd;
+    let library = null;
+    try { library = await resolveAppCapture(captureRef, this.root); } catch { library = null; }
+    if (library && covers(library.duration_seconds)) {
+      const { buffer: _buffer, path: _path, ...entry } = library;
+      return { library: entry };
+    }
+    const candidates = files.filter((file) => file.mimeType === "video/mp4" && (file.name === filename || `${file.name}.mp4` === filename));
+    if (!candidates.length && library) {
+      const { buffer: _buffer, path: _path, ...entry } = library;
+      return { library: entry };
+    }
+    if (!candidates.length) throw new Error(`Required Drive video is missing: ${filename}`);
+    let best = null;
+    for (const file of candidates) {
+      const prefetched = await this.download(file.id);
+      const duration = await this.measure(prefetched.buffer, filename);
+      if (covers(duration)) return { file, prefetched };
+      if (!best || duration > best.duration) best = { file, prefetched, duration };
+    }
+    if (library && library.duration_seconds >= best.duration) {
+      const { buffer: _buffer, path: _path, ...entry } = library;
+      return { library: entry };
+    }
+    return best;
+  }
+
+  async measure(buffer, filename) {
+    const temporary = resolve(this.root, `${filename}.probe`);
+    await writeFile(temporary, buffer);
+    try { return Number(await this.probeDuration(temporary)); } finally { await rm(temporary, { force: true }); }
+  }
+
+  async import({ driveFileId, captureRef, filename, feature, description, recordedInteractions, prefetched = null }) {
     driveFileId = required(driveFileId, "driveFileId");
     captureRef = required(captureRef, "captureRef");
     filename = required(filename, "filename");
@@ -131,7 +171,7 @@ export class CaptureIngestor {
     if (!Array.isArray(recordedInteractions) || !recordedInteractions.length || recordedInteractions.some((item) => typeof item !== "string" || !item.trim())) {
       throw new Error("recordedInteractions must contain at least one description");
     }
-    const { metadata, buffer } = await this.download(driveFileId);
+    const { metadata, buffer } = prefetched ?? await this.download(driveFileId);
     if (metadata.mimeType !== "video/mp4") throw new Error(`Drive file must be video/mp4, received ${metadata.mimeType}`);
     const driveName = String(metadata.name ?? "");
     if (driveName !== filename && `${driveName}.mp4` !== filename) throw new Error(`Drive file name must be ${filename}`);
@@ -150,7 +190,10 @@ export class CaptureIngestor {
     const temporary = `${target}.incoming`;
     await writeFile(temporary, buffer);
     const duration = Number(await this.probeDuration(temporary));
-    if (!Number.isFinite(duration) || duration <= 0) throw new Error("Unable to determine recording duration");
+    if (!Number.isFinite(duration) || duration <= 0) {
+      await rm(temporary, { force: true });
+      throw new Error("Unable to determine recording duration");
+    }
     await rename(temporary, target);
 
     const entry = {

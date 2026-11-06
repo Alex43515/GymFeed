@@ -2,7 +2,13 @@
 !marketing/
 !marketing/**
 marketing/node_modules/
+marketing/dashboard/node_modules/
+marketing/dashboard/.next/
+marketing/.dashboard-runtime/
 marketing/.env
+marketing/secrets/
+**/.env.*
+marketing/.dashboard-runtime/
 marketing/artifacts/
 !docs/
 !docs/GYMFEED_MARKETING_PRODUCT_BRIEF.md

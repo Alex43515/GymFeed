@@ -35,6 +35,35 @@ test("version 3 requires a real exchange and a human payoff, while legacy plans 
   assert.throws(() => validateVideoProductionPlan(swapped), /visible speaker_id/);
   const duplicate = structuredClone(p); duplicate.cast[1].character_id = "alex";
   assert.throws(() => validateVideoProductionPlan(duplicate), /unique/);
+  const conciseCta = structuredClone(p);
+  conciseCta.scenes.at(-1).overlay_text = "gymfeed.io";
+  assert.equal(validateVideoProductionPlan(conciseCta), conciseCta);
+});
+
+test("young-woman casting policy enforces a speaking presenter around real product proof", () => {
+  const p = plan();
+  p.casting_policy = "young_adult_women";
+  p.narrative.format = "presenter_tutorial";
+  p.cast = [{
+    ...actor("maya"),
+    gender_presentation: "woman",
+    age_range: "26-30",
+    camera_presence: "high",
+  }];
+  p.creative_treatment.people_screen_time_percent = 60;
+  p.scenes = [
+    { ...p.scenes[0], character_ids: ["maya"], speaker_id: "maya", spoken_dialogue: "This is how I check my GymFeed routine before training." },
+    p.scenes[2],
+    { ...p.scenes[4], character_ids: ["maya"], speaker_id: "maya", spoken_dialogue: "Now I know what I am starting in GymFeed." },
+  ];
+  p.target_duration_seconds = 12;
+
+  assert.equal(validateVideoProductionPlan(p), p);
+  assert.match(videoScenePrompt({ decision: { content: p } }, p.scenes[0]), /Speak directly to the viewer with natural creator energy/);
+
+  const male = structuredClone(p);
+  male.cast[0].gender_presentation = "man";
+  assert.throws(() => validateVideoProductionPlan(male), /young adult woman/);
 });
 
 test("cast reference routing matches prompt numbering and fails closed on a missing identity", () => {
@@ -69,6 +98,33 @@ test("story rejection is stored and stops all paid image/video calls", async () 
   });
   await assert.rejects(() => orchestration.generateVideo(content), (error) => /Creative story QA failed.*hook/.test(error.message) && error.safeToRetry === true && error.storyQaFailed === true);
   assert.equal(content.status, "failed"); assert.equal(content.decision.story_review.accept, false);
+});
+
+test("human campaign approval makes story QA advisory and still generates media", async () => {
+  let content = {
+    id: "pilot", content_key: "pilot", content_type: "video",
+    decision: { content: plan(), campaign: { generation_authorized: true } },
+  };
+  let tasks = 0;
+  const orchestration = new MarketingOrchestrator({
+    config: { FAL_VIDEO_USD_PER_SECOND: 0.1, FAL_ESTIMATED_IMAGE_COST_USD: 0.08 },
+    repository: {
+      reserveCost: async () => "r", settleCost: async () => {},
+      uploadAsset: async (path) => `https://example.com/${path}`,
+      updateContent: async (_id, patch) => (content = { ...content, ...patch }),
+    },
+    brain: { storyQualityReview: async () => ({ data: { ...pass(), accept: false, required_fixes: ["AI dislikes the hook"] }, costUsd: 0.01, responseId: "review" }) },
+    mediaProvider: {
+      generateReferenceImage: async () => ({ buffer: Buffer.from("image") }),
+      createTask: async () => ({ id: `t${++tasks}`, model: "gemini" }),
+    },
+    appCaptureResolver: async () => ({ duration_seconds: 20 }),
+  });
+
+  assert.equal((await orchestration.generateVideo(content)).pending, true);
+  assert.equal(tasks, 4);
+  assert.equal(content.decision.story_review.accept, false);
+  assert.equal(content.decision.workflow.story_qa_advisory_override_fingerprint, storyFingerprint(content.decision.content));
 });
 
 test("successful story generates one reference per actor and routes the right image to each shot", async () => {
@@ -138,4 +194,13 @@ test("pilot is a single explicitly selected model call without research or campa
   const brain = new MarketingBrain({ OPENAI_CREATIVE_MODEL: "gpt-6-sol", OPENAI_WEB_SEARCH_USD_PER_CALL: 0.01 }, { responses: { parse: async (input) => { calls.push(input); return { id: "one", model: "gpt-6-astra", output_parsed: null, usage: { input_tokens: 1000, output_tokens: 10 } }; } } });
   await assert.rejects(() => brain.draftVideo("one story", { model: "gpt-6-astra" }), (error) => error.openaiCostUsd === 0.0105);
   assert.equal(calls.length, 1); assert.equal(calls[0].model, "gpt-6-astra"); assert.equal(calls[0].tools, undefined);
+});
+
+test("app capture windows slide inside the recording and hold the last frame when it is short", async () => {
+  const { fitAppCaptureCut } = await import("../src/render-product-video.mjs");
+  assert.deepEqual(fitAppCaptureCut({ source_start_seconds: 26, duration_seconds: 6 }, 38.35), { start: 26, duration: 6, holdSeconds: 0, adjusted: false });
+  assert.deepEqual(fitAppCaptureCut({ source_start_seconds: 26, duration_seconds: 6 }, 10), { start: 4, duration: 6, holdSeconds: 0, adjusted: true });
+  const short = fitAppCaptureCut({ source_start_seconds: 26, duration_seconds: 6 }, 4.5);
+  assert.equal(short.start, 0);
+  assert.equal(short.holdSeconds, 1.5);
 });

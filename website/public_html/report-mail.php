@@ -101,7 +101,7 @@ $imageUrl = trim((string)($payload['image_url'] ?? ''));
 
 if (!preg_match($uuid, $reportId) || !preg_match($uuid, $contentId) ||
     !preg_match($uuid, $reportedUserId) ||
-    !in_array($contentType, ['post', 'food_post', 'workout', 'account'], true) ||
+    !in_array($contentType, ['post', 'food_post', 'workout', 'account', 'training_plan'], true) ||
     $reason === '') {
     respond(422, ['ok' => false, 'error' => 'Incomplete report']);
 }

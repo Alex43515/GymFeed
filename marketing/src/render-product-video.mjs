@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import sharp from "sharp";
 import { renderProductSlide } from "./render-product-slide.mjs";
 import { verifiedScreenshotUrl } from "./product-brief.mjs";
+import { captionAss } from "./caption-timing.mjs";
 
 const execFileAsync = promisify(execFile);
 const ffmpegExecutable = process.env.FFMPEG_PATH || "ffmpeg";
@@ -109,11 +110,24 @@ export function validateRetainedCut(scene, actualDuration) {
   return { start, duration };
 }
 
+// A real app recording that does not exactly cover the planned window is fitted,
+// not rejected: the window slides inside the recording, and a recording shorter
+// than the scene holds its last frame. QA and the owner judge the result.
+export function fitAppCaptureCut(scene, actualDuration) {
+  const duration = Number(scene.duration_seconds ?? scene.duration);
+  if (!Number.isFinite(actualDuration) || actualDuration <= 0 || !Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`App recording for ${scene.scene_id ?? scene.sceneId ?? "scene"} has no readable duration`);
+  }
+  const planned = Math.max(0, Number(scene.source_start_seconds ?? scene.start ?? 0) || 0);
+  const start = planned + duration <= actualDuration + 0.08 ? planned : Math.max(0, actualDuration - duration);
+  return { start, duration, holdSeconds: Math.max(0, duration - (actualDuration - start)), adjusted: start !== planned };
+}
+
 export function validateAppCaptureSource(scene, asset) {
   if (!asset?.verified || !Array.isArray(asset.recorded_interactions) || !asset.recorded_interactions.length || (!asset.buffer && !asset.path)) {
     throw new Error(`Missing verified recorded interactions for app capture: ${scene.captureRef ?? scene.capture_ref}`);
   }
-  validateRetainedCut(scene, Number(asset.duration_seconds));
+  fitAppCaptureCut(scene, Number(asset.duration_seconds));
   return asset;
 }
 
@@ -208,8 +222,12 @@ export function productionTimeline(plan, sceneVideoBuffers = [], supportingVideo
       const common = {
         sceneId: scene.scene_id,
         duration: Number(scene.duration_seconds),
+        sourceCutDuration: scene.source_cut_duration_seconds,
+        preserveStory: Boolean(plan.preserve_story_timeline),
         start: Number(scene.source_start_seconds ?? 0),
-        headline: scene.overlay_text || (index === 0 ? plan.hook : plan.caption_text?.[index] ?? plan.product_promise),
+        headline: plan.transcript_only_overlays
+          ? (scene.purpose === "cta" ? plan.cta : "")
+          : scene.overlay_text || (index === 0 ? plan.hook : plan.caption_text?.[index] ?? plan.product_promise),
         subtitle: Object.hasOwn(sceneCaptions, scene.scene_id)
           ? sceneCaptions[scene.scene_id]
           : scene.spoken_dialogue || scene.voiceover_text || "",
@@ -244,20 +262,79 @@ export function productionTimeline(plan, sceneVideoBuffers = [], supportingVideo
   ));
 }
 
+function uniqueScenes(scenes) {
+  return [...new Map(scenes.filter(Boolean).map((scene) => [scene.sceneId, scene])).values()];
+}
+
+export function platformTimeline(scenes, platform = "youtube") {
+  if (scenes.some((scene) => scene.preserveStory)) return scenes;
+  if (platform === "youtube" || scenes.length < 4 || !scenes.some((scene) => scene.purpose)) return scenes;
+
+  const maxDuration = platform === "tiktok" ? 14 : 18;
+  const fullDuration = scenes.reduce((total, scene) => total + Number(scene.duration), 0);
+  if (fullDuration > 30) return scenes;
+  if (fullDuration <= maxDuration) return scenes;
+
+  const firstHuman = scenes.find((scene) => scene.type === "video" && ["hook", "problem"].includes(scene.purpose)) ?? scenes[0];
+  const productProof = scenes.find((scene) => ["app_capture", "product"].includes(scene.type)
+    && ["action", "product_proof"].includes(scene.purpose));
+  const finalHuman = [...scenes].reverse().find((scene) => scene.type === "video"
+    && ["payoff", "cta"].includes(scene.purpose));
+  const finalScene = scenes.at(-1);
+  const mandatory = uniqueScenes([firstHuman, productProof, finalHuman, finalScene]);
+  const minimumDuration = platform === "tiktok" ? 9 : 12;
+  const selected = new Set(mandatory.map((scene) => scene.sceneId));
+  let duration = mandatory.reduce((total, scene) => total + Number(scene.duration), 0);
+
+  const optionalPriority = { problem: 1, payoff: 2, action: 3, product_proof: 4, hook: 5, cta: 6 };
+  const optional = scenes.filter((scene) => !selected.has(scene.sceneId))
+    .sort((left, right) => (optionalPriority[left.purpose] ?? 9) - (optionalPriority[right.purpose] ?? 9));
+  for (const scene of optional) {
+    if (duration + Number(scene.duration) > maxDuration) continue;
+    if (platform === "tiktok" && duration >= minimumDuration) continue;
+    selected.add(scene.sceneId);
+    duration += Number(scene.duration);
+  }
+
+  return scenes.filter((scene) => selected.has(scene.sceneId));
+}
+
+export function platformVideoDuration(plan, platform) {
+  const scenes = (plan.scenes ?? []).map((scene) => ({
+    sceneId: scene.scene_id,
+    type: scene.asset_type === "generated_video" ? "video" : scene.asset_type === "app_capture" ? "app_capture" : "product",
+    purpose: scene.purpose,
+    duration: Number(scene.duration_seconds),
+    preserveStory: Boolean(plan.preserve_story_timeline),
+  }));
+  if (!scenes.length) return plannedVideoDuration(plan);
+  return platformTimeline(scenes, platform).reduce((total, scene) => total + scene.duration, 0);
+}
+
 export async function renderProductVideo(plan, {
   screenshotResolver = verifiedScreenshotUrl,
   supportingVideoBuffer = null,
   sceneVideoBuffers = [],
   voiceoverBuffer = null,
   sceneVoiceoverBuffers = [],
+  sceneDialogueBuffers = [],
   sceneCaptions = {},
+  sceneCaptionTimings = null,
+  platform = "youtube",
   appCaptureResolver = async (reference) => { throw new Error(`Verified app capture resolver is not configured: ${reference}`); },
 } = {}) {
-  const scenes = productionTimeline(plan, sceneVideoBuffers, supportingVideoBuffer, sceneCaptions);
-  const totalDuration = scenes.reduce((total, scene) => total + Number(scene.duration), 0);
+  const scenes = platformTimeline(productionTimeline(plan, sceneVideoBuffers, supportingVideoBuffer, sceneCaptions), platform);
+  for (const scene of scenes) if (plan.captions_enabled === false || sceneCaptionTimings) scene.subtitle = "";
+  if (plan.transcript_only_overlays && plan.captions_enabled !== false) for (const scene of scenes) {
+    const normalize = (value) => String(value ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const spoken = normalize(sceneCaptions[scene.sceneId]);
+    if (scene.purpose === "cta" && normalize(scene.headline) && spoken.includes(normalize(scene.headline))) scene.headline = "";
+  }
+  let totalDuration = scenes.reduce((total, scene) => total + Number(scene.duration), 0);
   const productionV2 = Number(plan.production_version) >= 2;
   if (productionV2 && voiceoverBuffer) throw new Error("Production V2 needs sceneVoiceoverBuffers; a full-master voiceover could overlap native speech");
   const narration = new Map(sceneVoiceoverBuffers.map((item) => [item.sceneId, item.buffer]));
+  const dialogue = new Map(sceneDialogueBuffers.map(item=>[item.sceneId,item.buffer]));
   const directory = await mkdtemp(join(tmpdir(), "gymfeed-product-video-"));
   const output = join(directory, "gymfeed-product-video.mp4");
   try {
@@ -265,6 +342,13 @@ export async function renderProductVideo(plan, {
       const scene = scenes[index];
       scene.audioStrategy ??= ["native_audio", "ambient_plus_captions"].includes(plan.audio_mode) && scene.type === "video" ? "native" : "silent";
       if (productionV2 && !["native", "voiceover", "ambient", "silent"].includes(scene.audioStrategy)) throw new Error(`Missing audio strategy for ${scene.sceneId}`);
+      if(plan.discard_source_audio&&scene.audioStrategy==="native"){
+        const audio=dialogue.get(scene.sceneId);
+        if(!audio)throw Error(`Missing locked dialogue for ${scene.sceneId}; generated audio is never used as fallback`);
+        scene.voicePath=join(directory,`dialogue-${index}.mp3`);await writeFile(scene.voicePath,audio);
+        const measured=await inspectMedia(scene.voicePath);
+        if(!measured.hasAudio||measured.duration>scene.duration+.12)throw Error(`Canonical dialogue does not fit ${scene.sceneId}; preserve the complete line`);
+      }
       if (scene.audioStrategy === "voiceover") {
         const buffer = narration.get(scene.sceneId);
         if (!buffer) throw new Error(`Missing narration for scene ${scene.sceneId}`);
@@ -272,7 +356,8 @@ export async function renderProductVideo(plan, {
         await writeFile(scene.voicePath, buffer);
         const spoken = await inspectMedia(scene.voicePath);
         if (!spoken.hasAudio) throw new Error(`Narration is missing for ${scene.sceneId}`);
-        scene.voiceTempo = spoken.duration > scene.duration + 0.08 ? spoken.duration / scene.duration : 1;
+        if (plan.natural_audio_pace) scene.duration = Math.max(scene.duration, spoken.duration + .25);
+        scene.voiceTempo = !plan.natural_audio_pace && spoken.duration > scene.duration + 0.08 ? spoken.duration / scene.duration : 1;
         if (scene.voiceTempo > 1.75) {
           const error = new Error(`Narration does not fit retained cut for ${scene.sceneId}: ${spoken.duration}s / ${scene.duration}s`);
           error.safeToRetry = true;
@@ -287,9 +372,17 @@ export async function renderProductVideo(plan, {
         scene.videoPath = join(directory, `supporting-${index}.mp4`);
         await writeFile(scene.videoPath, scene.buffer);
         const technical = await inspectMedia(scene.videoPath);
-        validateRetainedCut(scene, technical.duration);
-        scene.hasAudio = technical.hasAudio;
-        if (scene.audioStrategy === "native" && !technical.hasAudio) throw new Error(`Native speech is missing for scene ${scene.sceneId}`);
+        if (scene.type === "app_capture") {
+          const fitted = fitAppCaptureCut({ ...scene, duration: scene.sourceCutDuration ?? scene.duration }, technical.duration);
+          scene.start = fitted.start;
+          scene.holdSeconds = fitted.holdSeconds;
+        } else {
+          const sourceCut = scene.sourceCutDuration == null ? scene.duration : Math.min(scene.duration, technical.duration - scene.start);
+          validateRetainedCut({ ...scene, duration: sourceCut }, technical.duration);
+          scene.sourceReadDuration = sourceCut;
+        }
+        scene.hasAudio = plan.discard_source_audio ? false : technical.hasAudio;
+        if (scene.audioStrategy === "native" && !technical.hasAudio && !scene.voicePath && !plan.allow_incomplete_preview) throw new Error(`Native speech is missing for scene ${scene.sceneId}`);
         const overlay = scene.type === "app_capture" ? renderProductScreenOverlay : renderVideoOverlay;
         await writeFile(join(directory, `overlay-${index}.png`), await overlay({ headline: scene.headline, subtitle: scene.subtitle }));
         continue;
@@ -317,6 +410,7 @@ export async function renderProductVideo(plan, {
       await writeFile(join(directory, `scene-${index}.png`), image);
     }
 
+    totalDuration = scenes.reduce((total, scene) => total + Number(scene.duration), 0);
     const voiceoverPath = voiceoverBuffer ? join(directory, "voiceover.mp3") : null;
     if (voiceoverPath) {
       await writeFile(voiceoverPath, voiceoverBuffer);
@@ -324,7 +418,7 @@ export async function renderProductVideo(plan, {
       if (!spoken.hasAudio || spoken.duration > totalDuration + 0.08) throw new Error("Full-master narration would be truncated by the edit");
     }
     const sceneAudio = !voiceoverPath && scenes.some((scene) => scene.voicePath || scene.hasAudio && ["native", "ambient"].includes(scene.audioStrategy));
-    if (productionV2 && !sceneAudio) throw new Error("Production video has no audible story timeline");
+    if (productionV2 && !sceneAudio && !plan.allow_incomplete_preview) throw new Error("Production video has no audible story timeline");
 
     const args = ["-hide_banner", "-loglevel", "error", "-y"];
     const segments = [];
@@ -333,7 +427,7 @@ export async function renderProductVideo(plan, {
       const scene = scenes[index];
       let segment;
       if (["video", "app_capture"].includes(scene.type)) {
-        args.push("-ss", String(scene.start ?? 0), "-t", String(scene.duration), "-i", scene.videoPath);
+        args.push("-ss", String(scene.start ?? 0), "-t", String(scene.sourceReadDuration ?? scene.sourceCutDuration ?? scene.duration), "-i", scene.videoPath);
         const videoInputIndex = nextInputIndex;
         nextInputIndex += 1;
         args.push("-loop", "1", "-t", String(scene.duration), "-i", join(directory, `overlay-${index}.png`));
@@ -371,12 +465,12 @@ export async function renderProductVideo(plan, {
         const framingFilter = segment.reframe === "medium_close"
           ? "scale=1944:3456:force_original_aspect_ratio=increase,crop=1080:1920:(iw-ow)/2:220"
           : "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
-        filters.push(`[${segment.inputIndex}:v]${framingFilter},fps=30,trim=duration=${segment.duration},setpts=PTS-STARTPTS,setsar=1[base${index}]`);
+        filters.push(`[${segment.inputIndex}:v]${framingFilter},fps=30,${segment.sourceReadDuration < segment.duration ? `tpad=stop_mode=clone:stop_duration=${segment.duration},` : ""}trim=duration=${segment.duration},setpts=PTS-STARTPTS,setsar=1[base${index}]`);
         filters.push(`[${segment.overlayInputIndex}:v]scale=1080:1920,format=rgba,trim=duration=${segment.duration},setpts=PTS-STARTPTS[overlay${index}]`);
         filters.push(`[base${index}][overlay${index}]overlay=0:0:format=auto[v${index}]`);
       } else if (["product", "app_capture"].includes(segment.type)) {
         // Preserve the whole real interface. Panning a screenshot cannot demonstrate an interaction.
-        filters.push(`[${segment.inputIndex}:v]scale=900:1360:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:280:color=0x050605,fps=30,trim=duration=${segment.duration},setpts=PTS-STARTPTS,setsar=1[product${index}]`);
+        filters.push(`[${segment.inputIndex}:v]scale=900:1360:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:280:color=0x050605,fps=30,tpad=stop_mode=clone:stop_duration=${segment.duration},trim=duration=${segment.duration},setpts=PTS-STARTPTS,setsar=1[product${index}]`);
         if (segment.overlayInputIndex != null) {
           filters.push(`[${segment.overlayInputIndex}:v]scale=1080:1920,format=rgba,trim=duration=${segment.duration},setpts=PTS-STARTPTS[productOverlay${index}]`);
           filters.push(`[product${index}][productOverlay${index}]overlay=0:0:format=auto[v${index}]`);
@@ -391,7 +485,7 @@ export async function renderProductVideo(plan, {
         if (audioIndex != null) {
           // Inputs already begin at the selected source cut; narration starts with its scene.
           const tempo = segment.voiceInputIndex != null && segment.voiceTempo > 1 ? `atempo=${segment.voiceTempo.toFixed(6)},` : "";
-          filters.push(`[${audioIndex}:a]${tempo}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS,apad=whole_dur=${segment.duration},atrim=duration=${segment.duration}[a${index}]`);
+          filters.push(`[${audioIndex}:a]${tempo}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS,${plan.discard_source_audio?"loudnorm=I=-16:TP=-1.5:LRA=7,":""}apad=whole_dur=${segment.duration},atrim=duration=${segment.duration}[a${index}]`);
         } else {
           filters.push(`anullsrc=r=48000:cl=stereo:d=${segment.duration}[a${index}]`);
         }
@@ -405,9 +499,20 @@ export async function renderProductVideo(plan, {
     if (voiceoverPath) {
       filters.push(`[${audioInputIndex}:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS,apad=whole_dur=${totalDuration},atrim=duration=${totalDuration}[aout]`);
     }
+    let videoOutput = "[outv]";
+    if (sceneCaptionTimings && plan.captions_enabled !== false) {
+      const captions = captionAss(scenes, sceneCaptionTimings, plan.caption_font_size ?? 46);
+      if (captions.count) {
+        const path = join(directory, "captions.ass");
+        await writeFile(path, captions.text);
+        const escaped = path.replaceAll("\\", "/").replaceAll(":", "\\:").replaceAll("'", "'\\''");
+        filters.push(`[outv]subtitles=filename='${escaped}'[captioned]`);
+        videoOutput = "[captioned]";
+      }
+    }
     args.push(
       "-filter_complex", filters.join(";"),
-      "-map", "[outv]",
+      "-map", videoOutput,
       ...(voiceoverPath
         ? ["-map", "[aout]", "-c:a", "aac", "-b:a", "160k"]
         : sceneAudio ? ["-map", "[ambient]", "-c:a", "aac", "-b:a", "160k"] : ["-an"]),

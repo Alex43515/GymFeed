@@ -1,0 +1,15 @@
+{
+  "id": "GFStudioDispatcher001",
+  "name": "GymFeed 08 - Studio Job Dispatcher",
+  "nodes": [
+    { "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 1 }] } }, "id": "studio-schedule", "name": "Every minute", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [0, 0] },
+    { "parameters": {}, "id": "studio-manual", "name": "Check queue manually", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 180] },
+    { "parameters": { "method": "POST", "url": "http://marketing-worker:3000/v1/studio/tick", "sendHeaders": true,
+      "headerParameters": { "parameters": [{ "name": "x-marketing-token", "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}" }] },
+      "sendBody": true, "specifyBody": "json", "jsonBody": "{}", "options": { "timeout": 30000 } },
+      "id": "studio-dispatch", "name": "Claim durable Studio job", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [300, 80] }
+  ],
+  "connections": { "Every minute": { "main": [[{ "node": "Claim durable Studio job", "type": "main", "index": 0 }]] }, "Check queue manually": { "main": [[{ "node": "Claim durable Studio job", "type": "main", "index": 0 }]] } },
+  "active": false, "settings": { "executionOrder": "v1", "errorWorkflow": "GFStudioErrorHandler001", "timezone": "Europe/Belgrade" },
+  "versionId": "3b2f417d-5c2f-4279-9c17-3e42cb8b0d65", "tags": [], "pinData": {}
+}

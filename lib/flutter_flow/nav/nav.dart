@@ -17,6 +17,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/animated_splash.dart';
 
 import '/index.dart';
+import '/workout/plans/training_plan_detail_widget.dart';
 
 export 'package:go_router/go_router.dart';
 export 'serialization_util.dart';
@@ -871,6 +872,14 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
                   'initialStoryIndex',
                   ParamType.int,
                 ),
+              ),
+            ),
+            FFRoute(
+              name: TrainingPlanDetailWidget.routeName,
+              path: TrainingPlanDetailWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => TrainingPlanDetailWidget(
+                planId: params.getParam('id', ParamType.String) ?? '',
               ),
             )
           ].map((r) => r.toRoute(appStateNotifier)).toList(),

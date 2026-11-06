@@ -1,0 +1,54 @@
+{
+  "id": "gfOutreachWeekly07",
+  "name": "GymFeed 07 - Weekly influencer outreach list",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 9 * * 1" }] } },
+      "id": "7c1e0f52-3d1b-4b8e-9a51-0e7a4c2f7001",
+      "name": "Monday 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://marketing-worker:3000/v1/outreach/weekly",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "x-marketing-token", "value": "={{ $env.MARKETING_INTERNAL_TOKEN }}" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": { "timeout": 1800000 }
+      },
+      "id": "7c1e0f52-3d1b-4b8e-9a51-0e7a4c2f7002",
+      "name": "Find and qualify creators",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    },
+    {
+      "id": "7c1e0f52-3d1b-4b8e-9a51-0e7a4c2f7003",
+      "name": "Weekly outreach",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, -300],
+      "parameters": {
+        "content": "## Monday influencer list\nAdds new qualified fitness creators with a personalised first DM to the Influencer Outreach sheet. Nothing is sent: the founder sends each first DM from the Open DM link. Replies are handled by the Instagram webhook on the worker.",
+        "height": 220,
+        "width": 520,
+        "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Monday 09:00": { "main": [[{ "node": "Find and qualify creators", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Europe/Belgrade" },
+  "versionId": "7c1e0f52-3d1b-4b8e-9a51-0e7a4c2f70ff",
+  "meta": {},
+  "pinData": {},
+  "tags": []
+}

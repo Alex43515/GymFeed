@@ -10,6 +10,8 @@ export const GymFeedFeatureSchema = z.enum([
   "fitclips",
   "ai_coach",
   "train",
+  "training_marketplace",
+  "health_connections",
   "scan_food",
   "scan_equipment",
   "nutrition_diary",
@@ -101,6 +103,18 @@ const CandidateConceptSchema = z.object({
 
 const CreativeTreatmentSchema = z.object({
   visual_mode: z.enum(["human_led", "hybrid", "product_led"]),
+  format_family: z.enum([
+    "creator_ugc", "two_person_dialogue", "observational_story", "pov_demo",
+    "voiceover_montage", "visual_challenge", "product_tutorial",
+    "documentary_testimonial", "comedic_sketch",
+  ]),
+  setting_family: z.enum([
+    "gym_floor", "home", "kitchen", "outdoors", "locker_room", "car_or_commute",
+    "office_or_study", "neutral_studio", "mixed_locations", "other",
+  ]),
+  camera_language: z.string().min(10).max(240),
+  performance_style: z.string().min(10).max(240),
+  novelty_note: z.string().min(20).max(400),
   opening_asset: z.enum(["fal_video", "gymfeed_screenshot", "app_capture"]),
   people_role: z.enum(["none", "primary", "supporting"]),
   people_screen_time_percent: z.number().int().min(0).max(100),
@@ -134,8 +148,9 @@ export const StoryReviewSchema = z.object({
 
 export const VideoPlanSchema = z.object({
   production_version: z.literal(3),
+  casting_policy: z.literal("young_adult_women"),
   narrative: z.object({
-    format: z.enum(["dialogue_story", "solo_story", "explicit_tutorial"]),
+    format: z.enum(["dialogue_story", "solo_story", "presenter_tutorial"]),
     exception_reason: z.string(),
     situation: z.string().min(10),
     tension: z.string().min(10),
@@ -145,10 +160,13 @@ export const VideoPlanSchema = z.object({
   cast: z.array(z.object({
     character_id: z.string().regex(/^[a-z][a-z0-9_]{0,29}$/),
     role: z.string().min(3),
+    gender_presentation: z.literal("woman"),
+    age_range: z.enum(["21-25", "26-30", "31-34"]),
+    camera_presence: z.literal("high"),
     appearance: z.string().min(10),
     wardrobe: z.string().min(3),
     voice_direction: z.string().min(10),
-  })).max(3),
+  })).max(8),
   review_brief: ReviewBriefSchema,
   product_feature: GymFeedFeatureSchema,
   feature_sequence: z.array(GymFeedFeatureSchema).min(1).max(4),
@@ -160,12 +178,12 @@ export const VideoPlanSchema = z.object({
   hook: z.string().min(5),
   target_audience: z.string().min(5),
   creative_treatment: CreativeTreatmentSchema,
-  target_duration_seconds: z.number().min(15).max(30),
+  target_duration_seconds: z.number().min(8).max(180),
   reviewer_instruction_map: z.array(z.object({
     instruction: z.string().min(3),
     scene_ids: z.array(z.string()).min(1),
     implemented_change: z.string().min(10),
-  })).max(12),
+  })).max(30),
   character_reference: z.object({
     required: z.boolean(),
     description: z.string().min(5),
@@ -175,7 +193,7 @@ export const VideoPlanSchema = z.object({
   }),
   scenes: z.array(z.object({
     scene_id: z.string().min(2).max(30),
-    character_ids: z.array(z.string()).max(3),
+    character_ids: z.array(z.string()).max(8),
     speaker_id: z.string(),
     asset_type: z.enum(["generated_video", "gymfeed_screen", "app_capture"]),
     purpose: z.enum(["hook", "problem", "action", "product_proof", "payoff", "cta"]),
@@ -196,7 +214,16 @@ export const VideoPlanSchema = z.object({
     ambient_audio: z.string(),
     audio_strategy: z.enum(["native", "voiceover", "ambient", "silent"]),
     voiceover_text: z.string().max(300),
-  })).min(3).max(8),
+  })).min(3).max(30),
+  // A new owner recording is the exception: each requested: ref absent from the
+  // library needs a concrete shot list entry and a reason the library cannot serve.
+  capture_requests: z.array(z.object({
+    capture_ref: z.string().regex(/^requested:[a-z0-9][a-z0-9-]{2,80}$/),
+    feature: z.string().min(3).max(60),
+    shot_instructions: z.string().min(20).max(1600),
+    target_duration_seconds: z.number().min(3).max(60),
+    why_library_insufficient: z.string().min(20).max(400),
+  })).max(2),
   audio_mode: z.enum(["mixed", "native_audio", "ai_voiceover", "music_only", "ambient_plus_captions", "silent"]),
   voiceover_script: z.string(),
   captions_enabled: z.boolean(),
@@ -219,6 +246,15 @@ export const InstagramPlanSchema = z.object({
   proof_points: z.array(z.string().min(5).max(180)).min(1).max(6),
   screenshot_refs: z.array(z.string()).max(7),
   format: z.enum(["image", "carousel"]),
+  creative_direction: z.object({
+    layout_style: z.enum([
+      "bold_typography", "editorial_photo", "product_proof", "data_card",
+      "checklist", "comparison", "quote_or_observation", "mixed_media",
+    ]),
+    visual_world: z.string().min(10).max(300),
+    composition: z.string().min(10).max(300),
+    novelty_note: z.string().min(20).max(400),
+  }),
   topic: z.string().min(3),
   concept: z.string().min(20),
   hook: z.string().min(5),
@@ -226,6 +262,7 @@ export const InstagramPlanSchema = z.object({
   cta: ApprovedCtaSchema,
   landing_url: z.literal("https://gymfeed.io"),
   hashtags: z.array(z.string()).max(15),
+  music_direction: z.string().min(10).max(180).nullable(),
   slides: z.array(z.object({
     headline: z.string().min(2).max(90),
     body: z.string().max(280),
@@ -253,8 +290,15 @@ export const CreativeDecisionSchema = z.object({
     ]),
   }),
   decision_rationale: z.string().min(30),
+  decision_inputs: z.object({
+    buffer_findings: z.array(z.string().min(10)).min(1).max(6),
+    ga4_findings: z.array(z.string().min(10)).min(1).max(6),
+    conversion_findings: z.array(z.string().min(10)).min(1).max(6),
+    creative_history_avoid: z.array(z.string().min(10)).min(1).max(8),
+  }),
   video: VideoPlanSchema,
   instagram: InstagramPlanSchema,
+  post: InstagramPlanSchema,
   experiment: z.object({
     hypothesis: z.string().min(10),
     variable: z.string().min(3),
@@ -321,3 +365,14 @@ export function overallQaScore(review) {
   const scores = Object.values(review.scores);
   return Math.round(scores.reduce((total, score) => total + score, 0) / scores.length);
 }
+
+// AI draft for an unsolicited library recording. A human must verify it before
+// the recording can prove a product claim.
+export const LibraryCaptureDescriptionSchema = z.object({
+  feature: GymFeedFeatureSchema,
+  title: z.string().min(3).max(80),
+  description: z.string().min(20).max(600),
+  recorded_interactions: z.array(z.string().min(10).max(300)).min(1).max(10),
+  privacy_concerns: z.array(z.string().max(200)).max(6),
+  usable_for_marketing: z.boolean(),
+});

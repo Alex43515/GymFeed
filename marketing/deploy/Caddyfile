@@ -1,4 +1,12 @@
 {$N8N_DOMAIN} {
   encode zstd gzip
-  reverse_proxy n8n:5678
+
+  # Meta delivers Instagram DM webhooks straight to the worker; everything else is n8n.
+  handle /webhooks/instagram* {
+    reverse_proxy marketing-worker:3000
+  }
+
+  handle {
+    reverse_proxy n8n:5678
+  }
 }

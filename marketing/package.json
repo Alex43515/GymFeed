@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node src/server.mjs",
+    "studio": "node scripts/start-studio.mjs",
     "test": "node --test test/*.test.mjs",
     "preview:product": "node scripts/generate-product-campaign-preview.mjs",
     "check": "node scripts/check-imports.mjs"

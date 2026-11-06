@@ -157,6 +157,44 @@ test("decision context includes first-party Buffer post performance", async () =
   assert.equal(context.app_captures.some((capture) => capture.id === "requested:train-start-track-complete-set"), true);
 });
 
+test("connected Buffer planning fails visibly when performance context is unavailable", () => {
+  const orchestrator = new MarketingOrchestrator({
+    config: {},
+    publisher: { performanceSummary: async () => ({ status: "error" }) },
+  });
+
+  assert.throws(
+    () => orchestrator.assertPerformanceContext({ buffer: { status: "error", message: "quota exhausted" } }),
+    /Buffer performance context unavailable: quota exhausted/,
+  );
+});
+
+test("performance audit records the exact Buffer benchmarks supplied to planning", () => {
+  const orchestrator = new MarketingOrchestrator({ config: {} });
+  const audit = orchestrator.performanceContextAudit({
+    ga4: { status: "ok" },
+    buffer: {
+      status: "ok",
+      source: "buffer_first_party",
+      collected_at: "2026-10-09T08:30:00Z",
+      posts_analyzed: 100,
+      benchmark_posts: [{
+        id: "post-1",
+        platform: "tiktok",
+        sent_at: "2026-10-05T10:00:00Z",
+        metrics: { views: 91, averageTimeWatched: 13.53 },
+        metrics_updated_at: "2026-10-08T19:34:00Z",
+        duration_seconds: 10.008,
+        watch_ratio: 1.35,
+      }],
+    },
+  });
+
+  assert.equal(audit.buffer.posts_analyzed, 100);
+  assert.equal(audit.buffer.benchmark_posts[0].id, "post-1");
+  assert.equal(audit.buffer.benchmark_posts[0].metrics.views, 91);
+});
+
 test("video generation creates one locked reference and queues every human scene", async () => {
   const updates = [];
   const content = {
@@ -356,6 +394,108 @@ test("a failed Gemini scene resumes only the rejected shot with QA corrections",
   assert.equal(updates.at(-1).decision.generation.scenes[0].history.length, 1);
 });
 
+test("a terminal fal infrastructure failure queues one bounded replacement task", async () => {
+  const updates = [];
+  const released = [];
+  let content = {
+    id: "content-provider-retry",
+    run_id: "run-provider-retry",
+    content_key: "GF-20261003-V001",
+    content_type: "video",
+    status: "generating",
+    provider_task_id: "failed-task",
+    decision: {
+      content: {
+        concept: "A trainee arrives for a session.",
+        hook: "Back in the gym?",
+        scenes: [{
+          scene_id: "S1", asset_type: "generated_video", duration_seconds: 5,
+          purpose: "hook", camera: "medium wide", subject: "one adult trainee",
+          action: "walks to a bench", environment: "unbranded gym", lighting: "overhead",
+          visual_style: "candid", continuity_notes: "same wardrobe", overlay_text: "",
+          screenshot_ref: "", spoken_dialogue: "", ambient_audio: "",
+        }],
+      },
+      generation: {
+        generation_id: "generation-provider-retry",
+        reference_image_url: "https://cdn.example/reference.png",
+        scenes: [{
+          scene_id: "S1", asset_type: "generated_video", status: "running", attempt: 1,
+          task_id: "failed-task", model: "reference-model", reservation_id: "old-reservation",
+          estimated_cost_usd: 0.5, history: [],
+        }],
+      },
+    },
+  };
+  const orchestrator = new MarketingOrchestrator({
+    config: { FAL_VIDEO_USD_PER_SECOND: 0.1, FAL_SCENE_MAX_ATTEMPTS: 2 },
+    campaigns: { assertGenerationAllowed: async () => {} },
+    repository: {
+      contentById: async () => content,
+      releaseCost: async (id) => { released.push(id); },
+      reserveCost: async () => "replacement-reservation",
+      updateContent: async (_id, patch) => {
+        updates.push(patch);
+        content = { ...content, ...patch };
+        return content;
+      },
+    },
+    mediaProvider: {
+      getTask: async () => ({
+        status: "failed",
+        message: "fal.ai downstream_service_unavailable: Downstream service unavailable (504)",
+        error: { type: "downstream_service_unavailable", status: 504, infrastructureFailure: true },
+      }),
+      createTask: async () => ({ id: "replacement-task", model: "reference-model", status: "queued" }),
+    },
+  });
+
+  const result = await orchestrator.refreshContent(content.id);
+  const replacement = result.content.decision.generation.scenes[0];
+  assert.equal(result.pending, true);
+  assert.deepEqual(released, ["old-reservation"]);
+  assert.equal(replacement.task_id, "replacement-task");
+  assert.equal(replacement.attempt, 2);
+  assert.equal(updates.at(-1).failure_reason, null);
+  assert.equal(replacement.history[0].task_id, "failed-task");
+  assert.match(replacement.history[0].failure_reason, /Downstream service unavailable/);
+});
+
+test("an explicit resume retries only the terminal infrastructure-failed scene", async () => {
+  let content = {
+    id: "content-explicit-provider-retry", content_type: "video", status: "failed",
+    decision: {
+      content: {
+        cast: [{ character_id: "maya" }],
+        scenes: [{ scene_id: "reply", asset_type: "generated_video", character_ids: ["maya"], duration_seconds: 4 }],
+      },
+      generation: {
+        character_reference_urls: { maya: "maya.png" },
+        scenes: [{
+          scene_id: "reply", asset_type: "generated_video", status: "failed", attempt: 4,
+          failure_reason: "fal.ai downstream_service_unavailable: Downstream service unavailable (504)", history: [],
+        }],
+      },
+    },
+  };
+  const queued = [];
+  const orchestrator = new MarketingOrchestrator({
+    config: { FAL_SCENE_MAX_ATTEMPTS: 4 },
+    repository: { updateContent: async (_id, patch) => (content = { ...content, ...patch }) },
+  });
+  orchestrator.queueVideoScene = async (_content, scene, refs, attempt, correction) => {
+    queued.push({ scene, refs, attempt, correction });
+    return { scene_id: scene.scene_id, asset_type: "generated_video", status: "queued", attempt, task_id: "retry-task" };
+  };
+
+  const result = await orchestrator.resumeFailedVideoScene(content);
+  assert.equal(result.retrying, true);
+  assert.equal(queued.length, 1);
+  assert.deepEqual(queued[0].refs, { maya: "maya.png" });
+  assert.equal(queued[0].attempt, 5);
+  assert.match(queued[0].correction, /Downstream service unavailable/);
+});
+
 test("a human-led decision is not overridden by four available screenshots", async () => {
   const content = {
     id: "content-human",
@@ -447,7 +587,7 @@ test("a human-led decision is not overridden by four available screenshots", asy
   assert.equal(result.pending, true);
   assert.equal(taskInputs.length, 1);
   assert.match(taskInputs[0].prompt, /human_led/);
-  assert.match(taskInputs[0].prompt, /relatable gym confusion/);
+  assert.match(taskInputs[0].prompt, /hesitates at an unfamiliar machine/);
 });
 
 test("one-day campaign schedules the carousel and video on the same date", () => {
@@ -470,6 +610,17 @@ test("one-day campaign schedules the carousel and video on the same date", () =>
   assert.equal(
     orchestrator.scheduledTime({ content_type: "video" }, "youtube"),
     "2026-09-06T16:30:00.000Z",
+  );
+});
+
+test("a past campaign slot is retryable because Buffer was not called", () => {
+  const orchestrator = new MarketingOrchestrator({ config: {} });
+  assert.throws(
+    () => orchestrator.scheduledTime({
+      content_type: "carousel",
+      decision: { campaign: { id: "campaign-past", date: "2020-01-01", timezone: "America/New_York" } },
+    }, "instagram"),
+    (error) => /past or too soon/.test(error.message) && error.safeToRetry === true,
   );
 });
 
@@ -558,11 +709,45 @@ test("a completed master keeps scene QA findings even when final model QA likes 
     updateContent: async (_id, patch) => (content = { ...content, ...patch }),
   };
   const brain = { qualityReview: async () => ({ data: { publish: true, scores: { brand_safety: 95, product_accuracy: 95, visual_quality: 95, copy_quality: 95 }, critical_issues: [], required_fixes: [] }, costUsd: 0, responseId: "qa" }) };
-  const orchestrator = new MarketingOrchestrator({ config: {}, repository, brain });
+  const orchestrator = new MarketingOrchestrator({
+    config: {},
+    repository,
+    brain,
+    fetchFn: async () => new Response(Buffer.from("jpg"), {
+      status: 200,
+      headers: { "content-type": "image/jpeg" },
+    }),
+  });
   const result = await orchestrator.reviewContent("v");
   assert.equal(result.content.status, "qa_failed");
   assert.match(result.content.failure_reason, /s05: Generated UI/);
   assert.equal(result.content.qa.publish, false);
+});
+
+test("final QA downloads visuals locally and retries transient URL failures", async () => {
+  let content = { id: "i", content_type: "carousel", status: "generated", asset_urls: ["https://assets.example/slide.png"], decision: { content: {} } };
+  let fetchAttempts = 0;
+  let receivedVisuals;
+  const repository = {
+    contentById: async () => content,
+    reserveCost: async () => "reservation",
+    settleCost: async () => {},
+    brandConfig: async () => ({ minimum_qa_score: 85 }),
+    updateContent: async (_id, patch) => (content = { ...content, ...patch }),
+  };
+  const brain = { qualityReview: async (_content, visuals) => {
+    receivedVisuals = visuals;
+    return { data: { publish: true, scores: { brand_safety: 95, product_accuracy: 95, visual_quality: 95, copy_quality: 95 }, critical_issues: [], required_fixes: [] }, costUsd: 0, responseId: "qa" };
+  } };
+  const orchestrator = new MarketingOrchestrator({ config: {}, repository, brain, fetchFn: async () => {
+    fetchAttempts += 1;
+    if (fetchAttempts === 1) throw new TypeError("fetch failed");
+    return new Response(Buffer.from("png"), { status: 200, headers: { "content-type": "image/png" } });
+  } });
+  const result = await orchestrator.reviewContent("i");
+  assert.equal(result.content.status, "awaiting_approval");
+  assert.equal(fetchAttempts, 2);
+  assert.match(receivedVisuals[0], /^data:image\/png;base64,/);
 });
 
 test("a saved preview reaches human review when the monthly final-QA budget is exhausted", async () => {
@@ -638,6 +823,108 @@ test("sheet approval records the decision but does not call Buffer while auto pu
 
   assert.equal(result.result.action, "approved_buffer_disabled");
   assert.equal(updates.at(-1).status, "approved");
+});
+
+test("Buffer receives only the video variant made for each platform", async () => {
+  let content = {
+    id: "video-platform-variants",
+    content_key: "GF-VIDEO-1",
+    content_type: "video",
+    status: "approved",
+    asset_urls: ["instagram.mp4", "tiktok.mp4", "youtube.mp4"],
+    decision: {
+      content: {
+        audio_mode: "mixed",
+        platform_copy: {
+          instagram_caption: "Instagram copy",
+          tiktok_caption: "TikTok copy",
+          youtube_title: "YouTube title",
+          youtube_description: "YouTube copy",
+          hashtags: ["#GymFeed"],
+        },
+      },
+      generation: {
+        platform_variants: {
+          instagram: { url: "instagram.mp4" },
+          tiktok: { url: "tiktok.mp4" },
+          youtube: { url: "youtube.mp4" },
+        },
+      },
+    },
+  };
+  const published = [];
+  const publications = [];
+  const orchestrator = new MarketingOrchestrator({
+    config: {
+      AUTO_PUBLISH: true,
+      GYMFEED_LANDING_URL: "https://gymfeed.io",
+      BUFFER_INSTAGRAM_CHANNEL_ID: "ig",
+      BUFFER_TIKTOK_CHANNEL_ID: "tt",
+      BUFFER_YOUTUBE_CHANNEL_ID: "yt",
+    },
+    repository: {
+      contentById: async () => content,
+      brandConfig: async () => ({ enabled: true }),
+      publicationByContent: async () => [],
+      upsertPublication: async (row) => {
+        const saved = { id: `${row.platform}-${publications.length}`, ...row };
+        publications.push(saved);
+        return saved;
+      },
+      updateContent: async (_id, patch) => (content = { ...content, ...patch }),
+    },
+    publisher: { publish: async (request) => {
+      published.push(request);
+      return { id: `${request.platform}-post` };
+    } },
+  });
+
+  await orchestrator.publishContent(content.id);
+
+  assert.deepEqual(published.map(({ platform, mediaUrls }) => [platform, mediaUrls]), [
+    ["instagram", ["instagram.mp4"]],
+    ["tiktok", ["tiktok.mp4"]],
+    ["youtube", ["youtube.mp4"]],
+  ]);
+  assert.deepEqual(publications.filter((row) => row.provider_request_id).map((row) => row.platform_copy.media_url), ["instagram.mp4", "tiktok.mp4", "youtube.mp4"]);
+});
+
+test("Buffer publishes static posts and carousels to Instagram and TikTok", async () => {
+  let content = {
+    id: "static-cross-platform",
+    content_key: "GF-CAROUSEL-1",
+    content_type: "carousel",
+    status: "approved",
+    asset_urls: ["one.jpg", "two.jpg"],
+    decision: { content: { caption: "Save this GymFeed checklist", hashtags: ["#GymFeed"] } },
+  };
+  const published = [];
+  const orchestrator = new MarketingOrchestrator({
+    config: {
+      AUTO_PUBLISH: true,
+      GYMFEED_LANDING_URL: "https://gymfeed.io",
+      BUFFER_INSTAGRAM_CHANNEL_ID: "ig",
+      BUFFER_TIKTOK_CHANNEL_ID: "tt",
+    },
+    repository: {
+      contentById: async () => content,
+      brandConfig: async () => ({ enabled: true }),
+      publicationByContent: async () => [],
+      upsertPublication: async (row) => row,
+      updateContent: async (_id, patch) => (content = { ...content, ...patch }),
+    },
+    publisher: { publish: async (request) => {
+      published.push(request);
+      return { id: `${request.platform}-post` };
+    } },
+  });
+
+  await orchestrator.publishContent(content.id);
+
+  assert.deepEqual(published.map(({ platform, mediaUrls, isVideo }) => [platform, mediaUrls, isVideo]), [
+    ["instagram", ["one.jpg", "two.jpg"], false],
+    ["tiktok", ["one.jpg", "two.jpg"], false],
+  ]);
 });
 
 test("sheet rejection requires actionable revision instructions", async () => {

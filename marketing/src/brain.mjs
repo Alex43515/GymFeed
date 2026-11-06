@@ -1,21 +1,27 @@
 import OpenAI from "openai";
+import { creativeIntelligence, assertFreshHooks, attributionSummary } from "./creative-intelligence.mjs";
+import { CMO_OPERATING_SYSTEM, StudioBriefSchema, STUDIO_DEPARTMENTS } from "./studio-strategy.mjs";
 import { zodTextFormat } from "openai/helpers/zod";
-import { CreativeDecisionSchema, InstagramPlanSchema, QualityReviewSchema, SceneQualityReviewSchema, StoryReviewSchema, TrendResearchSchema, VideoPlanSchema, WeeklyReviewSchema } from "./contracts.mjs";
-import { CONTENT_REVISION_PROMPT, DAILY_BRAIN_PROMPT, QA_PROMPT, SCENE_QA_PROMPT, STORY_REVIEW_PROMPT, VIDEO_PRODUCTION_DIRECTION, TREND_RESEARCH_PROMPT, WEEKLY_CMO_PROMPT } from "./prompts.mjs";
+import { VideoAssetRevisionSchema, VIDEO_ASSET_REVISION_PROMPT, applyVideoRevision } from "./video-revisions.mjs";
+import { CreativeDecisionSchema, InstagramPlanSchema, LibraryCaptureDescriptionSchema, QualityReviewSchema, SceneQualityReviewSchema, StoryReviewSchema, TrendResearchSchema, VideoPlanSchema, WeeklyReviewSchema } from "./contracts.mjs";
+import { CONTENT_REVISION_PROMPT, DAILY_BRAIN_PROMPT, LIBRARY_CAPTURE_PROMPT, QA_PROMPT, SCENE_QA_PROMPT, STORY_REVIEW_PROMPT, VIDEO_PRODUCTION_DIRECTION, TREND_RESEARCH_PROMPT, WEEKLY_CMO_PROMPT } from "./prompts.mjs";
 import { validateVideoStory } from "./video-story.mjs";
+import { ContinuityLayoutSchema, CONTINUITY_DIRECTOR_PROMPT } from "./production-continuity.mjs";
+import { libraryCatalog, libraryCoverage } from "./asset-library.mjs";
 import { loadProductBrief, referenceScreenshotCatalog, verifiedScreenshotManifest } from "./product-brief.mjs";
 
 function compactValue(value, depth = 0, { arrayLimit = 12, stringLimit = 1200, depthLimit = 5 } = {}) {
   if (typeof value === "string") return value.length > stringLimit ? `${value.slice(0, stringLimit)}...` : value;
   if (value === null || typeof value !== "object") return value;
+  if (Buffer.isBuffer(value)) return `[binary buffer: ${value.length} bytes]`;
   if (depth >= depthLimit) return Array.isArray(value) ? `[${value.length} items]` : "[object omitted]";
   if (Array.isArray(value)) return value.slice(0, arrayLimit).map((item) => compactValue(item, depth + 1, { arrayLimit, stringLimit, depthLimit }));
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !["raw", "buffer", "input", "output"].includes(key))
+    .filter(([key]) => !["raw", "input", "output"].includes(key))
     .map(([key, item]) => [key, compactValue(item, depth + 1, { arrayLimit, stringLimit, depthLimit })]));
 }
 
-function compactContext(context, maxChars = 30000) {
+export function compactContext(context, maxChars = 30000) {
   const compacted = JSON.stringify(compactValue(context)) ?? "null";
   if (compacted.length <= maxChars) return compacted;
   return JSON.stringify({ truncated: true, context_excerpt: compacted.slice(0, maxChars - 80) });
@@ -36,6 +42,7 @@ function eventSummary(events = []) {
 
 function contentSnapshot(content) {
   const plan = content.decision?.content ?? content.content ?? {};
+  const generatedScenes = (plan.scenes ?? []).filter((scene) => scene.asset_type === "generated_video");
   return {
     id: content.id,
     content_key: content.content_key,
@@ -49,6 +56,22 @@ function contentSnapshot(content) {
     hook: plan.hook,
     objective: plan.objective,
     caption: typeof plan.caption === "string" ? plan.caption.slice(0, 500) : undefined,
+    product_feature: plan.product_feature ?? plan.product_features,
+    creative_signature: content.content_type === "video" ? {
+      format_family: plan.creative_treatment?.format_family ?? plan.narrative?.format,
+      setting_family: plan.creative_treatment?.setting_family,
+      visual_mode: plan.creative_treatment?.visual_mode,
+      hook_pattern: plan.creative_treatment?.hook_pattern,
+      cast_count: plan.cast?.length ?? 0,
+      opening_environment: generatedScenes[0]?.environment,
+      camera_language: plan.creative_treatment?.camera_language ?? generatedScenes.map((scene) => scene.camera).join("; "),
+      performance_style: plan.creative_treatment?.performance_style,
+    } : {
+      format: plan.format ?? content.content_type,
+      layout_style: plan.creative_direction?.layout_style,
+      visual_world: plan.creative_direction?.visual_world,
+      visual_types: (plan.slides ?? []).map((slide) => slide.visual_type),
+    },
     campaign: content.decision?.campaign ? compactValue(content.decision.campaign, 0, { arrayLimit: 5, stringLimit: 500, depthLimit: 3 }) : undefined,
     failure_reason: content.failure_reason,
   };
@@ -92,16 +115,31 @@ function costSummary(costs = []) {
 }
 
 export function buildAiDecisionContext(context, { weekly = false } = {}) {
+  const masters = (context.content ?? []).filter(item => !item.master_content_id);
+  const recentContent = masters.slice(0, weekly ? 30 : 21).map(contentSnapshot);
+  const creativeArchive = masters.slice(0, weekly ? 90 : 60).map(contentSnapshot);
   return {
-    brand: compactValue(context.brand, 0, { arrayLimit: 8, stringLimit: 700, depthLimit: 4 }),
-    learnings: (context.learnings ?? []).slice(0, weekly ? 20 : 10).map((item) => compactValue(item, 0, { arrayLimit: 6, stringLimit: 700, depthLimit: 4 })),
-    recent_content: (context.content ?? []).slice(0, weekly ? 30 : 14).map(contentSnapshot),
-    recent_publications: (context.publications ?? []).slice(0, weekly ? 40 : 16).map((item) => compactValue(item, 0, { arrayLimit: 6, stringLimit: 500, depthLimit: 4 })),
+    buffer: compactValue(context.buffer, 0, { arrayLimit: weekly ? 12 : 6, stringLimit: 600, depthLimit: 6 }),
+    ga4: compactValue(context.ga4, 0, { arrayLimit: weekly ? 20 : 10, stringLimit: 600, depthLimit: 5 }),
     events_30d: eventSummary(context.events_30d),
     events_7d: eventSummary(context.events_7d),
     costs: costSummary(context.costs),
-    ga4: compactValue(context.ga4, 0, { arrayLimit: weekly ? 20 : 10, stringLimit: 600, depthLimit: 5 }),
-    buffer: compactValue(context.buffer, 0, { arrayLimit: weekly ? 12 : 6, stringLimit: 600, depthLimit: 5 }),
+    attribution_30d: attributionSummary(context.events_30d),
+    recent_publications: (context.publications ?? []).slice(0, weekly ? 40 : 16).map((item) => compactValue(item, 0, { arrayLimit: 6, stringLimit: 500, depthLimit: 4 })),
+    brand: compactValue(context.brand, 0, { arrayLimit: 8, stringLimit: 700, depthLimit: 4 }),
+    learnings: (context.learnings ?? []).slice(0, weekly ? 20 : 10).map((item) => compactValue(item, 0, { arrayLimit: 6, stringLimit: 700, depthLimit: 4 })),
+    recent_content: recentContent,
+    creative_memory: creativeArchive.map((item) => ({
+      id: item.id,
+      content_type: item.content_type,
+      status: item.status,
+      hook: item.hook,
+      product_feature: item.product_feature,
+      creative_signature: item.creative_signature,
+      qa_score: item.qa_score,
+      failure_reason: item.failure_reason,
+    })),
+    creative_intelligence: creativeIntelligence(context.content, context.publications, context.events_30d),
     campaign: compactValue(context.campaign, 0, { arrayLimit: 12, stringLimit: 700, depthLimit: 5 }),
   };
 }
@@ -187,12 +225,13 @@ export function responseCost(response, config) {
 
 function topPerformanceThumbnails(context, limit = 6) {
   const platforms = Object.values(context.buffer?.platforms ?? {});
-  const posts = platforms.flatMap((platform) => platform.top_posts ?? []);
+  const posts = [...(context.buffer?.benchmark_posts ?? []), ...platforms.flatMap((platform) => platform.top_posts ?? [])];
   const unique = new Map();
   for (const post of posts) {
     let stableThumbnail = false;
     try {
-      stableThumbnail = new URL(post.thumbnail_url).hostname === "buffer-media-uploads.s3.amazonaws.com";
+      stableThumbnail = ["buffer-media-uploads.s3.amazonaws.com", "buffer-updates-media-backfill-bucket.s3.amazonaws.com", "i.ytimg.com"]
+        .includes(new URL(post.thumbnail_url).hostname);
     } catch (_) {
       stableThumbnail = false;
     }
@@ -256,7 +295,78 @@ export function normalizeVideoPlan(plan) {
   return normalizeFinalCtaScene(normalizeRequestedCaptureRequirements(plan));
 }
 
-export function validateCreativeDecision(research, decision, { appCaptures } = {}) {
+function normalizedWords(value) {
+  const ignored = new Set(["the", "a", "an", "and", "or", "to", "of", "in", "on", "with", "for", "gymfeed"]);
+  return new Set(String(value ?? "").toLowerCase().match(/[a-z0-9]+/g)?.filter((word) => word.length > 2 && !ignored.has(word)) ?? []);
+}
+
+function similarity(left, right) {
+  const a = normalizedWords(left), b = normalizedWords(right);
+  if (!a.size || !b.size) return 0;
+  const overlap = [...a].filter((word) => b.has(word)).length;
+  return overlap / new Set([...a, ...b]).size;
+}
+
+function validateCreativeVariety(decision, creativeMemory = []) {
+  assertFreshHooks(decision, creativeMemory);
+  const recentVideo = creativeMemory.find((item) => item.content_type === "video")?.creative_signature;
+  const treatment = decision.video.creative_treatment;
+  if (recentVideo) {
+    const repeatedAxes = [
+      recentVideo.format_family === treatment.format_family,
+      recentVideo.setting_family === treatment.setting_family,
+      recentVideo.visual_mode === treatment.visual_mode,
+      similarity(recentVideo.camera_language, treatment.camera_language) >= 0.65,
+      similarity(recentVideo.performance_style, treatment.performance_style) >= 0.65,
+    ].filter(Boolean).length;
+    if (repeatedAxes >= 3) {
+      throw new Error("Selected video repeats too many creative axes from the most recent video; change format, setting, camera language or performance style materially");
+    }
+  }
+  if (decision.instagram.format !== "carousel" || decision.instagram.slides.length < 4) {
+    throw new Error("The daily Instagram carousel must be a distinct 4-7 slide carousel");
+  }
+  if (decision.post.format !== "image" || decision.post.slides.length !== 1) {
+    throw new Error("The daily single-image post must use format image and exactly one slide");
+  }
+  if (decision.instagram.creative_direction.layout_style === decision.post.creative_direction.layout_style) {
+    throw new Error("Carousel and single-image post must use different layout styles");
+  }
+  if (similarity(decision.instagram.hook, decision.post.hook) >= 0.55
+    || similarity(decision.instagram.slides[0]?.headline, decision.post.slides[0]?.headline) >= 0.55) {
+    throw new Error("Carousel and single-image post repeat the same hook; give each asset a different creative job");
+  }
+  for (const type of ["carousel", "image"]) {
+    const plan = type === "carousel" ? decision.instagram : decision.post;
+    const recent = creativeMemory.find((item) => item.content_type === type)?.creative_signature;
+    if (recent?.layout_style && recent.layout_style === plan.creative_direction.layout_style
+      && similarity(recent.visual_world, plan.creative_direction.visual_world) >= 0.5) {
+      throw new Error(`The ${type} repeats the most recent ${type} layout and visual world; choose a materially different direction`);
+    }
+  }
+}
+
+// Library first: a daily plan may ask the owner for at most one new recording,
+// and only with a concrete shot and a reason the existing library cannot serve.
+export function validateCaptureRequests(plan, appCaptures) {
+  if (!appCaptures) return;
+  const library = new Set(appCaptures.map((capture) => capture.id));
+  const missing = [...new Set((plan.scenes ?? [])
+    .filter((scene) => scene.asset_type === "app_capture" && String(scene.capture_ref ?? "").startsWith("requested:") && !library.has(scene.capture_ref))
+    .map((scene) => scene.capture_ref))];
+  if (missing.length > 1) {
+    throw new Error(`Daily plan requests ${missing.length} new recordings (${missing.join(", ")}); reuse the asset library and request at most one new recording`);
+  }
+  const requests = new Map((plan.capture_requests ?? []).map((request) => [request.capture_ref, request]));
+  for (const ref of missing) {
+    const request = requests.get(ref);
+    if (!request || String(request.why_library_insufficient ?? "").trim().length < 20 || String(request.shot_instructions ?? "").trim().length < 20) {
+      throw new Error(`New recording ${ref} needs a capture_requests entry with shot_instructions and why_library_insufficient`);
+    }
+  }
+}
+
+export function validateCreativeDecision(research, decision, { appCaptures, allowProductLedVideo = false, creativeMemory = [] } = {}) {
   const evidenceIds = new Set(research.trends.map((trend) => trend.evidence_id));
   const modes = new Set(decision.candidate_concepts.map((candidate) => candidate.content_mode));
   if (![...modes].some((mode) => mode === "human_story" || mode === "human_demonstration" || mode === "hybrid")) {
@@ -292,6 +402,9 @@ export function validateCreativeDecision(research, decision, { appCaptures } = {
     throw new Error("Creative treatment people and product screen-time percentages must total 100");
   }
   if (treatment.visual_mode === "product_led") {
+    if (!allowProductLedVideo) {
+      throw new Error("Daily video cannot be a screen-only product tutorial unless the human reviewer explicitly requested that format");
+    }
     if (!["gymfeed_screenshot", "app_capture"].includes(treatment.opening_asset) || treatment.people_role !== "none" || treatment.people_screen_time_percent !== 0) {
       throw new Error("Product-led treatment must open on GymFeed UI and contain no generated people");
     }
@@ -299,12 +412,16 @@ export function validateCreativeDecision(research, decision, { appCaptures } = {
     throw new Error("Human-led and hybrid treatments must open on a human fal.ai video sequence");
   }
   validateVideoProductionPlan(decision.video, { appCaptures });
-  for (const [index, slide] of decision.instagram.slides.entries()) {
-    if (slide.visual_type === "product_screenshot" && !slide.screenshot_ref) {
-      throw new Error(`Instagram slide ${index + 1} requires a verified screenshot_ref`);
-    }
-    if (slide.visual_type !== "product_screenshot" && slide.screenshot_ref) {
-      throw new Error(`Instagram slide ${index + 1} cannot combine ${slide.visual_type} with screenshot_ref`);
+  validateCaptureRequests(decision.video, appCaptures);
+  validateCreativeVariety(decision, creativeMemory);
+  for (const [assetName, asset] of [["Carousel", decision.instagram], ["Post", decision.post]]) {
+    for (const [index, slide] of asset.slides.entries()) {
+      if (slide.visual_type === "product_screenshot" && !slide.screenshot_ref) {
+        throw new Error(`${assetName} slide ${index + 1} requires a verified screenshot_ref`);
+      }
+      if (slide.visual_type !== "product_screenshot" && slide.screenshot_ref) {
+        throw new Error(`${assetName} slide ${index + 1} cannot combine ${slide.visual_type} with screenshot_ref`);
+      }
     }
   }
   return decision;
@@ -373,14 +490,14 @@ export function validateVideoProductionPlan(plan, { appCaptures } = {}) {
     const words = String(scene.audio_strategy === "native" ? scene.spoken_dialogue : scene.voiceover_text ?? "").trim().split(/\s+/).filter(Boolean).length;
     if (words > Math.floor(retained * 3)) throw new Error(`Speech in ${scene.scene_id} is too long for its retained cut`);
   }
-  if (duration < 15 || duration > 30) throw new Error(`Video scene duration must total 15-30 seconds; received ${duration}s`);
+  if (duration < 8 || duration > 180) throw new Error(`Video scene duration must total 8-180 seconds; received ${duration}s`);
   if (productionV2 && Math.abs(duration - Number(plan.target_duration_seconds)) > 0.01) throw new Error("Scene durations must equal target_duration_seconds exactly");
   plan.target_duration_seconds = duration;
   if (plan.creative_treatment.visual_mode === "product_led" && generatedScenes > 0) {
     throw new Error("Product-led video cannot contain generated human footage");
   }
-  if (plan.creative_treatment.visual_mode !== "product_led" && (generatedScenes < 1 || generatedScenes > 4)) {
-    throw new Error("Human-led and hybrid videos require 1-4 deliberately connected generated shots");
+  if (plan.creative_treatment.visual_mode !== "product_led" && generatedScenes < 1) {
+    throw new Error("Human-led and hybrid videos require at least one generated shot");
   }
   if (generatedScenes > 0 && !plan.character_reference.required) {
     throw new Error("Generated human scenes require one locked character reference");
@@ -395,7 +512,10 @@ export function validateVideoProductionPlan(plan, { appCaptures } = {}) {
     }
   }
   const finalScene = plan.scenes.at(-1);
-  if (finalScene?.purpose !== "cta" || String(finalScene.overlay_text ?? "").trim().split(/\s+/).length < 5) {
+  const finalOverlay = String(finalScene?.overlay_text ?? "").trim();
+  const finalPayoff = [finalScene?.action, finalScene?.spoken_dialogue, finalScene?.voiceover_text, finalOverlay]
+    .filter(Boolean).join(" ").trim();
+  if (finalScene?.purpose !== "cta" || !finalOverlay || finalPayoff.split(/\s+/).filter(Boolean).length < 5) {
     throw new Error("The final video scene requires a meaningful payoff or punchline plus CTA");
   }
   return plan;
@@ -415,6 +535,12 @@ export function validateRevisedPlan(plan, contentType, { appCaptures } = {}) {
       throw new Error("Revised human-led and hybrid video must open on a human fal.ai sequence");
     }
     return validateVideoProductionPlan(plan, { appCaptures });
+  }
+  if (contentType === "image" && (plan.format !== "image" || plan.slides.length !== 1)) {
+    throw new Error("Revised single-image post must keep format image and exactly one slide");
+  }
+  if (contentType === "carousel" && (plan.format !== "carousel" || plan.slides.length < 4)) {
+    throw new Error("Revised carousel must keep format carousel and 4-7 slides");
   }
   for (const [index, slide] of plan.slides.entries()) {
     if (slide.visual_type === "product_screenshot" && !slide.screenshot_ref) {
@@ -514,7 +640,7 @@ export class MarketingBrain {
     });
     if (!researchResponse.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no parsed trend research"), [researchResponse], this.config);
 
-    const decisionContext = `Planning timestamp: ${planningTimestamp}\nCampaign publication date: ${publicationDate}\n\nQUANTITATIVE TREND RESEARCH:\n${compactContext(researchResponse.output_parsed, 12000)}\n\nVERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${compactContext(screenshots, 10000)}\n\nVERIFIED APP CAPTURE MANIFEST (recorded interactions only; an empty list means production assets are missing):\n${compactContext((context.app_captures ?? []).map(captureSnapshot), 10000)}\n\nARCHIVE VISUAL REFERENCE FILENAMES (design reference only; never use as screenshot_refs or live-product proof):\n${compactContext(referenceScreens, 5000)}\n\nBOUNDED FIRST-PARTY PERFORMANCE CONTEXT:\n${compactContext(aiContext, 24000)}`;
+    const decisionContext = `Planning timestamp: ${planningTimestamp}\nCampaign publication date: ${publicationDate}\n\nQUANTITATIVE TREND RESEARCH:\n${compactContext(researchResponse.output_parsed, 12000)}\n\nRECENT CREATIVE MEMORY — DO NOT REPEAT THESE FORMAT/SETTING/CAMERA/LAYOUT COMBINATIONS:\n${compactContext(aiContext.creative_memory, 16000)}\n\nVERIFIED CURRENT-BUILD SCREENSHOT MANIFEST:\n${compactContext(screenshots, 10000)}\n\nASSET LIBRARY — VERIFIED APP RECORDINGS (reuse first; times_used/last_used show recent repetition):\n${compactContext(libraryCatalog(context.app_captures ?? [], context.content ?? []), 14000)}\n\nLIBRARY COVERAGE BY FEATURE (recordings and verified screenshots; zero recordings marks a gap worth one new request):\n${compactContext(libraryCoverage(context.app_captures ?? [], screenshots), 3000)}\n\nARCHIVE VISUAL REFERENCE FILENAMES (design reference only; never use as screenshot_refs or live-product proof):\n${compactContext(referenceScreens, 5000)}\n\nBOUNDED FIRST-PARTY PERFORMANCE CONTEXT:\n${compactContext(aiContext, 30000)}`;
     const decisionResponses = [];
     let decision = null;
     let validationError = null;
@@ -529,8 +655,8 @@ export class MarketingBrain {
           model,
           reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
           input: [
-            systemInstructions(DAILY_BRAIN_PROMPT, productBrief),
-            { role: "user", content: `${decisionContext}${repairContext}` },
+            systemInstructions(`${DAILY_BRAIN_PROMPT}${this.config.MARKETING_REVIEW_MODE === "human" ? "\nOWNER REVIEW POLICY: AI QA is disabled. The owner reviews the completed video, carousel or image and decides Approve or Reject. Do not invent a minimum AI QA score, automatic QA repairs or paid retakes as production requirements. An additional generation is authorized only by a new human revision decision. Keep verifiable asset requirements and factual product claims." : ""}`, productBrief),
+            { role: "user", content: `CREATIVE INTELLIGENCE — SATURATION, PRIOR PREMISES AND MEASUREMENT LIMITS:\n${compactContext(aiContext.creative_intelligence, 11000)}\n\n${decisionContext}${repairContext}` },
           ],
           text: { format: zodTextFormat(CreativeDecisionSchema, "gymfeed_creative_decision") },
           max_output_tokens: this.config.OPENAI_CREATIVE_MAX_OUTPUT_TOKENS ?? 12000,
@@ -546,7 +672,11 @@ export class MarketingBrain {
           ...response.output_parsed,
           video: normalizeVideoPlan(response.output_parsed.video),
         };
-        validateCreativeDecision(researchResponse.output_parsed, normalized, { appCaptures: context.app_captures ?? [] });
+        validateCreativeDecision(researchResponse.output_parsed, normalized, {
+          appCaptures: context.app_captures ?? [],
+          allowProductLedVideo: context.allow_product_led_video === true,
+          creativeMemory: aiContext.creative_memory ?? [],
+        });
         decision = normalized;
         break;
       } catch (error) {
@@ -588,6 +718,28 @@ export class MarketingBrain {
     return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
   }
 
+  async describeLibraryCapture({ filename, durationSeconds, frames, contactSheet }) {
+    this.ensureConfigured();
+    const model = this.config.OPENAI_QA_MODEL ?? this.config.OPENAI_DAILY_MODEL;
+    const response = await this.client.responses.parse({
+      model,
+      reasoning: { effort: this.config.OPENAI_QA_REASONING_EFFORT },
+      input: [
+        systemInstructions(LIBRARY_CAPTURE_PROMPT),
+        { role: "user", content: [
+          { type: "input_text", text: `FILE: ${filename}
+DURATION: ${durationSeconds.toFixed(2)} seconds
+${frames} frames in row-major order, evenly sampled approximately every ${(durationSeconds / frames).toFixed(2)} seconds.` },
+          { type: "input_image", image_url: `data:image/jpeg;base64,${contactSheet.toString("base64")}`, detail: "high" },
+        ] },
+      ],
+      text: { format: zodTextFormat(LibraryCaptureDescriptionSchema, "gymfeed_library_capture") },
+      max_output_tokens: this.config.OPENAI_QA_MAX_OUTPUT_TOKENS ?? 6000,
+    });
+    if (!response.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no parsed library description"), [response], this.config);
+    return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
+  }
+
   async reviseContent(content, instructions, { app_captures = [], captureVisuals = [] } = {}) {
     this.ensureConfigured();
     const [productBrief, screenshots] = await Promise.all([
@@ -610,7 +762,7 @@ export class MarketingBrain {
           model,
           reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
           input: [
-            systemInstructions(CONTENT_REVISION_PROMPT, productBrief),
+            systemInstructions(`${CONTENT_REVISION_PROMPT}${this.config.MARKETING_REVIEW_MODE === "human" ? "\nOWNER REVIEW POLICY: Apply the human's requested revision and return it for human review. No AI QA score gate or automatic retake loop. Do not copy the entire revision screenplay into individual shot instructions." : ""}`, productBrief),
             { role: "user", content: [
               { type: "input_text", text: `${revisionContext}${repair}\nUse the source contact sheets to locate the actual action and result. Never infer timestamp positions from a filename or requested description. Keep unrelated screens out of retained ranges. Choose interior ranges with edit handles; keep capture-to-result order. Preserve people and dialogue unless the reviewer explicitly requests their removal.` },
               ...captureVisuals.flatMap((capture) => [
@@ -644,6 +796,42 @@ export class MarketingBrain {
     throw attachBilledUsage(validationError, responses, this.config);
   }
 
+  async reviseVideoAsset(content, instructions) {
+    this.ensureConfigured();
+    const model = this.config.OPENAI_CREATIVE_MODEL ?? this.config.OPENAI_DAILY_MODEL;
+    const response = await this.client.responses.parse({
+      model, reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+      input: [systemInstructions(VIDEO_ASSET_REVISION_PROMPT), { role: "user", content: JSON.stringify({
+        owner_instructions: instructions,
+        plan: content.decision.content,
+        available_media: (content.decision.generation?.scenes ?? []).map((scene) => ({
+          scene_id: scene.scene_id, saved: Boolean(scene.asset_url), duration: scene.technical?.duration_seconds,
+          transcript: scene.technical?.source_transcript ?? scene.technical?.transcript,
+        })),
+      }) }],
+      text: { format: zodTextFormat(VideoAssetRevisionSchema, "gymfeed_selective_video_revision") },
+      max_output_tokens: this.config.OPENAI_CREATIVE_MAX_OUTPUT_TOKENS ?? 12000,
+      ...cacheConfiguration(model),
+    });
+    try {
+      if (!response.output_parsed) throw new Error("OpenAI returned no selective revision plan");
+      const patch = VideoAssetRevisionSchema.parse(response.output_parsed);
+      const revised = applyVideoRevision(content, patch, instructions);
+      return { data: revised.plan, revisionScope: revised.scope, costUsd: responseCost(response, this.config), responseId: response.id };
+    } catch (error) { throw attachBilledUsage(error, [response], this.config); }
+  }
+
+  async compileContinuity(plan, previous = null) {
+    this.ensureConfigured();
+    const response=await this.client.responses.parse({model:this.config.OPENAI_CREATIVE_MODEL??this.config.OPENAI_DAILY_MODEL,
+      input:[systemInstructions(CONTINUITY_DIRECTOR_PROMPT),{role:"user",content:JSON.stringify({cast:plan.cast,reference:plan.character_reference,
+        scenes:plan.scenes.map(({scene_id,environment,lighting,character_ids,speaker_id,action})=>({scene_id,environment,lighting,character_ids,speaker_id,action})),previous})}],
+      text:{format:zodTextFormat(ContinuityLayoutSchema,"gymfeed_production_continuity")},max_output_tokens:4000});
+    try{if(!response.output_parsed)throw Error("No production continuity layout returned");
+      return {data:ContinuityLayoutSchema.parse(response.output_parsed),costUsd:responseCost(response,this.config),responseId:response.id};
+    }catch(error){throw attachBilledUsage(error,[response],this.config);}
+  }
+
   async sceneQualityReview(content, scene, visualUrls = []) {
     this.ensureConfigured();
     const model = this.config.OPENAI_QA_MODEL ?? this.config.OPENAI_DAILY_MODEL;
@@ -675,14 +863,29 @@ export class MarketingBrain {
       model,
       reasoning: { effort: this.config.OPENAI_WEEKLY_REASONING_EFFORT ?? this.config.OPENAI_REASONING_EFFORT },
       input: [
-        systemInstructions(WEEKLY_CMO_PROMPT),
-        { role: "user", content: compactContext(buildAiDecisionContext(context, { weekly: true }), 40000) },
+        systemInstructions(`${WEEKLY_CMO_PROMPT}\n${CMO_OPERATING_SYSTEM}`, await loadProductBrief()),
+        { role: "user", content: `CREATIVE INTELLIGENCE:\n${compactContext(creativeIntelligence(context.content, context.publications, context.events_30d), 11000)}\n\nPERFORMANCE CONTEXT:\n${compactContext(buildAiDecisionContext(context, { weekly: true }), 40000)}` },
       ],
       text: { format: zodTextFormat(WeeklyReviewSchema, "gymfeed_weekly_review") },
       max_output_tokens: this.config.OPENAI_WEEKLY_MAX_OUTPUT_TOKENS ?? 10000,
       ...cacheConfiguration(model),
     });
     if (!response.output_parsed) throw attachBilledUsage(new Error("OpenAI returned no parsed weekly review"), [response], this.config);
+    return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
+  }
+
+  async studioBrief(context, { department, instructions = "" }) {
+    this.ensureConfigured();
+    const definition = STUDIO_DEPARTMENTS[department];
+    if (!definition) throw new Error("Unknown marketing department");
+    const response = await this.client.responses.parse({
+      model: this.config.OPENAI_CREATIVE_MODEL ?? this.config.OPENAI_DAILY_MODEL,
+      reasoning: { effort: this.config.OPENAI_REASONING_EFFORT },
+      input: [systemInstructions(`${CMO_OPERATING_SYSTEM}\nDEPARTMENT: ${definition.title}\n${definition.instruction}\nReturn the structured brief only.`, await loadProductBrief()),
+        { role: "user", content: `Owner brief: ${instructions}\n\nCREATIVE INTELLIGENCE:\n${compactContext(creativeIntelligence(context.content, context.publications, context.events_30d), 11000)}\n\n${compactContext(buildAiDecisionContext(context, { weekly: true }), 36000)}` }],
+      text: { format: zodTextFormat(StudioBriefSchema, "gymfeed_studio_brief") }, max_output_tokens: 6000,
+    });
+    if (!response.output_parsed) throw attachBilledUsage(new Error("No parsed department brief"), [response], this.config);
     return { data: response.output_parsed, costUsd: responseCost(response, this.config), responseId: response.id };
   }
 }

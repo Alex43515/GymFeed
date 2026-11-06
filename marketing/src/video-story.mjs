@@ -19,13 +19,30 @@ export function validateVideoStory(plan) {
     if (!/^[a-z][a-z0-9_]{0,29}$/.test(actor.character_id) || !actor.appearance?.trim() || !actor.wardrobe?.trim() || !actor.voice_direction?.trim()) throw new Error("Each cast member needs a safe ID, appearance, wardrobe and voice direction");
   }
   const narrative = plan.narrative;
-  if (!narrative || !["dialogue_story", "solo_story", "explicit_tutorial"].includes(narrative.format)) throw new Error("Video requires an explicit narrative format");
+  if (!narrative || !["dialogue_story", "solo_story", "presenter_tutorial", "explicit_tutorial"].includes(narrative.format)) throw new Error("Video requires an explicit narrative format");
   for (const key of ["situation", "tension", "product_turn", "payoff"]) {
     if (String(narrative[key] ?? "").trim().length < 10) throw new Error(`Story is missing ${key}`);
   }
-  if (narrative.format !== "dialogue_story" && String(narrative.exception_reason ?? "").trim().length < 20) throw new Error("Non-dialogue story needs a specific creative exception_reason");
   const scenes = plan.scenes ?? [];
   const generated = scenes.filter((scene) => scene.asset_type === "generated_video");
+  if (plan.casting_policy === "young_adult_women") {
+    if (!generated.length || plan.creative_treatment?.visual_mode === "product_led") {
+      throw new Error("Owner casting policy requires a young adult woman to lead every video");
+    }
+    if (!cast.length || cast.some((actor) => actor.gender_presentation !== "woman"
+      || !["21-25", "26-30", "31-34"].includes(actor.age_range)
+      || actor.camera_presence !== "high")) {
+      throw new Error("Every generated cast member must be a camera-ready young adult woman aged 21-34");
+    }
+    const proofIndex = scenes.findIndex((scene) => scene.asset_type === "app_capture" && ["action", "product_proof"].includes(scene.purpose));
+    const nativeBefore = scenes.slice(0, proofIndex).some((scene) => scene.asset_type === "generated_video" && scene.audio_strategy === "native" && scene.spoken_dialogue?.trim());
+    const nativeAfter = proofIndex >= 0 && scenes.slice(proofIndex + 1).some((scene) => scene.asset_type === "generated_video"
+      && scene.audio_strategy === "native" && ["payoff", "cta"].includes(scene.purpose) && scene.spoken_dialogue?.trim());
+    const nativeSpeech = generated.filter((scene) => scene.audio_strategy === "native").map((scene) => scene.spoken_dialogue).join(" ");
+    if (!nativeBefore || !nativeAfter) throw new Error("Female-led video requires spoken human story beats before and after the real GymFeed product proof");
+    if (!/\bGymFeed\b/i.test(nativeSpeech)) throw new Error("The on-camera woman must name GymFeed naturally in spoken dialogue");
+    if (Number(plan.creative_treatment?.people_screen_time_percent) < 50) throw new Error("Female-led video must keep the presenter visible for at least half of the edit");
+  }
   if (plan.creative_treatment?.visual_mode === "product_led" && narrative.format !== "explicit_tutorial") throw new Error("Product-only video requires an explicit tutorial brief");
   if (generated.length && !cast.length) throw new Error("Generated story requires named cast references");
   for (const scene of scenes) {
@@ -46,6 +63,13 @@ export function validateVideoStory(plan) {
     const total = scenes.reduce((sum, scene) => sum + scene.duration_seconds, 0);
     if (generated.reduce((sum, scene) => sum + scene.duration_seconds, 0) < total / 2) throw new Error("Dialogue story must keep people on screen for at least half the edit");
   }
+  if (narrative.format === "presenter_tutorial") {
+    const presenterScenes = scenes.filter((scene) => scene.asset_type === "generated_video"
+      && scene.audio_strategy === "native" && scene.spoken_dialogue?.trim());
+    if (cast.length !== 1 || presenterScenes.length < 2) {
+      throw new Error("Presenter tutorial requires one on-camera woman with native setup and payoff beats");
+    }
+  }
   if (narrative.format === "explicit_tutorial" && generated.length) throw new Error("Explicit product tutorial must not contain generated actors");
   return plan;
 }
@@ -57,9 +81,16 @@ export function sceneCast(plan, scene) {
 export function sceneReferenceUrls(plan, scene, references) {
   if (typeof references === "string") return [references];
   if (!plan.cast?.length) return [];
-  return sceneCast(plan, scene).map((actor) => {
+  const result = sceneCast(plan, scene).map((actor) => {
     const url = references?.[actor.character_id];
     if (!url) throw new Error(`Missing locked reference for ${actor.character_id} in ${scene.scene_id}`);
     return url;
   });
+  if(references?._locations){
+    const id=scene.location_id??references._scene_locations?.find(item=>item.scene_id===scene.scene_id)?.location_id;
+    const set=references._locations[id];
+    if(!set)throw Error(`Missing locked set reference for ${scene.scene_id}`);
+    result.push(set);
+  }
+  return result;
 }

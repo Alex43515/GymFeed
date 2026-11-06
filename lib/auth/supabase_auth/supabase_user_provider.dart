@@ -1,6 +1,7 @@
 import '/backend/supabase/supabase.dart';
 import '../base_auth_user_provider.dart';
 import 'email_verification_service.dart';
+import 'account_deletion_service.dart';
 
 export '../base_auth_user_provider.dart';
 
@@ -33,12 +34,13 @@ class SupabaseAuthUser extends BaseAuthUser {
   Future? delete() async {
     // Client cannot delete its own auth row; the delete-account Edge Function
     // (service role) purges DB + storage + Bunny, then we sign out locally.
-    try {
-      await supabase.functions.invoke('delete-account');
-    } catch (_) {
-      // Function not deployed yet / offline — fall through to sign-out.
-    }
-    await supabase.auth.signOut();
+    final userId = user?.id;
+    if (userId == null) throw StateError('Sign in to delete your account.');
+    await deleteAccountAndSignOut(
+      deleteRemote: () => supabase.functions.invoke('delete-account'),
+      clearLocalData: () => clearDeletedAccountPreferences(userId),
+      signOut: () => supabase.auth.signOut(scope: SignOutScope.local),
+    );
   }
 
   @override

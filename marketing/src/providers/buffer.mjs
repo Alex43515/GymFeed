@@ -5,8 +5,8 @@ function mutationError(payload) {
   return null;
 }
 
-function metricsObject(metrics = []) {
-  return Object.fromEntries(metrics.map((metric) => [metric.type, metric.value]));
+function metricsObject(metrics) {
+  return Object.fromEntries((metrics ?? []).map((metric) => [metric.type, metric.value]));
 }
 
 function postPerformance(post) {
@@ -35,6 +35,9 @@ function postPerformance(post) {
     thumbnail_url: asset?.thumbnail || null,
     asset_source_url: asset?.source || null,
     duration_seconds: durationSeconds || null,
+    format: (post.assets ?? []).some(item => item.video || item.type === "video")
+      ? post.channelService === "instagram" ? "reel" : "video"
+      : (post.assets ?? []).length > 1 ? "carousel" : (post.assets ?? []).length ? "image" : "text",
     metrics,
     metric_units: Object.fromEntries((post.metrics ?? []).map((metric) => [metric.type, metric.unit])),
     metrics_updated_at: post.metricsUpdatedAt ?? null,
@@ -65,9 +68,10 @@ function platformSummary(posts) {
 }
 
 export class BufferPublisher {
-  constructor({ apiKey, baseUrl, shareMode, youtubePrivacy, fetchFn = fetch }) {
+  constructor({ apiKey, baseUrl, benchmarkPostIds = [], shareMode, youtubePrivacy, fetchFn = fetch }) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.benchmarkPostIds = [...new Set(benchmarkPostIds)];
     this.shareMode = shareMode;
     this.youtubePrivacy = youtubePrivacy;
     this.fetchFn = fetchFn;
@@ -122,19 +126,18 @@ export class BufferPublisher {
     return result;
   }
 
-  async performanceSummary({ limit = 100 } = {}) {
-    const channels = await this.listChannels();
-    if (!channels.length) return { status: "ok", posts_analyzed: 0, platforms: {} };
-    const organizationId = channels[0].organizationId;
+  async sentPostsPage({ organizationId, channelIds, limit = 100, after = null }) {
     const data = await this.graphql(`
-      query RecentSentPosts($input: PostsInput!, $first: Int!) {
-        posts(input: $input, first: $first) {
+      query RecentSentPosts($input: PostsInput!, $first: Int!, $after: String) {
+        posts(input: $input, first: $first, after: $after) {
           edges {
             node {
               id
               channelService
               status
               sentAt
+              schedulingType
+              notificationStatus
               createdAt
               text
               externalLink
@@ -154,16 +157,53 @@ export class BufferPublisher {
       }
     `, {
       first: Math.max(1, Math.min(100, limit)),
+      after,
       input: {
         organizationId,
         filter: {
-          channelIds: channels.map((channel) => channel.id),
+          channelIds,
           status: ["sent"],
         },
         sort: [{ field: "createdAt", direction: "desc" }],
       },
     });
-    const posts = (data.posts?.edges ?? []).map((edge) => edge.node);
+    return data.posts;
+  }
+
+  async analyticsPosts(channelIds) {
+    const channels = (await this.listChannels()).filter(channel => channelIds.includes(channel.id));
+    const posts = new Map();
+    for (const channel of channels) {
+      let after = null;
+      do {
+        const page = await this.sentPostsPage({ organizationId: channel.organizationId, channelIds: [channel.id], after });
+        for (const { node } of page?.edges ?? []) {
+          if (node.schedulingType === "notification" && node.notificationStatus !== "markedAsPublished") continue;
+          posts.set(node.id, postPerformance(node));
+        }
+        const next = page?.pageInfo?.hasNextPage ? page.pageInfo.endCursor : null;
+        if (page?.pageInfo?.hasNextPage && (!next || next === after)) throw new Error("Buffer returned an invalid pagination cursor");
+        after = next;
+      } while (after);
+    }
+    return [...posts.values()];
+  }
+
+  async performanceSummary({ limit = 100 } = {}) {
+    const channels = await this.listChannels();
+    if (!channels.length) return { status: "ok", posts_analyzed: 0, platforms: {} };
+    const organizationId = channels[0].organizationId;
+    const page = await this.sentPostsPage({ organizationId, limit, channelIds: channels.filter(channel => channel.organizationId === organizationId).map(channel => channel.id) });
+    const isPublished = post => post.schedulingType !== "notification" || post.notificationStatus === "markedAsPublished";
+    const recentPosts = (page?.edges ?? []).map((edge) => edge.node);
+    const posts = recentPosts.filter(isPublished);
+    const recent = new Map(recentPosts.map((post) => [post.id, post]));
+    const benchmarkResults = await Promise.allSettled(this.benchmarkPostIds.map((id) => recent.has(id)
+      ? Promise.resolve(recent.get(id))
+      : this.getPost(id)));
+    const benchmarkPosts = benchmarkResults
+      .filter((result) => result.status === "fulfilled" && result.value && isPublished(result.value))
+      .map((result) => postPerformance(result.value));
     const platforms = {};
     for (const service of ["instagram", "tiktok", "youtube"]) {
       platforms[service] = platformSummary(posts.filter((post) => post.channelService === service));
@@ -173,12 +213,16 @@ export class BufferPublisher {
       source: "buffer_first_party",
       collected_at: new Date().toISOString(),
       posts_analyzed: posts.length,
-      truncated: Boolean(data.posts?.pageInfo?.hasNextPage),
+      truncated: Boolean(page?.pageInfo?.hasNextPage),
+      benchmark_posts: benchmarkPosts,
+      benchmark_errors: benchmarkResults.flatMap((result, index) => result.status === "rejected"
+        ? [{ id: this.benchmarkPostIds[index], error: result.reason?.message ?? String(result.reason) }]
+        : []),
       platforms,
     };
   }
 
-  metadata(platform, { isVideo, mediaCount, title }) {
+  metadata(platform, { isVideo, mediaCount, title, music }) {
     if (platform === "instagram") {
       return {
         instagram: {
@@ -186,11 +230,13 @@ export class BufferPublisher {
           // the image asset count determines that Instagram publishes a carousel.
           type: isVideo ? "reel" : "post",
           shouldShareToFeed: true,
-          isAiGenerated: true,
+          ...(music?{stickerFields:{music:music.direction}}:{isAiGenerated:true}),
         },
       };
     }
-    if (platform === "tiktok") return { tiktok: { isAiGenerated: true } };
+    // Buffer's TikTok photo API rejects the video-only AI disclosure field.
+    // Photo posts disclose generated imagery in their caption instead.
+    if (platform === "tiktok") return isVideo ? { tiktok: { isAiGenerated: true } } : {};
     if (platform === "youtube") {
       return {
         youtube: {
@@ -207,8 +253,11 @@ export class BufferPublisher {
     throw new Error(`Unsupported Buffer platform: ${platform}`);
   }
 
-  async publish({ platform, accountId, text, mediaUrls, scheduledTime, title, isVideo = false }) {
+  async publish({ platform, accountId, text, mediaUrls, scheduledTime, title, isVideo = false, music = null }) {
     if (!mediaUrls?.length) throw new Error("Buffer publishing requires at least one media URL");
+    if(music&&(isVideo||!["instagram","tiktok"].includes(platform)||music.scheduling_type!=="notification"))throw Error("Native photo music requires notification publishing on Instagram/TikTok");
+    if(music&&!/AI[- ]generated imagery/i.test(text))text=`${text}\n\nAI-generated imagery.`;
+    if (platform === "tiktok" && !isVideo && !/AI[- ]generated imagery/i.test(text)) text = `${text}\n\nAI-generated imagery.`;
     const mode = scheduledTime ? "customScheduled" : this.shareMode;
     const input = {
       channelId: accountId,
@@ -216,9 +265,9 @@ export class BufferPublisher {
       assets: mediaUrls.map((url) => isVideo
         ? { video: { url, metadata: { thumbnailOffset: 1000, title: title || undefined } } }
         : { image: { url } }),
-      metadata: this.metadata(platform, { isVideo, mediaCount: mediaUrls.length, title }),
+      metadata: this.metadata(platform, { isVideo, mediaCount: mediaUrls.length, title, music }),
       mode,
-      schedulingType: "automatic",
+      schedulingType: music?"notification":"automatic",
       needsApproval: false,
       saveToDraft: false,
       aiAssisted: true,
@@ -231,7 +280,7 @@ export class BufferPublisher {
         createPost(input: $input) {
           __typename
           ... on PostActionSuccess {
-            post { id status dueAt externalLink sentAt error { message } }
+            post { id status dueAt externalLink sentAt schedulingType notificationStatus error { message } }
           }
           ... on MutationError { message }
         }
@@ -257,13 +306,25 @@ export class BufferPublisher {
       query GetPost($postId: PostId!) {
         post(input: { id: $postId }) {
           id
+          channelService
           status
-          dueAt
-          externalLink
           sentAt
+          createdAt
+          text
+          dueAt
+          schedulingType
+          notificationStatus
+          externalLink
           error { message }
           metrics { type name value unit }
           metricsUpdatedAt
+          assets {
+            type
+            source
+            thumbnail
+            ... on VideoAsset { video { durationMs width height } }
+            ... on ImageAsset { image { width height } }
+          }
         }
       }
     `, { postId });

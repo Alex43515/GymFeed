@@ -85,6 +85,36 @@ test("automatic plan intake gives a reviewable block reason when required Drive 
   }), /Required Drive video is missing: missing\.mp4/);
 });
 
+test("automatic plan intake accepts a longer recording instead of blocking approval", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "gymfeed-capture-range-"));
+  await writeFile(join(temp, "manifest.json"), JSON.stringify({ version: 1, captures: [] }));
+  const files = { video: { name: "proof.mp4", mimeType: "video/mp4", buffer: Buffer.from("video") } };
+  const listed = [{ id: "video", name: "proof.mp4", mimeType: "video/mp4", size: files.video.buffer.length }];
+  const ingestor = new CaptureIngestor({ root: temp, clientFactory: async () => fakeClient(files, listed), probeDuration: async () => 29.78 });
+  const result = await ingestor.importApprovedPlan({
+    driveFolderUrl: "https://drive.google.com/drive/folders/folder_123",
+    plan: { scenes: [{ asset_type: "app_capture", capture_ref: "requested:proof", source_start_seconds: 6, source_duration_seconds: 10, duration_seconds: 4, action: "show the result" }] },
+  });
+  assert.equal(result.captures[0].duration_seconds, 29.78);
+});
+
+test("intake keeps the library copy when a newer same-name upload is too short for the plan", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "gymfeed-capture-choice-"));
+  const long = Buffer.from("long recording");
+  const sha = createHash("sha256").update(long).digest("hex");
+  await writeFile(join(temp, "proof.mp4"), long);
+  await writeFile(join(temp, "manifest.json"), JSON.stringify({ version: 1, captures: [{ id: "requested:proof", filename: "proof.mp4", feature: "ai_coach", description: "Coach", duration_seconds: 38, recorded_interactions: ["Implement"], verified: true, marketing_safe: true, sha256: sha }] }));
+  const files = { short: { name: "proof.mp4", mimeType: "video/mp4", buffer: Buffer.from("short") } };
+  const listed = [{ id: "short", name: "proof.mp4", mimeType: "video/mp4", size: 5 }];
+  const ingestor = new CaptureIngestor({ root: temp, clientFactory: async () => fakeClient(files, listed), probeDuration: async () => 6.5 });
+  const result = await ingestor.importApprovedPlan({
+    driveFolderUrl: "https://drive.google.com/drive/folders/folder_123",
+    plan: { scenes: [{ asset_type: "app_capture", capture_ref: "requested:proof", source_start_seconds: 26, source_duration_seconds: 38, duration_seconds: 6, action: "Implement" }] },
+  });
+  assert.equal(result.captures[0].duration_seconds, 38);
+  assert.equal(await readFile(join(temp, "proof.mp4"), "utf8"), "long recording");
+});
+
 test("Drive intake persists and verifies the approved video and screenshots", async () => {
   const temp = await mkdtemp(join(tmpdir(), "gymfeed-capture-"));
   const captureRoot = join(temp, "captures");

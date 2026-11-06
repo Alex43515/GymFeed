@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 
 import '/backend/backend.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
+import '/backend/supabase/repositories/training_plan_repository.dart';
 import '/backend/supabase/repositories/training_repository.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/components/post_type_badge/post_type_badge.dart';
+import '/components/profile_follow_list/profile_follow_list_widget.dart';
 import '/components/profile_story_avatar/profile_story_avatar_widget.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import '/ai_workout/coach_events/event_details_sheet.dart';
+import '/workout/plans/training_plan_detail_widget.dart';
+import '/workout/plans/training_plan_models.dart';
+import '/workout/plans/training_plan_ui.dart';
 
 class MobileProfileView extends StatefulWidget {
   const MobileProfileView({
@@ -51,9 +56,10 @@ class MobileProfileView extends StatefulWidget {
 class _MobileProfileViewState extends State<MobileProfileView> {
   static const _green = Color(0xFF0EEA78);
   late int _tab;
-  late Stream<List<PostsRecord>> _posts;
-  late Stream<List<PostsRecord>> _tagged;
-  late Stream<List<UserTrainingsRecord>> _trainings;
+  Future<List<PostsRecord>>? _posts;
+  Future<List<PostsRecord>>? _tagged;
+  Future<List<UserTrainingsRecord>>? _trainings;
+  Future<List<TrainingPlan>>? _plans;
   Future<ProfileSocialState>? _social;
 
   String get _userId {
@@ -64,24 +70,43 @@ class _MobileProfileViewState extends State<MobileProfileView> {
   @override
   void initState() {
     super.initState();
-    _tab = widget.initialTab.clamp(0, 2);
+    _tab = widget.initialTab.clamp(0, 3);
     _bindData();
   }
 
   @override
   void didUpdateWidget(covariant MobileProfileView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.profile.reference.id != widget.profile.reference.id) {
+    final oldUid = oldWidget.profile.uid.trim();
+    final oldUserId = oldUid.isEmpty ? oldWidget.profile.reference.id : oldUid;
+    if (oldUserId != _userId) {
       _bindData();
     }
   }
 
   void _bindData() {
-    _posts = queryPostsByUserStream(_userId);
-    _tagged = queryTaggedPostsByUserStream(_userId);
-    _trainings = queryTrainingsByUserStream(_userId);
-    if (widget.followerCount == null || widget.followingCount == null) {
-      _social = ProfileRepository().socialState(_userId);
+    _posts = null;
+    _tagged = null;
+    _trainings = null;
+    _plans = null;
+    _social = widget.followerCount == null || widget.followingCount == null
+        ? ProfileRepository().socialState(_userId)
+        : null;
+  }
+
+  Future<void> _openConnections(int initialTab) async {
+    final userId = _userId;
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => ProfileFollowListWidget(
+        userId: userId,
+        initialTab: initialTab,
+      ),
+    ));
+    if (mounted && widget.isSelf && _userId == userId) {
+      final social = ProfileRepository().socialState(userId);
+      setState(() {
+        _social = social;
+      });
     }
   }
 
@@ -92,7 +117,7 @@ class _MobileProfileViewState extends State<MobileProfileView> {
       body: Stack(
         children: [
           CustomScrollView(
-            key: PageStorageKey<String>('profile-$_userId-$_tab'),
+            key: PageStorageKey<String>('profile-$_userId'),
             slivers: [
               SliverToBoxAdapter(child: _header()),
               SliverToBoxAdapter(child: _tabs()),
@@ -219,9 +244,11 @@ class _MobileProfileViewState extends State<MobileProfileView> {
                 children: [
                   _stat('Level', '★'),
                   _divider(),
-                  _stat('Followers', '$followers'),
+                  _stat('Followers', '$followers',
+                      onTap: () => _openConnections(0)),
                   _divider(),
-                  _stat('Following', '$following'),
+                  _stat('Following', '$following',
+                      onTap: () => _openConnections(1)),
                 ],
               ),
             ],
@@ -252,24 +279,32 @@ class _MobileProfileViewState extends State<MobileProfileView> {
     );
   }
 
-  Widget _stat(String label, String value) => Expanded(
-        child: Column(
-          children: [
-            Text(value,
-                style: TextStyle(
-                    color: label == 'Level' ? _green : Colors.black,
-                    fontSize: label == 'Level' ? 28 : 20,
-                    fontWeight: FontWeight.w800)),
-            Text(label,
-                style: const TextStyle(color: Colors.black, fontSize: 13)),
-          ],
+  Widget _stat(String label, String value, {VoidCallback? onTap}) => Expanded(
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(value,
+                    style: TextStyle(
+                        color: label == 'Level' ? _green : Colors.black,
+                        fontSize: label == 'Level' ? 28 : 20,
+                        fontWeight: FontWeight.w800)),
+                Text(label,
+                    style: const TextStyle(color: Colors.black, fontSize: 13)),
+              ],
+            ),
+          ),
         ),
       );
 
   Widget _divider() => Container(width: 1.5, height: 43, color: Colors.black);
 
   Widget _tabs() {
-    const labels = ['Posts', 'Tagged', 'Workout'];
+    const labels = ['Posts', 'Tagged', 'Workout', 'Plans'];
     return Row(
       children: List.generate(labels.length, (index) {
         final selected = _tab == index;
@@ -300,20 +335,32 @@ class _MobileProfileViewState extends State<MobileProfileView> {
 
   Widget _content() {
     if (_tab == 2) return _workoutList();
-    return _postGrid(_tab == 0 ? _posts : _tagged);
+    if (_tab == 3) return _planList();
+    if (_tab == 0) {
+      final posts = _posts ??= queryPostsByUserStream(_userId).first;
+      return _postGrid(posts,
+          emptyLabel: 'No posts yet',
+          onRetry: () => setState(() => _posts = null));
+    }
+    final tagged = _tagged ??= queryTaggedPostsByUserStream(_userId).first;
+    return _postGrid(tagged,
+        emptyLabel: 'No tagged posts yet',
+        onRetry: () => setState(() => _tagged = null));
   }
 
-  Widget _postGrid(Stream<List<PostsRecord>> stream) {
-    return StreamBuilder<List<PostsRecord>>(
-      stream: stream,
+  Widget _postGrid(Future<List<PostsRecord>> postsFuture,
+      {required String emptyLabel, required VoidCallback onRetry}) {
+    return FutureBuilder<List<PostsRecord>>(
+      future: postsFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
               height: 180,
               child: Center(child: CircularProgressIndicator(color: _green)));
         }
-        final posts = snapshot.data!;
-        if (posts.isEmpty) return _empty('No posts yet');
+        if (snapshot.hasError) return _loadError('posts', onRetry);
+        final posts = snapshot.data ?? const <PostsRecord>[];
+        if (posts.isEmpty) return _empty(emptyLabel);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -377,16 +424,58 @@ class _MobileProfileViewState extends State<MobileProfileView> {
     );
   }
 
-  Widget _workoutList() {
-    return StreamBuilder<List<UserTrainingsRecord>>(
-      stream: _trainings,
+  /// Published training plans by this athlete.
+  Widget _planList() {
+    final plans = _plans ??= TrainingPlanRepository().bySeller(_userId);
+    return FutureBuilder<List<TrainingPlan>>(
+      future: plans,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
               height: 180,
               child: Center(child: CircularProgressIndicator(color: _green)));
         }
-        final trainings = snapshot.data!;
+        if (snapshot.hasError) {
+          return _loadError('plans', () => setState(() => _plans = null));
+        }
+        final items = snapshot.data ?? const <TrainingPlan>[];
+        if (items.isEmpty) {
+          return _empty(widget.isSelf
+              ? 'Create a plan in Train → Training plans'
+              : 'No training plans yet');
+        }
+        return Column(
+          children: items
+              .map((plan) => TrainingPlanCard(
+                    plan: plan,
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      settings:
+                          const RouteSettings(name: 'profile-training-plan'),
+                      builder: (_) => TrainingPlanDetailWidget(planId: plan.id),
+                    )),
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _workoutList() {
+    final trainingsFuture =
+        _trainings ??= queryTrainingsByUserStream(_userId).first;
+    return FutureBuilder<List<UserTrainingsRecord>>(
+      future: trainingsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+              height: 180,
+              child: Center(child: CircularProgressIndicator(color: _green)));
+        }
+        if (snapshot.hasError) {
+          return _loadError(
+              'workouts', () => setState(() => _trainings = null));
+        }
+        final trainings = snapshot.data ?? const <UserTrainingsRecord>[];
         if (trainings.isEmpty) return _empty('No workouts yet');
         return Column(
           children: [
@@ -507,6 +596,16 @@ class _MobileProfileViewState extends State<MobileProfileView> {
       ],
     );
   }
+
+  Widget _loadError(String section, VoidCallback onRetry) => Center(
+        child: Column(
+          children: [
+            Text('Could not load $section.',
+                style: const TextStyle(color: Color(0xFFAAAAAA))),
+            TextButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ),
+      );
 
   Widget _empty(String label) => Container(
         height: 190,

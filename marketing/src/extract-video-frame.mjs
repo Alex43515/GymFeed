@@ -84,3 +84,33 @@ export async function extractVideoAudio(videoBuffer, { startSeconds = 0, duratio
     await rm(directory, { recursive: true, force: true });
   }
 }
+
+export async function detectSpeechSilences(videoBuffer) {
+  const directory = await mkdtemp(join(tmpdir(), "gymfeed-speech-pauses-"));
+  const input = join(directory, "source.mp4");
+  try {
+    await writeFile(input, videoBuffer);
+    const { stderr } = await execFileAsync(ffmpegExecutable, ["-hide_banner", "-i", input,
+      "-af", "silencedetect=noise=-32dB:d=0.15", "-f", "null", "-"], { maxBuffer: 2_000_000 });
+    const silences = []; let start = null;
+    for (const line of stderr.split("\n")) {
+      const from = line.match(/silence_start: ([\d.]+)/);
+      const to = line.match(/silence_end: ([\d.]+)/);
+      if (from) start = Number(from[1]);
+      if (to && start !== null) { silences.push({ start, end: Number(to[1]) }); start = null; }
+    }
+    return silences;
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+export async function padSpeechAudio(buffer, {startSeconds=1,durationSeconds}) {
+  const directory=await mkdtemp(join(tmpdir(),"gymfeed-locked-speech-"));
+  try{
+    const input=join(directory,"speech.mp3"),output=join(directory,"padded.mp3");
+    await writeFile(input,buffer);
+    const measured=await inspectVideo(buffer);
+    if(durationSeconds < startSeconds+measured.duration_seconds+.15)throw Error("Canonical speech would be truncated by the source window");
+    await execFileAsync(ffmpegExecutable,["-v","error","-y","-i",input,"-af",`adelay=${Math.round(startSeconds*1000)}:all=1,apad`,"-t",String(durationSeconds),"-ar","48000","-b:a","128k",output]);
+    return await readFile(output);
+  }finally{await rm(directory,{recursive:true,force:true});}
+}
