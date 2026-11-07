@@ -444,7 +444,7 @@ class _CoachFoodScannerWidgetState extends State<CoachFoodScannerWidget> {
         _loading = false;
       });
     } catch (_) {
-      if (decision.consumedFreeUse) {
+      if (decision.counted) {
         await (widget.refundUse?.call() ?? AiUsageGate().refundUse());
       }
       if (!mounted) return;
@@ -787,7 +787,7 @@ class _CoachEquipmentScannerWidgetState
       });
     } catch (error) {
       debugPrint('Equipment scan failed: $error');
-      if (decision.consumedFreeUse) {
+      if (decision.counted) {
         await (widget.refundUse?.call() ?? AiUsageGate().refundUse());
       }
       if (!mounted) return;
@@ -1156,7 +1156,7 @@ class _CoachTrainerWidgetState extends State<CoachTrainerWidget> {
             workoutProposal: reply.workoutProposal,
           )));
     } catch (_) {
-      if (decision.consumedFreeUse) {
+      if (decision.counted) {
         await (widget.refundUse?.call() ?? AiUsageGate().refundUse());
       }
       if (!mounted) return;

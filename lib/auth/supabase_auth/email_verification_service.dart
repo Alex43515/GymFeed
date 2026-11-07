@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import '/ai_workout/premium/invite_friends.dart' show PendingInvite;
+import '/ai_workout/premium/premium_access.dart' show PremiumAccess;
 
 import '/app_state.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
@@ -46,6 +48,7 @@ Map<String, dynamic> signupIdentityMetadata() {
     'full_name': state.signupName.trim(),
     'display_name': state.signupName.trim(),
     'username': state.signupUsername.trim(),
+    if (PendingInvite.value.isNotEmpty) 'invited_by': PendingInvite.value,
   };
 }
 
@@ -138,6 +141,16 @@ Future<void> completeVerifiedOnboarding() async {
     'email': user.email ?? state.pendingVerificationEmail,
   });
   await refreshCurrentUserProfile();
+
+  // "Who invited you?" from signup: +7 Premium days for both people.
+  // A failed or rejected invite never blocks onboarding.
+  final invitedBy = _text(metadata['invited_by']).isNotEmpty
+      ? _text(metadata['invited_by'])
+      : PendingInvite.value;
+  if (invitedBy.isNotEmpty) {
+    await PremiumAccess.instance.redeemInvite(invitedBy);
+    await PendingInvite.clear();
+  }
 
   await supabase.auth.updateUser(UserAttributes(data: {
     ...metadata,

@@ -129,7 +129,7 @@ class _CoachFoodScannerExperienceState
       });
     } catch (error) {
       debugPrint('Coach food scan failed: $error');
-      if (decision.consumedFreeUse) {
+      if (decision.counted) {
         await (widget.refundUse?.call() ?? AiUsageGate().refundUse());
       }
       if (!mounted) return;

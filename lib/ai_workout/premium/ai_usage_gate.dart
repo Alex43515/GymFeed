@@ -1,137 +1,88 @@
 import 'package:flutter/material.dart';
 
 import '/ai_workout/payment/payment_widget.dart';
+import '/ai_workout/premium/premium_access.dart';
 import '/backend/supabase/supabase.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
 
-const int freeAiUseLimit = 3;
-const String premiumEntitlementId = 'premium_features';
+export '/ai_workout/premium/premium_access.dart'
+    show
+        PremiumAccess,
+        PremiumStatus,
+        premiumEntitlementId,
+        premiumTesterUserIds,
+        hasPremiumTesterOverride;
 
-/// Explicit internal QA accounts that need uninterrupted access while testing
-/// the premium Coach tools. Keep this list UID-only so another account cannot
-/// gain access by changing a profile email or username.
-const Set<String> premiumTesterUserIds = <String>{
-  'a9fd1bc3-61a8-43a0-b96e-b6e7f0c6d060', // test@test.com
-};
-
-bool hasPremiumTesterOverride(String? userId) =>
-    userId != null && premiumTesterUserIds.contains(userId);
-
-class AiUsageStatus {
-  const AiUsageStatus({required this.isPremium, required this.used});
-
-  final bool isPremium;
-  final int used;
-
-  int get remaining => isPremium
-      ? freeAiUseLimit
-      : (freeAiUseLimit - used).clamp(0, freeAiUseLimit);
-  bool get exhausted => !isPremium && remaining == 0;
-}
-
-enum AiUseResult { premium, free, exhausted, unavailable }
+enum AiUseResult { premium, exhausted, dailyLimit, unavailable }
 
 class AiUseDecision {
-  const AiUseDecision(this.result, {this.remaining = 0});
+  const AiUseDecision(this.result, {this.counted = false});
 
   final AiUseResult result;
-  final int remaining;
 
-  bool get allowed =>
-      result == AiUseResult.premium || result == AiUseResult.free;
-  bool get consumedFreeUse => result == AiUseResult.free;
+  /// True when the server counted this action toward today's limit, so a
+  /// failed AI call should give it back with [AiUsageGate.refundUse].
+  final bool counted;
+
+  bool get allowed => result == AiUseResult.premium;
 }
 
+/// Gate in front of every AI action (food scan, equipment scan, trainer
+/// message, body scan).
+///
+/// Premium users, paid or on free Premium days, may use AI tools up to the
+/// server's daily fair-use limit. Everyone else sees the upgrade screen.
 class AiUsageGate {
-  SupabaseClient get _db => supabase;
-  String? get _uid => _db.auth.currentUser?.id;
+  AiUsageGate({
+    PremiumAccess? access,
+    Future<Map<String, dynamic>> Function(bool clientPaid)? claimer,
+    Future<void> Function()? refunder,
+  })  : _access = access ?? PremiumAccess.instance,
+        _claimer = claimer ?? _claimOnServer,
+        _refunder = refunder ?? _refundOnServer;
 
-  Future<bool> isPremium() async {
-    if (hasPremiumTesterOverride(_uid)) return true;
-    if (revenue_cat.activeEntitlementIds.contains(premiumEntitlementId)) {
-      return true;
-    }
-    return await revenue_cat.isEntitled(premiumEntitlementId) ?? false;
+  final PremiumAccess _access;
+  final Future<Map<String, dynamic>> Function(bool clientPaid) _claimer;
+  final Future<void> Function() _refunder;
+
+  static Future<Map<String, dynamic>> _claimOnServer(bool clientPaid) async {
+    final result = await supabase
+        .rpc('claim_ai_use', params: {'p_client_paid': clientPaid});
+    return Map<String, dynamic>.from(result as Map);
   }
 
-  Future<AiUsageStatus> loadStatus() async {
-    final premium = await isPremium();
-    if (premium) return const AiUsageStatus(isPremium: true, used: 0);
-    final uid = _uid;
-    if (uid == null) return const AiUsageStatus(isPremium: false, used: 0);
-    final row = await _db
-        .from('profile_private')
-        .select('button_click')
-        .eq('id', uid)
-        .maybeSingle();
-    return AiUsageStatus(
-      isPremium: false,
-      used: ((row?['button_click'] as num?)?.toInt() ?? 0).clamp(0, 1 << 30),
-    );
+  static Future<void> _refundOnServer() async {
+    await supabase.rpc('refund_ai_use');
   }
 
-  /// Atomically claims one shared free use with a compare-and-swap update.
-  /// Food scans, equipment scans, and trainer messages all call this method.
+  Future<bool> isPremium() => _access.isPremium();
+
+  Future<PremiumStatus> loadStatus({bool refresh = false}) =>
+      _access.status(refresh: refresh);
+
+  /// Asks the server to count one AI action.
   Future<AiUseDecision> claimUse() async {
-    if (await isPremium()) {
-      return const AiUseDecision(AiUseResult.premium,
-          remaining: freeAiUseLimit);
-    }
-    final uid = _uid;
-    if (uid == null) return const AiUseDecision(AiUseResult.unavailable);
-
+    final status = await _access.status();
     try {
-      for (var attempt = 0; attempt < 4; attempt++) {
-        final row = await _db
-            .from('profile_private')
-            .select('button_click')
-            .eq('id', uid)
-            .maybeSingle();
-        if (row == null) return const AiUseDecision(AiUseResult.unavailable);
-        final used = (row['button_click'] as num?)?.toInt() ?? 0;
-        if (used >= freeAiUseLimit) {
-          return const AiUseDecision(AiUseResult.exhausted);
-        }
-        final updated = await _db
-            .from('profile_private')
-            .update({'button_click': used + 1})
-            .eq('id', uid)
-            .eq('button_click', used)
-            .select('button_click');
-        if ((updated as List).isNotEmpty) {
-          return AiUseDecision(
-            AiUseResult.free,
-            remaining: (freeAiUseLimit - used - 1).clamp(0, freeAiUseLimit),
-          );
-        }
+      final result = await _claimer(status.paid);
+      if (result['allowed'] == true) {
+        return const AiUseDecision(AiUseResult.premium, counted: true);
       }
+      return switch (result['reason']?.toString()) {
+        'daily_limit' => const AiUseDecision(AiUseResult.dailyLimit),
+        _ => const AiUseDecision(AiUseResult.exhausted),
+      };
     } catch (_) {
+      // A paying user is never blocked by a counting hiccup.
+      if (status.paid) return const AiUseDecision(AiUseResult.premium);
       return const AiUseDecision(AiUseResult.unavailable);
     }
-    return const AiUseDecision(AiUseResult.unavailable);
   }
 
-  /// A network/AI failure does not cost the user one of their trial uses.
+  /// A network/AI failure does not count against today's limit.
   Future<void> refundUse() async {
-    final uid = _uid;
-    if (uid == null) return;
     try {
-      for (var attempt = 0; attempt < 4; attempt++) {
-        final row = await _db
-            .from('profile_private')
-            .select('button_click')
-            .eq('id', uid)
-            .maybeSingle();
-        final used = (row?['button_click'] as num?)?.toInt() ?? 0;
-        if (used <= 0) return;
-        final updated = await _db
-            .from('profile_private')
-            .update({'button_click': used - 1})
-            .eq('id', uid)
-            .eq('button_click', used)
-            .select('button_click');
-        if ((updated as List).isNotEmpty) return;
-      }
+      await _refunder();
     } catch (_) {}
   }
 }
@@ -145,6 +96,7 @@ Future<void> openPremiumUpgrade(BuildContext context) async {
       builder: (_) => const Scaffold(body: PaymentWidget(initialPremium: true)),
     ),
   );
+  PremiumAccess.instance.invalidate();
 }
 
 Future<bool> handleDeniedAiUse(
@@ -162,8 +114,12 @@ Future<bool> handleDeniedAiUse(
     return false;
   }
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Could not verify your free uses. Please try again.'),
+    SnackBar(
+      content: Text(
+        decision.result == AiUseResult.dailyLimit
+            ? "You've reached today's AI limit. It resets tomorrow."
+            : 'Could not verify your Premium access. Please try again.',
+      ),
     ),
   );
   return false;

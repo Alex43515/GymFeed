@@ -1,6 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/ai_workout/coach_home/coach_section_switcher.dart';
 import '/ai_workout/premium/ai_usage_gate.dart';
+import '/ai_workout/premium/invite_friends.dart';
 import '/backend/supabase/supabase.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -103,8 +104,9 @@ class CoachHomeWidget extends StatefulWidget {
     super.key,
     this.statsLoader,
     this.entitlementLoader,
-    this.usageStatusLoader,
+    this.premiumStatusLoader,
     this.upgradeOpener,
+    this.inviteOpener,
   });
 
   static String routeName = 'coachHome';
@@ -112,8 +114,9 @@ class CoachHomeWidget extends StatefulWidget {
 
   final Future<CoachStats> Function()? statsLoader;
   final Future<bool> Function()? entitlementLoader;
-  final Future<AiUsageStatus> Function()? usageStatusLoader;
+  final Future<PremiumStatus> Function()? premiumStatusLoader;
   final Future<void> Function()? upgradeOpener;
+  final Future<void> Function()? inviteOpener;
 
   static Future<CoachStats>? _cachedStats;
   static String? _cachedStatsUserId;
@@ -170,7 +173,7 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
   ];
 
   late Future<CoachStats> _statsFuture;
-  late Future<AiUsageStatus> _usageFuture;
+  late Future<PremiumStatus> _usageFuture;
   bool _openingTool = false;
 
   @override
@@ -180,23 +183,46 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
     _usageFuture = _loadUsageStatus();
   }
 
-  Future<AiUsageStatus> _loadUsageStatus() async {
-    if (widget.usageStatusLoader != null) {
-      return widget.usageStatusLoader!();
+  Future<PremiumStatus> _loadUsageStatus({bool refresh = false}) async {
+    if (widget.premiumStatusLoader != null) {
+      return widget.premiumStatusLoader!();
     }
     if (widget.entitlementLoader != null) {
       final premium = await widget.entitlementLoader!();
-      return AiUsageStatus(isPremium: premium, used: 0);
+      return PremiumStatus.paidOnly(premium);
     }
-    return AiUsageGate().loadStatus();
+    return PremiumAccess.instance.status(refresh: refresh);
   }
 
   Future<void> _refresh() async {
     _statsFuture =
         widget.statsLoader?.call() ?? CoachHomeWidget._loadStats(refresh: true);
-    _usageFuture = _loadUsageStatus();
+    _usageFuture = _loadUsageStatus(refresh: true);
     safeSetState(() {});
     await Future.wait<dynamic>([_statsFuture, _usageFuture]);
+  }
+
+  Future<void> _inviteFriend() async {
+    if (widget.inviteOpener != null) {
+      await widget.inviteOpener!();
+      return;
+    }
+    final status = await _usageFuture;
+    if (!mounted) return;
+    await shareReferralInvite(
+      context,
+      username: valueOrDefault(currentUserDocument?.username, ''),
+      bonusDays: status.referralBonusDays,
+    );
+  }
+
+  Future<void> _redeemInvite() async {
+    final result = await showRedeemInviteSheet(context);
+    if (!mounted || result == null) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(result.message)));
+    _usageFuture = _loadUsageStatus(refresh: true);
+    safeSetState(() {});
   }
 
   Future<void> _openTool(_CoachTool tool) async {
@@ -224,7 +250,7 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
       await openPremiumUpgrade(context);
     }
     if (!mounted) return;
-    _usageFuture = _loadUsageStatus();
+    _usageFuture = _loadUsageStatus(refresh: true);
     safeSetState(() {});
   }
 
@@ -298,12 +324,13 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
             ],
           ),
         ),
-        FutureBuilder<AiUsageStatus>(
+        FutureBuilder<PremiumStatus>(
           future: _usageFuture,
           builder: (context, snapshot) {
             final status =
-                snapshot.data ?? const AiUsageStatus(isPremium: false, used: 0);
+                snapshot.data ?? const PremiumStatus(paid: false);
             final active = status.isPremium;
+            final days = status.daysLeft;
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
               decoration: BoxDecoration(
@@ -330,9 +357,11 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
                   ),
                   const SizedBox(width: 7),
                   Text(
-                    active
+                    status.paid
                         ? 'Pro active'
-                        : '${status.remaining} free ${status.remaining == 1 ? 'use' : 'uses'} left',
+                        : active
+                            ? 'Pro · $days ${days == 1 ? 'day' : 'days'} left'
+                            : 'Free plan',
                     style: _style(
                       context,
                       size: 13,
@@ -350,95 +379,15 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
   }
 
   Widget _premiumBanner(BuildContext context) {
-    return FutureBuilder<AiUsageStatus>(
+    return FutureBuilder<PremiumStatus>(
       future: _usageFuture,
       builder: (context, snapshot) {
-        final status =
-            snapshot.data ?? const AiUsageStatus(isPremium: false, used: 0);
-        if (status.isPremium) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            decoration: BoxDecoration(
-              color: _iconSurface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFF176137)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.workspace_premium_rounded,
-                    color: Color(0xFF1FE276)),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Text('GymFeed Pro active · Unlimited AI tools',
-                      style:
-                          _style(context, size: 13, weight: FontWeight.w700)),
-                ),
-              ],
-            ),
-          );
-        }
-        return Container(
-          key: const ValueKey('coach-premium-banner'),
-          padding: const EdgeInsets.fromLTRB(17, 15, 15, 15),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF20E576), Color(0xFF35CD70)],
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: const Color(0x22000000),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.auto_awesome_rounded,
-                    color: Color(0xFF062313), size: 21),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Unlock GymFeed Pro',
-                        style: _style(context,
-                            size: 15,
-                            color: const Color(0xFF07180E),
-                            weight: FontWeight.w700)),
-                    const SizedBox(height: 3),
-                    Text(
-                      status.exhausted
-                          ? '0 uses left · Upgrade for unlimited access'
-                          : '${status.remaining} free uses left · Then upgrade',
-                      style: _style(context,
-                          size: 11, color: const Color(0xFF174C2B)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                key: const ValueKey('coach-upgrade'),
-                onPressed: _openUpgrade,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF06351C),
-                  foregroundColor: const Color(0xFF1FE276),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18)),
-                ),
-                child: Text('Upgrade',
-                    style: _style(context,
-                        size: 12,
-                        color: const Color(0xFF1FE276),
-                        weight: FontWeight.w700)),
-              ),
-            ],
-          ),
+        final status = snapshot.data ?? const PremiumStatus(paid: false);
+        return PremiumDaysCard(
+          status: status,
+          onUpgrade: _openUpgrade,
+          onInvite: _inviteFriend,
+          onRedeemInvite: _redeemInvite,
         );
       },
     );

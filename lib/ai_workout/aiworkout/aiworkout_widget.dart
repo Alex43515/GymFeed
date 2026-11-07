@@ -4,6 +4,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
+import '/ai_workout/premium/premium_access.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'aiworkout_model.dart';
@@ -526,7 +527,7 @@ class _AiworkoutWidgetState extends State<AiworkoutWidget> {
                 highlightColor: Colors.transparent,
                 onTap: () async {
                   final isEntitled =
-                      await revenue_cat.isEntitled('premium_features') ?? false;
+                      await PremiumAccess.instance.isPremium();
                   if (!isEntitled) {
                     await revenue_cat.loadOfferings();
                   }

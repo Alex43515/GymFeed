@@ -35,20 +35,33 @@ void main() {
         home: home,
       );
 
-  testWidgets('Coach hub shows shared uses, upgrade, and nutrition diary',
+  testWidgets('Coach hub shows free Premium days, invites, and nutrition diary',
       (tester) async {
     configurePhone(tester);
     var upgradeOpens = 0;
+    var inviteOpens = 0;
     await tester.pumpWidget(phoneApp(CoachHomeWidget(
       statsLoader: () async => const CoachStats(),
-      usageStatusLoader: () async =>
-          const AiUsageStatus(isPremium: false, used: 0),
+      premiumStatusLoader: () async => PremiumStatus.fromServer(const {
+        'seconds_left': 5 * 86400 - 3600,
+        'trial_days': 7,
+        'invites_used': 1,
+        'invites_max': 4,
+        'referral_bonus_days': 7,
+        'can_redeem_invite': false,
+      }, paid: false),
       upgradeOpener: () async => upgradeOpens += 1,
+      inviteOpener: () async => inviteOpens += 1,
     )));
     await tester.pumpAndSettle();
 
-    expect(find.text('3 free uses left'), findsOneWidget);
-    expect(find.textContaining('3 free uses left'), findsWidgets);
+    expect(find.text('Pro · 5 days left'), findsOneWidget);
+    expect(find.text('Premium · 5 days left'), findsOneWidget);
+    expect(find.text('Invite friends: +7 days each · 1 of 4 used'),
+        findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('coach-invite-friend')));
+    await tester.pumpAndSettle();
+    expect(inviteOpens, 1);
     await tester.tap(find.byKey(const ValueKey('coach-upgrade')));
     await tester.pumpAndSettle();
     expect(upgradeOpens, 1);
@@ -71,19 +84,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Coach hub shows zero free uses after the trial is exhausted',
+  testWidgets('Coach hub explains when the free Premium days have ended',
       (tester) async {
     configurePhone(tester);
     await tester.pumpWidget(phoneApp(CoachHomeWidget(
       statsLoader: () async => const CoachStats(),
-      usageStatusLoader: () async =>
-          const AiUsageStatus(isPremium: false, used: 3),
+      premiumStatusLoader: () async => PremiumStatus.fromServer(const {
+        'seconds_left': 0,
+        'trial_days': 7,
+        'invites_used': 4,
+        'invites_max': 4,
+        'can_redeem_invite': false,
+      }, paid: false),
       upgradeOpener: () async {},
     )));
     await tester.pumpAndSettle();
 
-    expect(find.text('0 free uses left'), findsOneWidget);
-    expect(find.textContaining('0 uses left'), findsOneWidget);
+    expect(find.text('Free plan'), findsOneWidget);
+    expect(find.text('Your free Premium has ended'), findsOneWidget);
+    expect(find.text('Invite friends: +7 days each · 4 of 4 used'),
+        findsOneWidget);
+    // All four invites are used, so there is nothing left to share.
+    expect(find.byKey(const ValueKey('coach-invite-friend')), findsNothing);
+    expect(find.byKey(const ValueKey('coach-upgrade')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('paid subscribers see Pro active instead of days',
+      (tester) async {
+    configurePhone(tester);
+    await tester.pumpWidget(phoneApp(CoachHomeWidget(
+      statsLoader: () async => const CoachStats(),
+      premiumStatusLoader: () async =>
+          PremiumStatus.fromServer(const {'seconds_left': 0}, paid: true),
+      upgradeOpener: () async {},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pro active'), findsOneWidget);
+    expect(find.text('GymFeed Pro active · Unlimited AI tools'), findsOneWidget);
+    expect(find.byKey(const ValueKey('coach-premium-banner')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

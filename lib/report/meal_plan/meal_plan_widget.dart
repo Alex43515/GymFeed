@@ -4,6 +4,7 @@ import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
+import '/ai_workout/premium/premium_access.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -378,10 +379,7 @@ class _MealPlanWidgetState extends State<MealPlanWidget> {
                                                           ),
                                                           onPressed: () async {
                                                             final isEntitled =
-                                                                await revenue_cat
-                                                                        .isEntitled(
-                                                                            'premium_features') ??
-                                                                    false;
+                                                                await PremiumAccess.instance.isPremium();
                                                             if (!isEntitled) {
                                                               await revenue_cat
                                                                   .loadOfferings();
@@ -616,10 +614,7 @@ class _MealPlanWidgetState extends State<MealPlanWidget> {
                                                           ),
                                                           onPressed: () async {
                                                             final isEntitled =
-                                                                await revenue_cat
-                                                                        .isEntitled(
-                                                                            'premium_features') ??
-                                                                    false;
+                                                                await PremiumAccess.instance.isPremium();
                                                             if (!isEntitled) {
                                                               await revenue_cat
                                                                   .loadOfferings();
@@ -911,10 +906,7 @@ class _MealPlanWidgetState extends State<MealPlanWidget> {
                                                           ),
                                                           onPressed: () async {
                                                             final isEntitled =
-                                                                await revenue_cat
-                                                                        .isEntitled(
-                                                                            'premium_features') ??
-                                                                    false;
+                                                                await PremiumAccess.instance.isPremium();
                                                             if (!isEntitled) {
                                                               await revenue_cat
                                                                   .loadOfferings();
@@ -1149,10 +1141,7 @@ class _MealPlanWidgetState extends State<MealPlanWidget> {
                                                           ),
                                                           onPressed: () async {
                                                             final isEntitled =
-                                                                await revenue_cat
-                                                                        .isEntitled(
-                                                                            'premium_features') ??
-                                                                    false;
+                                                                await PremiumAccess.instance.isPremium();
                                                             if (!isEntitled) {
                                                               await revenue_cat
                                                                   .loadOfferings();

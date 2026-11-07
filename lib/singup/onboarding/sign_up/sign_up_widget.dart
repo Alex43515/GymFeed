@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '/ai_workout/premium/invite_friends.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -31,6 +32,9 @@ class _SignUpWidgetState extends State<SignUpWidget> {
   int _usernameRequest = 0;
   _UsernameAvailability _usernameAvailability = _UsernameAvailability.idle;
 
+  /// Optional "Who invited you?" username. Redeemed after email verification.
+  final _invitedByController = TextEditingController(text: PendingInvite.value);
+
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -53,6 +57,7 @@ class _SignUpWidgetState extends State<SignUpWidget> {
   @override
   void dispose() {
     _usernameDebounce?.cancel();
+    _invitedByController.dispose();
     _model.dispose();
 
     super.dispose();
@@ -326,6 +331,18 @@ class _SignUpWidgetState extends State<SignUpWidget> {
                           validator: _model.emailAddressTextControllerValidator
                               .asValidator(context),
                         ),
+                        const SizedBox(height: 14.0),
+                        TextFormField(
+                          key: const ValueKey('signup-invited-by'),
+                          controller: _invitedByController,
+                          autocorrect: false,
+                          textInputAction: TextInputAction.done,
+                          decoration: fieldDecoration(
+                              'Who invited you? (optional)',
+                              fieldError: false),
+                          style: fieldTextStyle(false),
+                          cursorColor: theme.primary,
+                        ),
                         const SizedBox(height: 40.0),
                         FFButtonWidget(
                           onPressed: () async {
@@ -372,6 +389,8 @@ class _SignUpWidgetState extends State<SignUpWidget> {
                             FFAppState().signupEmail =
                                 _model.emailAddressTextController.text.trim();
                             FFAppState().update(() {});
+                            await PendingInvite.save(_invitedByController.text);
+                            if (!context.mounted) return;
 
                             context.goNamed(SignUpPasswordWidget.routeName);
                           },
