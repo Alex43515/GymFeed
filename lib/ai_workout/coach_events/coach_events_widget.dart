@@ -394,6 +394,39 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
     );
   }
 
+  /// Nobody has posted an event yet: invite the user to host the first one.
+  Widget _noEventsYet() => Padding(
+        key: const Key('events-empty-host-first'),
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 12),
+        child: Column(
+          children: [
+            const Icon(Icons.event_available_rounded, color: _muted, size: 34),
+            const SizedBox(height: 10),
+            Text(
+              'No events near you yet. Founding members can host the first one.',
+              textAlign: TextAlign.center,
+              style: _text(size: 14),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              key: const Key('events-empty-create-button'),
+              onPressed: () =>
+                  context.pushNamed(ScheduleTrainingWidget.routeName),
+              style: FilledButton.styleFrom(
+                backgroundColor: FlutterFlowTheme.of(context).primary,
+                foregroundColor: const Color(0xFF080808),
+              ),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: Text('Create event',
+                  style: _text(
+                      size: 13,
+                      color: const Color(0xFF080808),
+                      weight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+
   Widget _loadingCard({double height = 210}) => Container(
         height: height,
         decoration: BoxDecoration(
@@ -617,13 +650,13 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
                           style: _text(color: _muted),
                         ),
                       )
+                    else if (all.isEmpty)
+                      _noEventsYet()
                     else if (visible.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 50),
                         child: Text(
-                          all.isEmpty
-                              ? 'No events have been posted yet.'
-                              : _query.trim().isNotEmpty
+                          _query.trim().isNotEmpty
                                   ? 'No events match “${_query.trim()}”.'
                                   : 'No events match this filter.',
                           textAlign: TextAlign.center,

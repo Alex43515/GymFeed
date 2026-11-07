@@ -4,6 +4,7 @@ import '/backend/supabase/repositories/notification_repository.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
 import '/backend/supabase/supabase_records.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/pages/core_pages/explore_page/explore_page_widget.dart';
 import '/pages/core_pages/profile_other/profile_other_widget.dart';
 import '/pages/posts/post_details/post_details_widget.dart';
 
@@ -158,7 +159,11 @@ class _NotificationsWidgetState extends State<NotificationsWidget> {
                         onRetry: () => setState(() {}),
                       );
                     }
-                    final values = _filtered(snapshot.data ?? const []);
+                    final all = snapshot.data ?? const <AppNotification>[];
+                    if (all.isEmpty) {
+                      return _noNotificationsYet();
+                    }
+                    final values = _filtered(all);
                     if (values.isEmpty) {
                       return _emptyState();
                     }
@@ -462,6 +467,59 @@ class _NotificationsWidgetState extends State<NotificationsWidget> {
       },
     );
   }
+
+  /// A brand new account: nothing has happened yet, so point at Suggested.
+  Widget _noNotificationsYet() => Center(
+        child: Padding(
+          key: const Key('notifications-empty-suggested'),
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 62,
+                height: 62,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF102D20),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.notifications_none_rounded,
+                    color: _green, size: 30),
+              ),
+              const SizedBox(height: 15),
+              const Text(
+                'Nothing here yet. Follow a few people from Suggested and this fills up fast.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                key: const Key('notifications-see-suggested'),
+                onPressed: () => context.pushNamed(
+                  ExplorePageWidget.routeName,
+                  queryParameters: {'tab': '1'},
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text(
+                  'See suggested',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 
   Widget _emptyState() => Center(
         child: Padding(

@@ -63,3 +63,24 @@ Future<void> shareGymFeedTrainingPlan({
     sharePositionOrigin: sharePositionOrigin,
   );
 }
+
+const gymFeedDownloadUrl = '$gymFeedWebOrigin/download';
+
+/// Text a user sends to bring a friend (gym partner) to GymFeed.
+String gymFeedInviteText({String username = ''}) {
+  final handle = username.trim();
+  final from = handle.isEmpty ? '' : " I'm @$handle.";
+  return 'Join me on GymFeed, the first 1,000 get Founding perks.$from\n'
+      '$gymFeedDownloadUrl';
+}
+
+Future<void> shareGymFeedInvite({
+  String username = '',
+  Rect? sharePositionOrigin,
+}) {
+  return Share.share(
+    gymFeedInviteText(username: username),
+    subject: 'Join me on GymFeed',
+    sharePositionOrigin: sharePositionOrigin,
+  );
+}

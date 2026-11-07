@@ -5,6 +5,7 @@ import '/backend/backend.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
 import '/backend/supabase/repositories/training_plan_repository.dart';
 import '/backend/supabase/repositories/training_repository.dart';
+import '/components/founding_badge/founding_badge.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/components/post_type_badge/post_type_badge.dart';
 import '/components/profile_story_avatar/profile_story_avatar_widget.dart';
@@ -183,6 +184,10 @@ class _MobileProfileViewState extends State<MobileProfileView> {
                         color: Colors.black,
                         fontSize: 20,
                         fontWeight: FontWeight.w700)),
+              FoundingBadge(
+                userId: _userId,
+                padding: const EdgeInsets.only(top: 6),
+              ),
               if (widget.profile.bio.trim().isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(widget.profile.bio,

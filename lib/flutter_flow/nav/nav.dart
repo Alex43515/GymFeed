@@ -504,7 +504,13 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
               name: ExplorePageWidget.routeName,
               path: ExplorePageWidget.routePath,
               requireAuth: true,
-              builder: (context, params) => ExplorePageWidget(),
+              builder: (context, params) => ExplorePageWidget(
+                initialTab: params.getParam(
+                      'tab',
+                      ParamType.int,
+                    ) ??
+                    0,
+              ),
             ),
             FFRoute(
               name: BlockedPageWidget.routeName,

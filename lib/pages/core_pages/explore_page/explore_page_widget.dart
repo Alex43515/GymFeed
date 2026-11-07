@@ -12,7 +12,10 @@ import '/pages/core_pages/profile_other/profile_other_widget.dart';
 import '/pages/posts/post_details/post_details_widget.dart';
 
 class ExplorePageWidget extends StatefulWidget {
-  const ExplorePageWidget({super.key});
+  const ExplorePageWidget({super.key, this.initialTab = 0});
+
+  /// 0 = posts, 1 = people (suggested accounts).
+  final int initialTab;
   static const String routeName = 'ExplorePage';
   static const String routePath = 'explorePage';
   @override
@@ -31,7 +34,11 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 1),
+    );
     _posts = queryPostsRecordOnce(limit: 150);
   }
 

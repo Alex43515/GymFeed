@@ -1,6 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
+import '/components/founding_badge/founding_badge.dart';
 import '/components/personal_post_options/personal_post_options_widget.dart';
 import '/components/post_type_badge/post_type_badge.dart';
 import '/components/send_post/send_post_widget.dart';
@@ -290,22 +291,31 @@ class _PostFoodWidgetState extends State<PostFoodWidget>
                                     onTap: () async {
                                       _openAuthorProfile(columnUsersRecord);
                                     },
-                                    child: Text(
-                                      valueOrDefault<String>(
-                                        columnUsersRecord.username,
-                                        'user',
-                                      ),
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            fontFamily: 'Poppins',
-                                            fontSize: MediaQuery.sizeOf(context)
-                                                        .width <
-                                                    768.0
-                                                ? 15.0
-                                                : 20.0,
-                                            letterSpacing: 0.0,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          valueOrDefault<String>(
+                                            columnUsersRecord.username,
+                                            'user',
                                           ),
+                                          style: FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .override(
+                                                fontFamily: 'Poppins',
+                                                fontSize: MediaQuery.sizeOf(context)
+                                                            .width <
+                                                        768.0
+                                                    ? 15.0
+                                                    : 20.0,
+                                                letterSpacing: 0.0,
+                                              ),
+                                        ),
+                                        FoundingBadge(
+                                          userId: widget.postFood?.postUser?.id ?? '',
+                                          compact: true,
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   if (widget.postFood?.location != null &&

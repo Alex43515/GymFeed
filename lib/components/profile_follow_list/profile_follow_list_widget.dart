@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '/auth/firebase_auth/auth_util.dart';
+import '/backend/share_links.dart';
 import '/backend/supabase/database/profile.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
 import '/backend/supabase/supabase_records.dart';
@@ -118,6 +120,8 @@ class _ProfileFollowListWidgetState extends State<ProfileFollowListWidget>
             );
           }
           final data = snapshot.data ?? const _FollowLists();
+          final isOwnList =
+              widget.userId.isNotEmpty && widget.userId == currentUserUid;
           return TabBarView(
             controller: _tabs,
             children: [
@@ -125,6 +129,9 @@ class _ProfileFollowListWidgetState extends State<ProfileFollowListWidget>
                 profiles: data.followers,
                 emptyLabel: 'No followers yet',
                 onRelationshipChanged: _reload,
+                emptyInvite: isOwnList
+                    ? _EmptyInvite(username: data.owner?.username ?? '')
+                    : null,
               ),
               _ProfileList(
                 profiles: data.following,
@@ -144,16 +151,21 @@ class _ProfileList extends StatelessWidget {
     required this.profiles,
     required this.emptyLabel,
     required this.onRelationshipChanged,
+    this.emptyInvite,
   });
 
   final List<Profile> profiles;
   final String emptyLabel;
   final Future<void> Function() onRelationshipChanged;
 
+  /// Shown instead of [emptyLabel] on your own empty followers list.
+  final Widget? emptyInvite;
+
   @override
   Widget build(BuildContext context) {
     if (profiles.isEmpty) {
-      return _Status(icon: Icons.people_outline_rounded, label: emptyLabel);
+      return emptyInvite ??
+          _Status(icon: Icons.people_outline_rounded, label: emptyLabel);
     }
     return RefreshIndicator(
       onRefresh: onRelationshipChanged,
@@ -197,6 +209,58 @@ class _Status extends StatelessWidget {
             TextButton(onPressed: action, child: const Text('Try again')),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Empty followers list on your own profile: early, not abandoned.
+class _EmptyInvite extends StatelessWidget {
+  const _EmptyInvite({required this.username});
+
+  final String username;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          key: const Key('followers-empty-invite'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.people_outline_rounded,
+                color: theme.secondaryText, size: 34),
+            const SizedBox(height: 10),
+            Text(
+              "You're early. Invite your gym partner while Founding spots last.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: theme.primaryText, fontSize: 14),
+            ),
+            const SizedBox(height: 14),
+            Builder(
+              builder: (buttonContext) => FilledButton.icon(
+                key: const Key('followers-empty-invite-button'),
+                onPressed: () {
+                  final box = buttonContext.findRenderObject() as RenderBox?;
+                  shareGymFeedInvite(
+                    username: username,
+                    sharePositionOrigin: box == null
+                        ? null
+                        : box.localToGlobal(Offset.zero) & box.size,
+                  );
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.primary,
+                  foregroundColor: Colors.black,
+                ),
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                label: const Text('Invite'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

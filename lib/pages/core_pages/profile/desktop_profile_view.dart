@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/components/founding_badge/founding_badge.dart';
 import '/components/editsettings/editsettings_widget.dart';
 import '/components/qr/qr_widget.dart';
 import '/components/post_type_badge/post_type_badge.dart';
@@ -159,6 +160,11 @@ class _DesktopProfileViewState extends State<DesktopProfileView> {
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
+                      ),
+                      FoundingBadge(
+                        userId: currentUserUid,
+                        onDark: true,
+                        padding: const EdgeInsets.only(top: 6),
                       ),
                       const SizedBox(height: 5),
                       Text(
