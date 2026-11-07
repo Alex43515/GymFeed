@@ -203,6 +203,12 @@ class PostsRecord extends FirestoreRecord {
   String? _feedAuthorPhotoUrl;
   String get feedAuthorPhotoUrl => _feedAuthorPhotoUrl ?? '';
 
+  /// 'following' (you + people you follow) or 'suggested' (everyone else),
+  /// from feed_page(). Empty for posts loaded any other way.
+  String? _feedSection;
+  String get feedSection => _feedSection ?? '';
+  bool get isSuggestedInFeed => _feedSection == 'suggested';
+
   UsersRecord? get feedAuthor {
     final reference = postUser;
     if (reference == null ||
@@ -262,6 +268,7 @@ class PostsRecord extends FirestoreRecord {
     _feedAuthorDisplayName =
         snapshotData['feed_author_display_name'] as String?;
     _feedAuthorPhotoUrl = snapshotData['feed_author_photo_url'] as String?;
+    _feedSection = snapshotData['feed_section'] as String?;
   }
 
   static CollectionReference get collection =>
@@ -283,10 +290,16 @@ class PostsRecord extends FirestoreRecord {
   }
 
   /// Build a PostsRecord straight from a Supabase `posts` row.
-  static PostsRecord fromSupabase(Map<String, dynamic> row) {
+  static PostsRecord fromSupabase(
+    Map<String, dynamic> row, {
+    String? feedSection,
+  }) {
     final id = (row['id'] ?? '').toString();
-    return PostsRecord.getDocumentFromData(
-        _supaPostData(row), supaRef('posts', id));
+    final data = _supaPostData(row);
+    if (feedSection != null && feedSection.isNotEmpty) {
+      data['feed_section'] = feedSection;
+    }
+    return PostsRecord.getDocumentFromData(data, supaRef('posts', id));
   }
 
   /// Build a PostsRecord from a `feed_page()` RPC row (carries like_count and
@@ -332,6 +345,7 @@ class PostsRecord extends FirestoreRecord {
     data['feed_author_username'] = row['author_username'];
     data['feed_author_display_name'] = row['author_display_name'];
     data['feed_author_photo_url'] = row['author_photo_url'];
+    data['feed_section'] = row['feed_section'];
     return PostsRecord.getDocumentFromData(data, supaRef('posts', id));
   }
 

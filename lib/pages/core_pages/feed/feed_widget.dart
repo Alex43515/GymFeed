@@ -6,6 +6,7 @@ import '/backend/supabase/repositories/post_repository.dart';
 import '/backend/supabase/repositories/training_repository.dart';
 import '/ai_workout/coach_events/event_details_sheet.dart';
 import '/components/create/create_widget.dart';
+import '/components/first_run/first_run_flow.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/components/home_post_engagement/home_post_engagement_widget.dart';
 import '/components/story_tray/story_tray_widget.dart';
@@ -26,6 +27,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:provider/provider.dart';
 import 'feed_model.dart';
+import 'feed_sections.dart';
 export 'feed_model.dart';
 
 class FeedWidget extends StatefulWidget {
@@ -76,6 +78,9 @@ class _FeedWidgetState extends State<FeedWidget> {
       } else {
         setAppLanguage(context, 'sr');
       }
+      // First visit after creating a profile: Founding popup, notification
+      // permission and the short walkthrough (runs once per account).
+      if (mounted) unawaited(FirstRunFlow.maybeStart(context));
     });
   }
 
@@ -124,7 +129,10 @@ class _FeedWidgetState extends State<FeedWidget> {
     if (row == null || row['deleted'] == true) {
       updatedItems.removeAt(index);
     } else {
-      updatedItems[index] = PostsRecord.fromSupabase(row);
+      updatedItems[index] = PostsRecord.fromSupabase(
+        row,
+        feedSection: updatedItems[index].feedSection,
+      );
     }
     controller.itemList = updatedItems;
   }
@@ -1314,6 +1322,13 @@ class _FeedWidgetState extends State<FeedWidget> {
                                         postFeedIndex) {
                                       final postId =
                                           postFeedPostsRecord.reference.id;
+                                      final sectionHeader =
+                                          feedSectionHeaderFor(
+                                        _model.postFeedPagingController
+                                                ?.itemList ??
+                                            const <PostsRecord>[],
+                                        postFeedIndex,
+                                      );
                                       return KeyedSubtree(
                                         key: ValueKey('home-feed-post-$postId'),
                                         child: Padding(
@@ -1323,6 +1338,10 @@ class _FeedWidgetState extends State<FeedWidget> {
                                           child: Column(
                                             mainAxisSize: MainAxisSize.max,
                                             children: [
+                                              if (sectionHeader !=
+                                                  FeedSectionHeader.none)
+                                                FeedSectionDivider(
+                                                    header: sectionHeader),
                                               Container(
                                                 width:
                                                     MediaQuery.sizeOf(context)

@@ -21,6 +21,7 @@ import 'backend/supabase/supabase.dart';
 import 'backend/marketing/marketing_attribution.dart';
 
 import 'backend/push_notifications/push_notifications_util.dart';
+import 'components/first_run/first_run_flow.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/internationalization.dart';
 import 'flutter_flow/revenue_cat_util.dart' as revenue_cat;
@@ -137,7 +138,9 @@ class _MyAppState extends State<MyApp> {
 
   void _warmUpUserData(BaseAuthUser user) {
     if (!user.loggedIn) return;
-    unawaited(registerCurrentDeviceForPush());
+    // New accounts are asked for push permission by the first-run flow on
+    // Home (right after the Founding popup), not on a cold start.
+    unawaited(FirstRunFlow.registerPushUnlessDeferred(user.uid ?? ''));
     unawaited(claimPendingMarketingAttribution());
     unawaited(FeedModel.warmUp().catchError((Object error, StackTrace stack) {
       debugPrint('Home feed warm-up failed: $error');
