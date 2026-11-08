@@ -6,7 +6,7 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { normalizeRequestedCaptureRequirements, validateVideoProductionPlan } from "../src/brain.mjs";
-import { productionTimeline, renderProductVideo, validateAppCaptureSource, validateRetainedCut, verifiedSceneCaptions } from "../src/render-product-video.mjs";
+import { platformTimeline, platformVideoDuration, productionTimeline, renderProductVideo, validateAppCaptureSource, validateRetainedCut, verifiedSceneCaptions } from "../src/render-product-video.mjs";
 
 const execFileAsync = promisify(execFile);
 const ffmpeg = process.env.FFMPEG_PATH || "ffmpeg";
@@ -38,6 +38,19 @@ test("production director permits meaningful phone action and multiple connected
   const plan = story();
   assert.equal(validateVideoProductionPlan(plan, { appCaptures: [{ capture_ref: "train-complete" }] }), plan);
   assert.equal(plan.scenes[0].source_start_seconds, 1);
+});
+
+test("a sixty-second story with fifteen scenes is accepted and kept whole on all platforms", () => {
+  const plan = story();
+  const base = plan.scenes[0];
+  const extras = Array.from({ length: 11 }, (_, i) => ({ ...base, scene_id: `extra_${i}`, source_start_seconds: 0 }));
+  plan.scenes.splice(1, 0, ...extras);
+  plan.scenes[1].duration_seconds = 2;
+  plan.target_duration_seconds = plan.scenes.reduce((sum, scene) => sum + scene.duration_seconds, 0);
+  assert.equal(plan.scenes.length, 15);
+  assert.equal(plan.target_duration_seconds, 60);
+  assert.equal(validateVideoProductionPlan(plan, { appCaptures: [{ capture_ref: "train-complete" }] }), plan);
+  for (const platform of ["instagram", "tiktok", "youtube"]) assert.equal(platformVideoDuration(plan, platform), 60);
 });
 
 test("missing footage is an explicit reviewable production requirement, never a made-up verified capture", () => {
@@ -76,6 +89,24 @@ test("timeline retains source cuts, product captions and narration per scene", (
   assert.equal(timeline[1].start, 4);
   assert.equal(timeline[1].subtitle, plan.scenes[1].voiceover_text);
   assert.equal(timeline[3].showOverlay, true);
+});
+
+test("platform edits keep complete scenes while changing pace for each network", () => {
+  const scenes = [
+    { sceneId: "hook", type: "video", purpose: "hook", duration: 3 },
+    { sceneId: "problem", type: "video", purpose: "problem", duration: 4 },
+    { sceneId: "proof", type: "app_capture", purpose: "product_proof", duration: 3 },
+    { sceneId: "detail", type: "product", purpose: "product_proof", duration: 4 },
+    { sceneId: "payoff", type: "video", purpose: "payoff", duration: 3 },
+    { sceneId: "cta", type: "video", purpose: "cta", duration: 4 },
+  ];
+  assert.deepEqual(platformTimeline(scenes, "tiktok").map((scene) => scene.sceneId), ["hook", "proof", "cta"]);
+  assert.deepEqual(platformTimeline(scenes, "instagram").map((scene) => scene.sceneId), ["hook", "problem", "proof", "payoff", "cta"]);
+  assert.deepEqual(platformTimeline(scenes, "youtube").map((scene) => scene.sceneId), scenes.map((scene) => scene.sceneId));
+  const plan = { scenes: scenes.map((scene) => ({ scene_id: scene.sceneId, asset_type: scene.type === "video" ? "generated_video" : scene.type === "app_capture" ? "app_capture" : "gymfeed_screen", purpose: scene.purpose, duration_seconds: scene.duration })) };
+  assert.equal(platformVideoDuration(plan, "tiktok"), 10);
+  assert.equal(platformVideoDuration(plan, "instagram"), 17);
+  assert.equal(platformVideoDuration(plan, "youtube"), 21);
 });
 
 test("review master captions use the recorded words and omit unverified speech", () => {

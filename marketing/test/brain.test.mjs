@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildAiDecisionContext, researchEvidenceForQa, responseCost, validateCreativeDecision } from "../src/brain.mjs";
+import { buildAiDecisionContext, compactContext, researchEvidenceForQa, responseCost, validateCreativeDecision } from "../src/brain.mjs";
 
 test("response cost distinguishes uncached, cached, cache-write, output, and search usage", () => {
   const response = {
@@ -84,10 +84,41 @@ test("AI decision context summarizes raw events and bounds historical records", 
   });
   assert.equal(context.events_30d.find((item) => item.event_name === "signup").count, 50);
   assert.equal(context.events_7d.find((item) => item.event_name === "signup").count, 2);
-  assert.equal(context.recent_content.length, 14);
+  assert.equal(context.recent_content.length, 21);
+  assert.equal(context.creative_memory.length, 50);
+  assert.equal(context.creative_intelligence.sample_size, 50);
   assert.equal(context.recent_publications.length, 16);
   assert.equal(context.learnings.length, 10);
   assert.deepEqual(context.costs, [{ provider: "openai", status: "settled", entries: 1, usd: 1.25 }]);
+});
+
+test("compacted AI context retains first-party Buffer performance", () => {
+  const compacted = compactContext(buildAiDecisionContext({
+    buffer: {
+      status: "ok",
+      posts_analyzed: 100,
+      benchmark_posts: [{ id: "buffer-post-1", platform: "tiktok", metrics: { views: 91 } }],
+    },
+  }));
+
+  assert.match(compacted, /"buffer"/);
+  assert.match(compacted, /buffer-post-1/);
+  assert.match(compacted, /"views":91/);
+});
+
+test("long planning history cannot push live performance out of the model context", () => {
+  const context = buildAiDecisionContext({
+    buffer: { status: "ok", benchmark_posts: [{ id: "current-benchmark", metrics: { views: 170 } }] },
+    ga4: { status: "ok", sessions: 123 },
+    learnings: Array.from({ length: 20 }, () => ({ pattern: "x".repeat(2000), recommended_action: "y".repeat(2000) })),
+    content: Array.from({ length: 30 }, (_, index) => ({ id: `c${index}`, failure_reason: "z".repeat(2000) })),
+  });
+  const compacted = compactContext(context, 24000);
+  assert.match(compacted, /current-benchmark/);
+  assert.match(compacted, /views/);
+  assert.match(compacted, /170/);
+  assert.match(compacted, /sessions/);
+  assert.match(compacted, /123/);
 });
 
 test("creative decision validation enforces evidence lineage, score math, and the chosen visual mode", () => {
@@ -150,14 +181,55 @@ test("creative decision validation enforces evidence lineage, score math, and th
       captions_enabled: true,
     },
     instagram: {
+      format: "carousel",
+      hook: "Four signs your plan is guessing",
+      creative_direction: { layout_style: "checklist", visual_world: "clean charcoal checklist cards with green ticks" },
       slides: [
-        { visual_type: "human_lifestyle", screenshot_ref: "" },
+        { visual_type: "human_lifestyle", screenshot_ref: "", headline: "Four signs your plan is guessing" },
         { visual_type: "product_screenshot", screenshot_ref: "curated/screen.png" },
+        { visual_type: "branded_graphic", screenshot_ref: "" },
+        { visual_type: "branded_graphic", screenshot_ref: "" },
       ],
+    },
+    post: {
+      format: "image",
+      hook: "Your rest day deserves a reason",
+      creative_direction: { layout_style: "bold_typography", visual_world: "oversized white type on deep black" },
+      slides: [{ visual_type: "branded_graphic", screenshot_ref: "", headline: "Your rest day deserves a reason" }],
     },
   };
 
   assert.equal(validateCreativeDecision(research, decision), decision);
+  assert.throws(
+    () => validateCreativeDecision(research, { ...decision, post: { ...decision.post, slides: [...decision.post.slides, decision.post.slides[0]] } }),
+    /exactly one slide/,
+  );
+  assert.throws(
+    () => validateCreativeDecision(research, { ...decision, post: { ...decision.post, creative_direction: decision.instagram.creative_direction } }),
+    /different layout styles/,
+  );
+  assert.throws(
+    () => validateCreativeDecision(research, { ...decision, post: { ...decision.post, hook: decision.instagram.hook,
+      slides: [{ ...decision.post.slides[0], headline: decision.instagram.slides[0].headline }] } }),
+    /same hook/,
+  );
+  const signature = {
+    format_family: "creator_ugc", setting_family: "gym_floor", visual_mode: "human_led",
+    camera_language: "handheld selfie camera in a moody gym", performance_style: "candid reaction with a confession",
+  };
+  const repeated = { ...decision, video: { ...decision.video, creative_treatment: { ...decision.video.creative_treatment, ...signature } } };
+  assert.throws(
+    () => validateCreativeDecision(research, repeated, { creativeMemory: [{ content_type: "video", creative_signature: signature }] }),
+    /repeats too many creative axes/,
+  );
+  const fresh = { ...repeated, video: { ...repeated.video, creative_treatment: { ...repeated.video.creative_treatment,
+    format_family: "observational_story", setting_family: "kitchen", camera_language: "locked-off wide over the counter at dawn" } } };
+  assert.equal(validateCreativeDecision(research, fresh, { creativeMemory: [{ content_type: "video", creative_signature: signature }] }), fresh);
+  assert.throws(
+    () => validateCreativeDecision(research, decision, { creativeMemory: [{ content_type: "image",
+      creative_signature: { layout_style: "bold_typography", visual_world: "oversized white type on deep black" } }] }),
+    /repeats the most recent image/,
+  );
   const topTierDecision = {
     ...decision,
     candidate_concepts: [

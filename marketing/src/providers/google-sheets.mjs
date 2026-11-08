@@ -61,6 +61,9 @@ function productionRequirementsText(requirements) {
   if (requirements.estimated_video_cost_usd_per_attempt != null) {
     lines.push("", `Estimated generated-video cost per attempt: $${requirements.estimated_video_cost_usd_per_attempt}`);
   }
+  if (requirements.distribution) lines.push("", `Target platforms: ${requirements.distribution}`);
+  if (requirements.music_direction) lines.push(`Music direction: ${requirements.music_direction}`);
+  if (requirements.music_note) lines.push(`Music note: ${requirements.music_note}`);
   if (requirements.cost_note) lines.push(requirements.cost_note);
   return cellText(lines.join("\n"));
 }
@@ -175,7 +178,12 @@ function normalizedDecision(value) {
 
 function captionFor(content) {
   const plan = content.decision?.content ?? {};
-  return plan.caption ?? plan.platform_copy?.instagram_caption ?? "";
+  const caption = plan.caption ?? plan.platform_copy?.instagram_caption ?? "";
+  if (content.content_type === "video") return caption;
+  const photoMusic=content.decision?.photo_music;
+  if(photoMusic?.required)return `${caption}\n\nTARGET PLATFORMS: Instagram + TikTok\nMUSIC REQUIRED: ${photoMusic.direction}\nOpen the Buffer mobile notification, add music in the native app and finish publishing.`;
+  const music = plan.music_direction ?? "Choose an optional thematic sound manually in TikTok.";
+  return `${caption}\n\nTARGET PLATFORMS: Instagram + TikTok\nTIKTOK MUSIC: ${music} (manual in TikTok; Buffer cannot attach library audio automatically)`;
 }
 
 function reviewRevision(content) {
@@ -252,12 +260,16 @@ function rowForContent(content, existing = null, { freshReview = false } = {}) {
 }
 
 export class GoogleSheetsApprovalQueue {
-  constructor({ spreadsheetId, sheetName = "Content Review", ideaSheetName = "Idea Review", credentialsPath, auth, fetchImpl = fetch } = {}) {
+  constructor({ spreadsheetId, sheetName = "Content Review", ideaSheetName = "Idea Review", credentialsPath, auth, fetchImpl = fetch,
+    sleepImpl = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)), readRetryLimit = 6 } = {}) {
     this.spreadsheetId = spreadsheetId;
     this.sheetName = sheetName;
     this.ideaSheetName = ideaSheetName;
     if (sheetName === ideaSheetName) throw new Error("Idea Review must use a separate tab from Content Review");
     this.fetchImpl = fetchImpl;
+    this.sleepImpl = sleepImpl;
+    this.readRetryLimit = readRetryLimit;
+    this.inflightReads = new Map();
     this.auth = auth ?? (spreadsheetId ? new GoogleAuth({
       ...(credentialsPath ? { keyFile: credentialsPath } : {}),
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
@@ -272,24 +284,50 @@ export class GoogleSheetsApprovalQueue {
     if (!this.configured) throw new Error("Google Sheets approval queue is not configured");
   }
 
-  async request(path, { method = "GET", body } = {}) {
+  async request(path, options = {}) {
+    const method = options.method ?? "GET";
+    if (method !== "GET") return this.performRequest(path, options);
+    const existing = this.inflightReads.get(path);
+    if (existing) return existing;
+    const task = this.performRequest(path, options);
+    this.inflightReads.set(path, task);
+    try {
+      return await task;
+    } finally {
+      if (this.inflightReads.get(path) === task) this.inflightReads.delete(path);
+    }
+  }
+
+  async performRequest(path, { method = "GET", body } = {}) {
     this.ensureConfigured();
     const client = await this.auth.getClient();
     const authHeaders = await client.getRequestHeaders();
     const requestHeaders = typeof authHeaders?.entries === "function"
       ? Object.fromEntries(authHeaders.entries())
       : authHeaders;
-    const response = await this.fetchImpl(`https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}${path}`, {
-      method,
-      headers: {
-        ...requestHeaders,
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`Google Sheets ${method} ${path}: ${payload.error?.message ?? response.status}`);
-    return payload;
+    for (let attempt = 0; ; attempt += 1) {
+      const response = await this.fetchImpl(`https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}${path}`, {
+        method,
+        headers: {
+          ...requestHeaders,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      const message = payload.error?.message ?? String(response.status);
+      const readQuotaExceeded = method === "GET"
+        && (response.status === 429 || response.status === 403 && /quota exceeded|rate limit/i.test(message));
+      if (response.ok) return payload;
+      if (!readQuotaExceeded || attempt >= this.readRetryLimit) {
+        throw new Error(`Google Sheets ${method} ${path}: ${message}`);
+      }
+      const retryAfterSeconds = Number(response.headers?.get?.("retry-after"));
+      const delay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000
+        : Math.min(32_000, 1000 * 2 ** attempt);
+      await this.sleepImpl(delay);
+    }
   }
 
   valuesPath(range, sheetName = this.sheetName) {

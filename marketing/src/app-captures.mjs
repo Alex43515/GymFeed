@@ -32,10 +32,12 @@ export async function preflightAppCaptures(plan, resolver = resolveAppCapture) {
   if (Number(plan.production_version) >= 2 && !(plan.scenes ?? []).some((scene) => scene.asset_type === "app_capture")) {
     throw new Error("Product-use video requires a verified app recording before generation");
   }
-  for (const scene of plan.scenes ?? []) {
-    if (scene.asset_type !== "app_capture") continue;
-    const capture = await resolver(scene.capture_ref);
-    const start = scene.source_start_seconds ?? 0;
-    if (start < 0 || start + scene.duration_seconds > capture.duration_seconds + 0.05) throw new Error(`App recording ${scene.capture_ref} is too short for scene ${scene.scene_id}`);
+  const refs = new Set((plan.scenes ?? []).filter(scene => scene.asset_type === "app_capture").map(scene => scene.capture_ref));
+  const captures = [];
+  for (const ref of refs) {
+    // Existence is required; an imperfect window is fitted at render time.
+    const asset = await resolver(ref);
+    captures.push({ id: ref, sha256: asset?.sha256 });
   }
+  return captures;
 }

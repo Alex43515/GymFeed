@@ -11,6 +11,10 @@ function board(content = [], ideas = []) {
     const rows = name === "Idea Review" ? ideas : content;
     for (const { rowNumber, values } of updates) Object.assign(rows.find((r) => r.rowNumber === rowNumber), values);
   };
+  queue.writeFields = async (name, _headers, rowNumber, fields) => {
+    const rows = name === "Idea Review" ? ideas : content;
+    Object.assign(rows.find((row) => row.rowNumber === rowNumber), fields);
+  };
   queue.appendBoard = async (name, _headers, rows) => (name === "Idea Review" ? ideas : content).push(...rows);
   return queue;
 }
@@ -22,6 +26,31 @@ test("review board puts actions, failures, scores and media first; planned date 
   assert.deepEqual(CONTENT_HEADERS.slice(0, 6), ["Decision", "Current status", "Reason / next step", "QA score", "Preview", "Asset 1"]);
   assert.equal(IDEA_HEADERS[6], "Planned date");
   assert.ok(CONTENT_HEADERS.indexOf("Content ID") > 20);
+});
+
+test("a planned replacement reports blocked or intake rather than stale generating", () => {
+  const content = { status: "planned", decision: { workflow: { stage: "blocked", message: "Required Drive video is missing" } } };
+  assert.equal(contentPresentation(content).status, "Approved - Blocked");
+  content.decision.workflow = { stage: "intake", message: "Checking Drive" };
+  assert.equal(contentPresentation(content).status, "Pending");
+});
+
+test("blocked assembly never presents a stale generating database status as active work", () => {
+  const view=contentPresentation({status:"generating",failure_reason:"InvalidMimeType",decision:{workflow:{stage:"blocked",message:"Audio upload failed: InvalidMimeType"}}});
+  assert.equal(view.status,"Needs Review");
+  assert.match(view.reason,/Audio upload failed/);
+});
+
+test("retrying unfinished media consumes Approve without authorizing publication", async () => {
+  const rows = [contentRow({ Decision: "Approve", "Revision instructions": "Keep my revision", "Planned date": "2026-10-22" })];
+  const queue = board(rows);
+  assert.deepEqual(await queue.markContentGenerationRetry({ contentId: "v", revision: 2, instructions: "Keep my revision" }, "Checking Drive"), { marked: true });
+  assert.equal(rows[0].Decision, "Pending");
+  assert.equal(rows[0]["Current status"], "Pending");
+  assert.equal(rows[0]["Revision instructions"], "Keep my revision");
+  assert.equal(rows[0]["Planned date"], "2026-10-22");
+  assert.equal(rows[0]["QA score"], "62");
+  assert.deepEqual(await queue.markContentGenerationRetry({ contentId: "v", revision: 2 }, "Duplicate"), { marked: false });
 });
 
 test("changing QA to 90 submits a manual override even without changing decision", async () => {
@@ -47,6 +76,18 @@ test("failed QA resets approval and displays the reason on the same row", async 
   assert.equal(rows[0]["Buffer status"], "Not submitted");
 });
 
+test("concurrent content syncs keep one row per content revision", async () => {
+  const rows = [];
+  const queue = board(rows);
+  const content = { id: "v", status: "generating", content_type: "video", asset_urls: [], decision: { review_revision: 1 } };
+
+  await Promise.all([queue.syncContent([content]), queue.syncContent([content])]);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]["Content ID"], "v");
+  assert.equal(rows[0].Revision, 1);
+});
+
 test("sync preserves a manual QA edit until the reviewed media changes", async () => {
   const rows = [contentRow({ "QA score": "90", "Asset 1": "a.mp4" })];
   const queue = board(rows);
@@ -65,6 +106,72 @@ test("blocked upload retries automatically but failed paid production does not l
   assert.equal((await queue.pendingIdeaDecisions()).length, 1);
   rows[0]["Block kind"] = "production";
   assert.equal((await queue.pendingIdeaDecisions()).length, 0);
+});
+
+test("interrupted generation clears the consumed idea approval", async () => {
+  const rows = [{
+    rowNumber: 33, "Idea ID": "v", "Campaign ID": "c", Version: "1", "Idea decision": "Approve",
+    "Revision instructions": "", "Planned date": "2026-10-04", "Current status": "Needs Review",
+    "Processed decision fingerprint": "old",
+  }];
+  const queue = board([], rows);
+
+  await queue.markInterruptedIdea("v", "Generation failed; nothing is currently generating.", "now");
+
+  assert.equal(rows[0]["Idea decision"], "Pending");
+  assert.equal(rows[0]["Current status"], "Pending");
+  assert.equal(rows[0]["Processed decision fingerprint"], "");
+  assert.match(rows[0]["Reason / next step"], /nothing is currently generating/);
+  assert.deepEqual(await queue.pendingIdeaDecisions(), []);
+});
+
+test("idea status points to the exact Content Review row", async () => {
+  const content = [{ rowNumber: 34, "Content ID": "v" }];
+  const ideas = [{ rowNumber: 33, "Idea ID": "v", Version: "1", "Planned date": "2026-10-04" }];
+  await board(content, ideas).syncIdeas([{
+    id: "v", version: 1, status: "Ready in Content Review", planned_date: "2026-10-04",
+    campaign_id: "c", content_type: "carousel", brief: {},
+  }]);
+  assert.equal(ideas[0]["Current status"], "Ready in Content Review - row 34");
+});
+
+test("a ready idea with a Content Review row does not restart production", async () => {
+  const rows = [{
+    rowNumber: 33, "Idea ID": "v", "Campaign ID": "c", Version: "1", "Approved version": "1",
+    "Idea decision": "Approve", "Revision instructions": "", "Planned date": "2026-10-04",
+    "Stored planned date": "2026-10-04", "Current status": "Ready in Content Review - row 34",
+    "Processed decision fingerprint": "",
+  }];
+
+  assert.deepEqual(await board([], rows).pendingIdeaDecisions(), []);
+});
+
+test("production failure resets the idea row for one explicit retry", async () => {
+  const ideas = [{
+    rowNumber: 39, "Idea ID": "v", "Campaign ID": "c", Version: "1", "Idea decision": "Approve",
+    "Revision instructions": "", "Planned date": "2026-10-06", "Stored planned date": "2026-10-06",
+    "Current status": "Needs Review", "Approved version": "1", "Processed decision fingerprint": "old",
+  }];
+  const queue = board([], ideas);
+  await queue.markIdeaRetryRequired({ ideaId: "v", version: 1 }, "Generation failed: fal.ai 504. Select Approve again to retry.", "now");
+  assert.equal(ideas[0]["Idea decision"], "Pending");
+  assert.equal(ideas[0]["Current status"], "Retry Required");
+  assert.equal(ideas[0]["Processed decision fingerprint"], "");
+
+  ideas[0]["Idea decision"] = "Approve";
+  assert.equal((await queue.pendingIdeaDecisions())[0].ideaId, "v");
+});
+
+test("idea decisions carry the stored planned date so unchanged dates do not reschedule", async () => {
+  const rows = [{
+    rowNumber: 31, "Idea ID": "v", "Campaign ID": "c", Version: "2", "Idea decision": "Approve",
+    "Revision instructions": "", "Planned date": "2026-10-03", "Stored planned date": "2026-10-03",
+    "Current status": "Pending", "Processed decision fingerprint": "",
+  }];
+  const queue = board([], rows);
+  const [entry] = await queue.pendingIdeaDecisions();
+  assert.equal(entry.plannedDate, "2026-10-03");
+  assert.equal(entry.storedPlannedDate, "2026-10-03");
 });
 
 test("partial Buffer submission is shown as blocked rather than scheduled", () => {
@@ -123,6 +230,21 @@ test("explicit approval of a low-QA completed video preserves its original score
   assert.equal(content.status, "approved");
 });
 
+test("explicit approval publishes a completed failed asset without AI repair", async () => {
+  let content = { id: "v", status: "failed", updated_at: "now", failure_reason: "AI disliked continuity", qa: { publish: false }, asset_urls: ["review.mp4"], decision: { review_revision: 1, campaign: { id: "c" } } };
+  const cmo = new CmoController({ repository: {
+    contentById: async () => structuredClone(content),
+    updateContent: async (_id, patch) => (content = { ...content, ...patch }),
+    createContentReview: async () => ({ reused: true, review: { status: "processed", decision: "approve" } }),
+  }, orchestrator: { approveContent: async () => { content.status = "approved"; } } });
+  cmo.releaseItem = async () => ({ scheduled: true });
+  cmo.repairAndApprove = async () => assert.fail("human approval must not start AI repair");
+
+  await cmo.assetDecision({ contentId: "v", revision: 1, decision: "Approve", contentUpdatedAt: "now" });
+  assert.equal(content.status, "approved");
+  assert.equal(content.qa.human_override.original_reason, "AI disliked continuity");
+});
+
 test("release of one approved item requires actual Buffer post confirmation", async () => {
   const cmo = new CmoController({ repository: { publicationByContent: async () => [{ platform: "instagram", error: "Rejected media", provider_request_id: null }] }, campaigns: {
     assertPublicationAllowed: async () => true, withWork: async (_id, _op, fn) => fn(),
@@ -153,6 +275,13 @@ test("repair progress is visible even while the old asset still has failed QA", 
   const result = contentPresentation({ status: "qa_failed", failure_reason: "Old failure", decision: { workflow: { stage: "repairing", message: "Automatic QA repair 1/2 is running." } } });
   assert.equal(result.status, "Repairing");
   assert.match(result.reason, /1\/2/);
+});
+
+test("reviewer rejection shows plan revision progress instead of stale QA instructions", () => {
+  const result = contentPresentation({ status: "qa_failed", failure_reason: "Old failure", decision: { workflow: { stage: "revising", message: "Astra is rewriting the intro from the reviewer's instructions." } } });
+  assert.equal(result.status, "Revising plan");
+  assert.match(result.reason, /rewriting the intro/);
+  assert.doesNotMatch(result.reason, /ACTION REQUIRED/);
 });
 
 test("old fingerprints do not restart an approved idea whose asset needs review", async () => {
@@ -194,7 +323,39 @@ test("a low-QA video presents each scene defect once beside the finished asset",
   const item = { status: "qa_failed", asset_urls: ["review.mp4"], qa: { critical_issues: ["s01: towel changes", "s05: fake UI"] }, decision: { generation: { scenes: [{ scene_id: "s01", qa: { accept: false, defects: ["towel changes"] } }, { scene_id: "s05", qa: { accept: false, defects: ["fake UI"] } }] } } };
   const result = contentPresentation(item);
   assert.equal(result.status, "Needs Review");
-  assert.match(result.reason, /Video ready for review/);
+  assert.match(result.reason, /ACTION REQUIRED: Review Asset 1/);
   assert.equal(result.reason.match(/s01: towel changes/g)?.length, 1);
   assert.equal(result.reason.match(/s05: fake UI/g)?.length, 1);
+});
+
+test("platform video variants are named clearly in Content Review", () => {
+  const result = contentPresentation({
+    status: "awaiting_approval",
+    content_type: "video",
+    asset_urls: ["instagram.mp4", "tiktok.mp4", "youtube.mp4"],
+    decision: { generation: { platform_variants: { instagram: {}, tiktok: {}, youtube: {} } } },
+  });
+  assert.match(result.reason, /Assets 1-3 \(Instagram Reel, TikTok, YouTube Short\)/);
+});
+
+test("new review rows are written from column A after the last used row, never via append", async () => {
+  const queue = new ReviewBoard({ spreadsheetId: "test", auth: {} });
+  const calls = [];
+  queue.request = async (path, options = {}) => {
+    calls.push({ path: decodeURIComponent(path), method: options.method ?? "GET", body: options.body });
+    return options.method ? {} : { values: [["Decision"], ["Pending"], [], ["Approve"]] };
+  };
+  await queue.appendBoard("Content Review", CONTENT_HEADERS, [{ "Content ID": "a" }, { "Content ID": "b" }]);
+  const write = calls.find((call) => call.method === "PUT");
+  assert.match(write.path, /'Content Review'!A5:AF6\?valueInputOption=RAW$/);
+  assert.equal(write.body.values[0][CONTENT_HEADERS.indexOf("Content ID")], "a");
+  assert.ok(!calls.some((call) => call.path.includes(":append")));
+});
+
+test("overlapping content syncs are serialized so a new item is appended once", async () => {
+  const content = [];
+  const queue = board(content);
+  const item = { id: "new", status: "awaiting_approval", content_type: "image", asset_urls: ["https://a/1.png"], decision: { review_revision: 1, content: {} } };
+  await Promise.all([queue.syncContent([item]), queue.syncContent([item])]);
+  assert.equal(content.filter((row) => row["Content ID"] === "new").length, 1);
 });

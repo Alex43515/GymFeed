@@ -36,29 +36,295 @@
       "id": "requested:scan-equipment-photo-result",
       "filename": "scan-equipment-photo-result.mp4",
       "feature": "scan_equipment",
-      "description": "Use requested:scan-equipment-photo-result only. Before export, verify that the retained source interval visibly contains native framing, one genuine equipment-photo capture, and the resulting guidance state. Do not substitute gallery selection, animated screenshots, or simulated interaction.",
-      "duration_seconds": 38.315144,
+      "description": "Inspect this exact retained range before approval. If the result is not visible and legible throughout, retime to an actual result window in this recording; otherwise block publication.",
+      "duration_seconds": 45.727767,
       "recorded_interactions": [
-        "Show one genuine native equipment-photo capture and end with the resulting Equipment Scan guidance state visible."
+        "Show the recorded result state, including its likely match and guidance; do not simulate an earlier photo action."
       ],
       "verified": true,
       "marketing_safe": true,
-      "sha256": "fa3a26001939d752b88631dd3b20e550db1e5ea1d953ddc0f8642ab023024e1a",
-      "drive_file_id": "1Dd_YXXl5SUrjTXX8Z6PfJTwakT-D8yGL"
+      "sha256": "074d8db520a13041aa6c2c30900f921575f054974d93633e3e7cb6296983fbec",
+      "drive_file_id": "1coGy9CfeRX7uVDVDaviqOtArgFQehned"
     },
     {
       "id": "requested:scan-food-photo-review-log-diary",
       "filename": "scan-food-photo-review-log-diary.mp4",
       "feature": "scan_food",
-      "description": "Use requested:scan-food-photo-review-log-diary. The provisional 0–6 second interval is in source bounds; inspect actual action timecodes and keep the phone-glance-to-capture cut causal.",
-      "duration_seconds": 43.004778,
+      "description": "Contact-sheet-derived interior cut. Do not narrate a shutter press: this window begins during analysis. Maintain original order and label Demo capture.",
+      "duration_seconds": 22.132911,
       "recorded_interactions": [
-        "Show the genuine recording’s framing-to-photo action only if confirmed within this source cut; otherwise retime the cut to the actual recorded photo action before publishing."
+        "Play source 5.1–10.1 seconds at normal speed, preserving analysis followed by the ingredient-result state."
       ],
       "verified": true,
       "marketing_safe": true,
-      "sha256": "33cfb655fe331b49276e24e8233094b8d21b7102a93924d537a3abbb77e957a5",
-      "drive_file_id": "1yx3OT8RzD7C7jyW11kCcWZNIjq7Nf-Vq"
+      "sha256": "0c93e5fe6051361f95682ff0b1f5825d06487cd57677c50d7bf1630526583417",
+      "drive_file_id": "12Tn5QY-rrtTD8HA6WJJGxwvlGYUEsqRD"
+    },
+    {
+      "id": "requested:nutrition-planned-meal-open-preparation",
+      "filename": "nutrition-planned-meal-open-preparation.mp4",
+      "feature": "scan_food",
+      "description": "Starts after the goal-editing section. Continue directly into s03 at source second 15.4; verify the exact recorded photo transition before assembly.",
+      "duration_seconds": 29.780333,
+      "recorded_interactions": [
+        "Show the recorded move from the camera's meal view into analysis; do not add a synthetic shutter press."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "f7afd131eb24ad95fb82adb987b8819f2128251b5ad4a70421ed3a1e3084e6ba",
+      "drive_file_id": "1ZxNErKbarQOZR15FR02JM_7PwcIiKQQ2"
+    },
+    {
+      "id": "requested:coach-dated-empty-day-answer",
+      "filename": "coach-dated-empty-day-answer.mp4",
+      "feature": "ai_coach",
+      "description": "This is a labeled product demo, not the actor's account. No synthetic taps, changed wording or inferred question submission. Block if the retained range cannot prove the narrated sequence.",
+      "duration_seconds": 38.350967,
+      "recorded_interactions": [
+        "Retain the original proposal → actual Implement interaction → added-to-Train acknowledgment in order. Proposed timecode requires motion-conform approval."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "cb30d9f7220f85ab2b802930ae0cacaa1cd765b360ed3f34c24e48c23deca53d",
+      "drive_file_id": "1IuzOkURyQP1qBSIlmeDQOYIlSJEXBDPL"
+    },
+    {
+      "id": "requested:starter-plan-train-diary-proof",
+      "filename": "starter-plan-train-diary-proof.mp4",
+      "feature": "starter_plan",
+      "description": "Contact-sheet-derived interior window, pending motion conform. Preserve the recorded transition; do not infer completed sets or a finished workout. Mask the demo name.",
+      "duration_seconds": 37.7549,
+      "recorded_interactions": [
+        "Play the genuine Start workout transition at normal speed, retaining the resulting active sets."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "f61c93ebc1e3a83096bf844186ae7fdc789f1e1d050eb0d8a43ae39e78efcc3c",
+      "drive_file_id": "1ZgmCH5duU0myR2qztczknYTchZT0psTS"
+    },
+    {
+      "id": "requested:events-open-detail-join-confirmation",
+      "filename": "events-open-detail-join-confirmation.mp4",
+      "feature": "events",
+      "description": "Use events-open-detail-join-confirmation.mp4. The contact sheet places Joined near 6.27 seconds and the detail opening near 7.10 seconds. Keep that order. Label Product demo and mask private identifiers consistently. This is not the actor's account. No map opening is shown.",
+      "duration_seconds": 15.040378,
+      "recorded_interactions": [
+        "Play source seconds 5.10–13.60 in order at normal speed. Retain the genuine Join interaction, Joined result and subsequent detail opening. Hold the visible time and location link through the interior endpoint."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "cca55c86ba1edd324f0b39405cd914759da79d8690a80796c9f4af62dd0d6127",
+      "drive_file_id": "1UuZv_NnjGoSwQ6Jvlj5f2gjkCdSa52eB"
+    },
+    {
+      "id": "requested:nutrition-diary-open-planned-meal-details",
+      "filename": "nutrition-diary-open-planned-meal-details.mp4",
+      "feature": "nutrition_diary",
+      "description": "First chapter of the complete recording. The source begins at zero intentionally to honor the full-video request. Label Demo account and 1.5× playback. No transition into s03.",
+      "duration_seconds": 29.922144,
+      "recorded_interactions": [
+        "Play source 0–10 seconds continuously at 1.5×, including the initial Coach screen, diary loading and date-picker interaction."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "43e573a28e8d8df3c95bea0fe252506dd00dfba32603e02f220a175c604ac159",
+      "drive_file_id": "1Q4bwjaSyG90iEOvbb_ADajdMc0dL9-cW"
+    },
+    {
+      "id": "requested:marketplace-exercise-video-preview",
+      "filename": "marketplace-exercise-video-preview.mp4",
+      "feature": "training_marketplace",
+      "description": "Requested footage, not yet verified. Retain only the exact visible action. No import or workout-start claim. Block if the 3–9-second range does not show the full narrated sequence.",
+      "duration_seconds": 35.857622,
+      "recorded_interactions": [
+        "Show the exercise list, preserve the genuine tap opening an available instruction, and retain actual video playback."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "4d1f76ebfe50af143197881f5ebc0aeac69bb4f3adfbc370ad46399abb2a764b",
+      "drive_file_id": "1W8XtZwnF-UELN7LtOrK7yUcz1AYkCcEs"
+    },
+    {
+      "id": "requested:scan-equipment-result-continuous-clean",
+      "filename": "scan-equipment-result-continuous-clean.mp4",
+      "feature": "scan_equipment",
+      "description": "BLOCKED pending capture verification. Eight seconds is the requested source duration, not an existing verified asset duration. The planned 1–7-second cut must be validated against the delivered recording before use. No camera, loading, incoming-call, gallery, New routine or Coach screens. Do not claim this identifies the prop machine.",
+      "duration_seconds": 23.2608,
+      "recorded_interactions": [
+        "Retain one continuous six-second interior interval from the requested clean result recording. Show only genuine readable result UI. A gentle real scroll may reveal existing guidance while remaining within the same result; no added taps, simulated behavior, freezing, looping or stitched intervals."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "74c03f88004104dda24b971030e221023700e243c62cecaf5ba03726810c4bb4",
+      "drive_file_id": "1JHfIynSOpyy5YpzgqHs7XxbA5G5rFHfz"
+    },
+    {
+      "id": "requested:train-upper-body-open-start-readable",
+      "filename": "train-upper-body-open-start-readable.mp4",
+      "feature": "train",
+      "description": "Master 8–13 seconds. This is a requested recording specification, not a verified existing asset. The five-second window must stand alone in shortened exports and visibly support both narration sentences. Keep Demo capture visible without covering controls. No configuration screenshot splice.",
+      "duration_seconds": 16.100656,
+      "recorded_interactions": [
+        "Show the genuine routine opening, readable Upper Body routine, actual Start workout tap and resulting active-workout screen in order. Retain original interaction timing and touch feedback. Do not show completed sets or a completed session."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "e9e87e0804f3eadee9809cadcb5410e915225e3fd5b7bfed270ac6091ee359a4",
+      "drive_file_id": "111yf4gXkzy1HtKtjsHpZFsMdSwKjNtCa"
+    },
+    {
+      "id": "requested:creator-coach-hub-open",
+      "filename": "creator-coach-hub-open.mp4",
+      "feature": "connected_ecosystem",
+      "description": "Requested recording, not verified footage. Source length and window are acquisition targets requiring conform approval.",
+      "duration_seconds": 16.225111,
+      "recorded_interactions": [
+        "Retain the hub, real AI Coach tap and destination in order."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "34752bd91a0529a17a76eb988b145a18023c05c26b8a4499c2dc7ad29c794784",
+      "drive_file_id": "1TSGV29uW9F2_yVCtFfDHCu3BFNeaue0V"
+    },
+    {
+      "id": "requested:creator-today-plan-open",
+      "filename": "creator-today-plan-open.mp4",
+      "feature": "connected_ecosystem",
+      "description": "Requested recording. The visible exercise must match s07; do not imply a completed workout or cross-device sync.",
+      "duration_seconds": 12.573489,
+      "recorded_interactions": [
+        "Show the selected date and genuine opening of its routine, ending on the relevant exercise."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "0ddfe002b9be1f4d17fb679e95b6a75ae87b3751579eedcc066bb047952ac285",
+      "drive_file_id": "1kqav8oeGlZoUxBkoyRQOtDXtIUHYa5HH"
+    },
+    {
+      "id": "requested:creator-coach-equipment-alternative",
+      "filename": "creator-coach-equipment-alternative.mp4",
+      "feature": "connected_ecosystem",
+      "description": "Production blocker. The response must support the exercise filmed next. Do not imply automatic routine replacement or a saved calendar change. Preserve the product health disclosure and label guidance as general fitness guidance.",
+      "duration_seconds": 20.609633,
+      "recorded_interactions": [
+        "Show actual submission of the prepared question, the authentic response and a readable hold. Narration acknowledges Ava's own choice only after the alternative is visible."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "ad56923f94f50eacdce6eb4f5835135ec12207bac7a41254a14e71bd448dc173",
+      "drive_file_id": "1qdD3c_tDCrpVbqXHLOtPFcNSHT2wWIck"
+    },
+    {
+      "id": "requested:creator-shake-manual-log",
+      "filename": "creator-shake-manual-log.mp4",
+      "feature": "connected_ecosystem",
+      "description": "Requested capture. Any displayed nutrition values come from documented nutrition information for the demo item and remain labeled demo data. No camera recognition or automatic macro claim.",
+      "duration_seconds": 15.072656,
+      "recorded_interactions": [
+        "Show the completed manual-entry review, genuine save action and resulting shake entry in the selected day's diary."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "a7b9c6db5a4478be6bc1856d84a1cfe6f88de1440dcfac92809fc74fa47d66c8",
+      "drive_file_id": "1E5DL8ZSaDtzpmkRmyPLd_OdSABReeqiQ"
+    },
+    {
+      "id": "requested:creator-share-community-sequence",
+      "filename": "creator-share-community-sequence.mp4",
+      "feature": "connected_ecosystem",
+      "description": "Requested conformed assembly, not a claimed existing recording. Original source recordings, exact cuts and upload/result order require approval. Do not fabricate engagement, followers or community scale.",
+      "duration_seconds": 45.237067,
+      "recorded_interactions": [
+        "Use a clearly disclosed editorial assembly of genuine interactions: select the cleared clip and publish it, retain the actual resulting post, then show real workout playback and a regular post and food post. Cuts must not imply instant upload or processing."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "1d1c4b38165003c1ad2db9ac27ebeac9b11b0061d7837b4f327746b224b561f8",
+      "drive_file_id": "1BXJZCXhqq7HMp3eQGPc9cWX9-JIntL0S"
+    },
+    {
+      "id": "requested:food-post-dinner-open-info",
+      "filename": "food-post-dinner-open-info.mp4",
+      "feature": "scan_food",
+      "description": "PRODUCTION BLOCKER: requested recording does not yet exist. Source duration and cut are recording targets, not verified metadata. Do not imply publication is demonstrated.",
+      "duration_seconds": 10.191522,
+      "recorded_interactions": [
+        "Show the dinner photo in the feed with its genuine food identifier, then the actual tap opening food-post detail."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "d03d701a592d481c3477c5965426a1605103b7e74c5a2d4e9e85aeca8cee2178",
+      "drive_file_id": "19TG6hoqOWvoaKA4h0CANesB8gsmxEvER"
+    },
+    {
+      "id": "requested:scan-equipment-open-vlog",
+      "filename": "scan-equipment-open-vlog.mp4",
+      "feature": "scan_equipment",
+      "description": "Missing asset, not verified footage. Required tap and screen settling must fit the retained window. No synthetic touch feedback.",
+      "duration_seconds": 14.250856,
+      "recorded_interactions": [
+        "Show the genuine tap opening Scan equipment and the resulting input screen."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "93a0a9f9d9fe5f1119dfa64cb6230e95586778ca34c382d4feb08f4ecebc86d8",
+      "drive_file_id": "1BKBgEfhCvrAqrLbyHoD6HPPVcEzEJuth"
+    },
+    {
+      "id": "requested:train-routine-open-only-vlog",
+      "filename": "train-routine-open-only-vlog.mp4",
+      "feature": "train",
+      "description": "This is a requested recording, not a verified existing asset. The specified window is a recording brief. Keep the routine opening and result continuous with original touch feedback.",
+      "duration_seconds": 11.818089,
+      "recorded_interactions": [
+        "Show the genuine routine-opening action and readable routine result in order, stopping before Start workout."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "714bcbb102b5464b7d261d3f95a1869bd9bf7e4bbc573c4659518b4e51b697c9",
+      "drive_file_id": "1JUXEDRXS-pThNdIsVV-kdhJosQxROti-"
+    },
+    {
+      "id": "requested:coach-time-budget-submit",
+      "filename": "coach-time-budget-submit.mp4",
+      "feature": "ai_coach",
+      "description": "Requested recording, not verified footage. Six-second source and one-second in-point are acquisition targets pending actual recording and conform. Same account continues through the product turn.",
+      "duration_seconds": 23.285467,
+      "recorded_interactions": [
+        "Show the already-composed request and real send action, ending on its submitted message. Do not imply that an answer has already arrived."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "9e234fb44a17e8bbd333800b831b8a11428d162fd8238da0fabb4a763c882187",
+      "drive_file_id": "1nnbdTdPvuqApQb4BVKYwc4GlGRkz63sj"
+    },
+    {
+      "id": "requested:coach-time-budget-proposal",
+      "filename": "coach-time-budget-proposal.mp4",
+      "feature": "ai_coach",
+      "description": "Requested recording pending verification. A clear 'Reply received' label marks elapsed response time rather than implying instant generation. Preserve the actual disclosure.",
+      "duration_seconds": 23.285467,
+      "recorded_interactions": [
+        "Hold the actual proposal and its relevant exercise details long enough to review. Retain any real scroll needed to reveal them."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "9e234fb44a17e8bbd333800b831b8a11428d162fd8238da0fabb4a763c882187",
+      "drive_file_id": "1nnbdTdPvuqApQb4BVKYwc4GlGRkz63sj"
+    },
+    {
+      "id": "requested:coach-time-budget-implement",
+      "filename": "coach-time-budget-implement.mp4",
+      "feature": "ai_coach",
+      "description": "Requested recording pending verification. Time narration to the visible tap and acknowledgment; the second sentence begins only once success is visible.",
+      "duration_seconds": 14.600233,
+      "recorded_interactions": [
+        "Retain the real proposal before the tap, actual Implement interaction and subsequent successful added-to-Train acknowledgment in order."
+      ],
+      "verified": true,
+      "marketing_safe": true,
+      "sha256": "d182ede3a19501bfcd609b16fe6f0c3f8ca2aad33bcb856b48a1dcc9f09f6099",
+      "drive_file_id": "1unwWZ7wzLRPKpGpNDTkYL49qEzGuGfPK"
     }
   ]
 }

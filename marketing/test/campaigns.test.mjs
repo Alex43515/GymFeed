@@ -46,9 +46,12 @@ test("idea decisions require explicit version, key, and rejection instructions",
 
 test("registerDay never accepts ambiguous or duplicate content IDs", () => {
   const { engine, calls } = fake();
-  assert.throws(() => engine.registerDay({ campaignId: "campaign", date: "2026-10-01", contentIds: ["a", "a"] }), /exactly one/);
-  assert.throws(() => engine.registerDay({ campaignId: "campaign", date: "2026-10-01", contentIds: ["a"] }), /exactly one/);
+  assert.throws(() => engine.registerDay({ campaignId: "campaign", date: "2026-10-01", contentIds: ["a", "a"] }), /one video, one carousel/);
+  assert.throws(() => engine.registerDay({ campaignId: "campaign", date: "2026-10-01", contentIds: ["a"] }), /one video, one carousel/);
+  assert.throws(() => engine.registerDay({ campaignId: "campaign", date: "2026-10-01", contentIds: ["a", "b", "b"] }), /one video, one carousel/);
   assert.equal(calls.length, 0);
+  engine.registerDay({ campaignId: "campaign", date: "2026-10-01", contentIds: ["video", "carousel", "post"] });
+  assert.deepEqual(calls[0].payload.content_ids, ["video", "carousel", "post"]);
 });
 
 test("idea card preserves source metrics and gaps instead of claiming a proven winner", () => {

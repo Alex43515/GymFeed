@@ -11,6 +11,12 @@ import { buildApp } from "./app.mjs";
 import { MarketingCampaigns } from "./campaigns.mjs";
 import { CmoController } from "./cmo-controller.mjs";
 import { CaptureIngestor } from "./capture-ingest.mjs";
+import { CaptureStorage } from "./capture-storage.mjs";
+import { LibraryInbox } from "./library-inbox.mjs";
+import { createOutreachService, registerOutreachRoutes } from "./outreach/index.mjs";
+import { registerStudioRoutes } from "./studio-api.mjs";
+import { registerStudioAnalytics } from "./studio-analytics.mjs";
+import { createStudioEditor } from "./studio-editor.mjs";
 
 const config = loadConfig();
 const repository = new MarketingRepository(config);
@@ -28,6 +34,7 @@ const mediaProvider = new FalMediaProvider({
 const publisher = new BufferPublisher({
   apiKey: config.BUFFER_API_KEY,
   baseUrl: config.BUFFER_BASE_URL,
+  benchmarkPostIds: config.BUFFER_CREATIVE_BENCHMARK_POST_IDS,
   shareMode: config.BUFFER_SHARE_MODE,
   youtubePrivacy: config.BUFFER_YOUTUBE_PRIVACY,
 });
@@ -46,6 +53,7 @@ const approvalSheet = new GoogleSheetsApprovalQueue({
   sheetName: config.GOOGLE_SHEETS_APPROVAL_TAB,
   credentialsPath: config.GOOGLE_SHEETS_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS,
 });
+const captureStorage = new CaptureStorage(repository.client.storage);
 const orchestrator = new MarketingOrchestrator({
   config,
   repository,
@@ -56,10 +64,16 @@ const orchestrator = new MarketingOrchestrator({
   voiceProvider,
   approvalSheet,
   campaigns,
+  appCaptureResolver: ref => captureStorage.resolve(ref),
 });
-const cmo = new CmoController({ orchestrator, campaigns, repository, approvalSheet, config });
 const captureIngestor = new CaptureIngestor({ credentialsPath: config.GOOGLE_SHEETS_CREDENTIALS ?? process.env.GOOGLE_APPLICATION_CREDENTIALS });
+const libraryInbox = new LibraryInbox({ ingestor: captureIngestor, brain, repository, config });
+const cmo = new CmoController({ orchestrator, campaigns, repository, approvalSheet, config, libraryInbox });
 const app = buildApp({ config, orchestrator, cmo, captureIngestor, logger: { level: config.LOG_LEVEL } });
+registerOutreachRoutes(app, createOutreachService({ config, logger: app.log }));
+const editor = createStudioEditor({ config, repository, mediaProvider, publisher });
+registerStudioRoutes(app, { config, cmo, repository, orchestrator, captureStorage, editor });
+registerStudioAnalytics(app, { repository, publisher, config });
 
 try {
   await app.listen({ port: config.PORT, host: "0.0.0.0" });

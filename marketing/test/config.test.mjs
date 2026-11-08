@@ -18,7 +18,7 @@ test("safe execution switches default to false", () => {
   assert.equal(config.AUTO_PUBLISH, false);
   assert.equal(config.OPENAI_RESEARCH_MODEL, "gpt-6-luna");
   assert.equal(config.OPENAI_DAILY_MODEL, "gpt-6-luna");
-  assert.equal(config.OPENAI_FALLBACK_MODEL, "gpt-6-sol");
+  assert.equal(config.OPENAI_FALLBACK_MODEL, "gpt-6-astra");
   assert.equal(config.OPENAI_QA_MODEL, "gpt-6-luna");
   assert.equal(config.OPENAI_WEEKLY_MODEL, "gpt-6-sol");
   assert.equal(config.OPENAI_RESEARCH_REASONING_EFFORT, "low");
@@ -26,13 +26,13 @@ test("safe execution switches default to false", () => {
   assert.equal(config.OPENAI_QA_REASONING_EFFORT, "low");
   assert.equal(config.OPENAI_WEEKLY_REASONING_EFFORT, "medium");
   assert.equal(config.OPENAI_CACHE_WRITE_USD_PER_MILLION, 0.125);
-  assert.equal(config.FAL_IMAGE_MODEL, "fal-ai/nano-banana-2");
-  assert.equal(config.FAL_VIDEO_MODEL, "google/gemini-omni-flash/v1.1/text-to-video");
-  assert.equal(config.FAL_REFERENCE_VIDEO_MODEL, "google/gemini-omni-flash/v1.1/reference-to-video");
-  assert.equal(config.FAL_VIDEO_USD_PER_SECOND, 0.10);
+  assert.equal(config.FAL_IMAGE_MODEL, "google/nano-banana-2.1");
+  assert.equal(config.FAL_VIDEO_MODEL, "alibaba/wan-3.0/text-to-video");
+  assert.equal(config.FAL_REFERENCE_VIDEO_MODEL, "alibaba/wan-3.0/reference-to-video");
+  assert.equal(config.FAL_VIDEO_USD_PER_SECOND, 0.20);
   assert.equal(config.FAL_SCENE_MAX_ATTEMPTS, 2);
   assert.equal(config.FAL_SCENE_QA_THRESHOLD, 88);
-  assert.equal(config.BUFFER_YOUTUBE_PRIVACY, "private");
+  assert.equal(config.BUFFER_YOUTUBE_PRIVACY, "public");
   assert.equal(config.OPENAI_TTS_MODEL, "gpt-4o-mini-tts");
   assert.equal(config.OPENAI_TTS_VOICE, "coral");
   assert.equal(config.OPENAI_TRANSCRIBE_MODEL, "gpt-4o-mini-transcribe");

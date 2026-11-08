@@ -4,6 +4,7 @@
 > support staff, and partners. Use this document before producing GymFeed copy.
 >
 > Product snapshot: **28 August 2026**<br>
+> Marketing feature update: **16 October 2026**, confirmed by the product owner.<br>
 > App version in repository: **2.1.21 (build 206)**<br>
 > Public website: **https://gymfeed.io**<br>
 > Android package: **com.flutterflow.gymfeedofficial**
@@ -274,6 +275,39 @@ Current limitation: member-created routine edits, schedules, and workout
 history use device-local storage. The generated starter-plan source lives in
 Supabase, but this Train state is not yet guaranteed to follow the user to
 another device or the web session.
+
+### 7.1 Training Marketplace
+
+Owner-confirmed feature update, 16 October 2026:
+
+- Discover training plans from other trainers in GymFeed.
+- Preview a plan's exercises and its available video instructions.
+- Add a selected plan to the member's Train calendar.
+- Approved positioning: find a trainer's plan, understand the exercises, then
+  bring the plan into your own training schedule.
+- Do not infer a fixed price, free access to all plans, trainer credentials,
+  guaranteed results, or that every exercise includes a video.
+- Existing Train recordings do not prove Marketplace browsing, video previews
+  or plan import. Use a matching verified capture for those interactions.
+
+### 7.2 Smartwatch data and AI Coach
+
+Owner-confirmed feature update, 16 October 2026:
+
+- With the member's permission, GymFeed uses data available through Apple Health
+  and Health Connect to inform AI Coach recommendations about activity and
+  recovery.
+- Approved positioning: connect supported health data so AI Coach can take
+  activity and recovery context into account alongside the member's GymFeed data.
+- Describe Apple Health and Health Connect as the integration paths. Do not
+  promise a direct connection to every watch brand or model.
+- Data availability depends on the user's permissions, device and connected
+  health platform. Do not invent supported metrics, clinical accuracy, real-time
+  monitoring, diagnoses or a proprietary readiness score.
+- Apple Health wording does not establish a public iOS launch; the platform
+  availability rule in section 1 still applies.
+- Use verified current-build footage for permission or connection flows and
+  Coach behavior. Existing Coach clips alone do not prove a health-data connection.
 
 ## 8. Events
 

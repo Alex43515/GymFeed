@@ -59,6 +59,15 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env
+    environment:
+      OPENAI_CREATIVE_MODEL: gpt-6-astra
+      OPENAI_FALLBACK_MODEL: gpt-6-astra
+      STUDIO_SCHEDULER: n8n
+      MARKETING_REVIEW_MODE: human
+      MARKETING_CONTINUITY_MODE: locked
+      PHOTO_MUSIC_MODE: notification
+      FAL_SCENE_MAX_ATTEMPTS: 1
+      FAL_SCENE_EDIT_ENABLED: "false"
     volumes:
       - ../secrets/ga4-service-account.json:/run/secrets/ga4-service-account.json:ro
       - ../../docs/marketing/app-captures:/app/docs/marketing/app-captures

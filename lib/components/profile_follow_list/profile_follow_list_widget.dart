@@ -54,7 +54,11 @@ class _ProfileFollowListWidgetState extends State<ProfileFollowListWidget>
   }
 
   Future<void> _reload() async {
-    if (mounted) setState(() => _lists = _load());
+    if (!mounted) return;
+    final lists = _load();
+    setState(() {
+      _lists = lists;
+    });
   }
 
   @override

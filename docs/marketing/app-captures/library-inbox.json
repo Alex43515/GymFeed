@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "library:scan-22equipment-photo-result",
+      "filename": "library-scan-22equipment-photo-result.mp4",
+      "drive_file_id": "1Dd_YXXl5SUrjTXX8Z6PfJTwakT-D8yGL",
+      "drive_name": "scan-22equipment-photo-result",
+      "status": "pending",
+      "added_at": "2026-10-04T11:32:28.707Z",
+      "duration_seconds": 38.315144,
+      "sha256": "fa3a26001939d752b88631dd3b20e550db1e5ea1d953ddc0f8642ab023024e1a",
+      "ai": {
+        "feature": "scan_equipment",
+        "title": "Scan equipment and view exercise setup",
+        "description": "The recording shows the equipment scanner identifying a plate-loaded iso-lateral chest press machine, followed by its exercise details and a routine setup screen with set targets.",
+        "recorded_interactions": [
+          "0.0-3.1s: Coach tab is visible with the Scan equipment tool listed.",
+          "3.2-4.7s: Scan equipment screen shows an empty camera frame and instructions to frame the whole machine.",
+          "4.8-14.3s: A chest press machine appears in the scanner with a “Recognizing machine...” status.",
+          "14.4-19.1s: The identified machine’s details screen shows the exercise name, primary muscles, usage instructions, and Scan again and Add to workout buttons.",
+          "19.2-20.7s: A New routine screen shows the machine exercise listed.",
+          "20.8-35.1s: Set-targets screen displays three sets with rep and weight fields; visible weight values are edited, ending at 60 kg, 65 kg, and 70 kg, with 10 reps shown for each set.",
+          "35.2-36.7s: The New routine screen is shown with a Saving... status over the equipment details screen.",
+          "36.8-38.3s: The machine’s exercise details screen appears, followed by the Coach tab."
+        ],
+        "privacy_concerns": [],
+        "usable_for_marketing": true
+      }
+    },
+    {
+      "id": "library:train-start-track22-complete-set",
+      "filename": "library-train-start-track22-complete-set.mp4",
+      "drive_file_id": "1NGnU7qG59selJ3OIMxKjbRhHYddlQdsc",
+      "drive_name": "train-start-track22-complete-set",
+      "status": "pending",
+      "added_at": "2026-10-04T11:32:40.686Z",
+      "duration_seconds": 25.473189,
+      "sha256": "e70efe47149db3db2088376aaf4db4da1beaade166b6d9349050a6045952eabb",
+      "ai": {
+        "feature": "train",
+        "title": "Upper Body workout tracking and completion",
+        "description": "The recording shows a Train routine being opened, an Upper Body workout tracked set by set, and a workout-complete summary. It also shows the Train calendar and workout options.",
+        "recorded_interactions": [
+          "0.0-1.1s: Coach tab showing AI Coach and Scan food/Scan equipment tools.",
+          "1.1-5.3s: Train tab showing a calendar, an empty Today's plan, and workout plans including Upper Body.",
+          "5.3-8.5s: Upper Body routine detail listing Bench Press, Overhead Press, and Tricep Dips, with a Start workout button.",
+          "8.5-15.9s: Active Upper Body workout screen with exercise sets, weight and rep fields, checked set indicators, a timer, and a rest countdown.",
+          "15.9-17.0s: Workout-complete screen showing duration, total volume, sets done, and exercises.",
+          "17.0-19.1s: Coach plans list and Train calendar screens are visible.",
+          "19.1-21.2s: Add workout panel shows available routines, including Upper Body and other workout categories.",
+          "21.2-24.4s: Train calendar shows an Upper Body workout card with Preview and Start workout buttons."
+        ],
+        "privacy_concerns": [
+          "A truncated name, “Aleks...”, is visible in the Train header."
+        ],
+        "usable_for_marketing": true
+      }
+    },
+    {
+      "id": "library:1",
+      "filename": "library-1.mp4",
+      "drive_file_id": "1yx3OT8RzD7C7jyW11kCcWZNIjq7Nf-Vq",
+      "drive_name": "1. scan-food-photo-review-log-diary",
+      "status": "pending",
+      "added_at": "2026-10-08T17:45:55.280Z",
+      "duration_seconds": 43.004778,
+      "sha256": "33cfb655fe331b49276e24e8233094b8d21b7102a93924d537a3abbb77e957a5",
+      "ai": {
+        "feature": "scan_food",
+        "title": "Scan a meal and review its nutrition",
+        "description": "A food photo is selected and analyzed in Scan food. The app displays a meal labeled “Kebabs with Omelette,” detected ingredients and nutrition values, then shows a nutrition breakdown and the meal in Nutrition diary.",
+        "recorded_interactions": [
+          "0.0-3.6s: AI Coach screen shows the Scan food tool, followed by its camera screen with a prompt to place food inside the frame.",
+          "5.4-7.2s: A Google Photos picker is open with food and other thumbnails; a food photo is selected.",
+          "7.2-10.7s: The selected food photo appears in the Scan food frame with an “Analyzing your plate...” message.",
+          "12.5-16.1s: Scan results show “Kebabs with Omelette,” 380 g, 612 kcal, and detected ingredients kebabs, omelette, and onions with weights.",
+          "16.1-19.7s: The result screen shows meal-type choices and Rescan and See breakdown buttons; Lunch is highlighted in a later frame.",
+          "19.7-25.1s: A nutrition breakdown shows 612 kcal, 46 g protein, 58 g carbs, and 19 g fat, with a Log to diary button.",
+          "25.1-28.7s: Nutrition diary displays its daily goal, meal plan, and logged “Kebabs with Omelette” meal.",
+          "28.7-34.1s: The diary view continues; a brief “Remove meal” control is visible beside the logged meal in one frame."
+        ],
+        "privacy_concerns": [],
+        "usable_for_marketing": true
+      }
+    },
+    {
+      "id": "library:screen-recording-20261101-183443",
+      "filename": "library-screen-recording-20261101-183443.mp4",
+      "drive_file_id": "1TSGV29uW9F2_yVCtFfDHCu3BFNeaue0V",
+      "drive_name": "Screen_Recording_20261101_183443.mp4",
+      "status": "pending",
+      "added_at": "2026-11-01T17:36:02.048Z",
+      "duration_seconds": 16.225111,
+      "sha256": "34752bd91a0529a17a76eb988b145a18023c05c26b8a4499c2dc7ad29c794784",
+      "ai": {
+        "feature": "ai_coach",
+        "title": "AI Coach chat and personalized plans",
+        "description": "The recording shows the Coach landing screen, then an AI Coach conversation with workout-history summaries, recovery guidance, workout details, and a dated meal plan. The chat contains a visible personal name and detailed fitness and nutrition information.",
+        "recorded_interactions": [
+          "0.0-1.4s: Coach landing screen shows the AI Coach introduction and tiles for Scan food, Scan equipment, AI Trainer, Body scan, and Nutrition diary.",
+          "2.0-6.8s: AI Coach chat is open, showing a long text response with workout and nutrition details and suggested prompt buttons beneath it.",
+          "7.5-10.9s: The chat displays recovery guidance, including suggestions for a lighter workout or mobility session and a medical disclaimer.",
+          "11.6-13.6s: The chat shows detailed workout history and a user message asking how the previous session or day went; an assistant summary is visible.",
+          "14.3-16.2s: The chat shows a dated meal-plan card with lunch, dinner, and snack entries, alongside the ongoing conversation."
+        ],
+        "privacy_concerns": [
+          "The name “Aleksandar” is visible in the chat.",
+          "Detailed workout history, nutrition information, and health-related readings are visible."
+        ],
+        "usable_for_marketing": false
+      }
+    },
+    {
+      "id": "library:screen-recording-20261101-184929",
+      "filename": "library-screen-recording-20261101-184929.mp4",
+      "drive_file_id": "1E5DL8ZSaDtzpmkRmyPLd_OdSABReeqiQ",
+      "drive_name": "Screen_Recording_20261101_184929.mp4",
+      "status": "pending",
+      "added_at": "2026-11-01T17:56:01.499Z",
+      "duration_seconds": 15.072656,
+      "sha256": "a7b9c6db5a4478be6bc1856d84a1cfe6f88de1440dcfac92809fc74fa47d66c8",
+      "ai": {
+        "feature": "scan_food",
+        "title": "Scan a protein shake and review its nutrition breakdown",
+        "description": "The recording shows the Scan food interface framing a protein shake, then displaying an editable meal entry with estimated ingredients and nutrition values, followed by a macro breakdown and a confirmation that the meal was added to the diary.",
+        "recorded_interactions": [
+          "0.0-0.6s: AI Coach screen with the Scan food and Scan equipment tools visible.",
+          "0.6-2.5s: Scan food camera interface with framing guides and instructions to place food inside the frame.",
+          "2.5-6.3s: A video of a protein shake appears within the scan frame with an “Analyzing your plate…” overlay; the account handle proteinhouse_uae is visible.",
+          "6.3-9.5s: Scan result form appears for “Protein Shake,” showing 450 g, 320 kcal, and detected ingredients including whey protein powder, milk, peanut butter, and ice.",
+          "9.5-12.0s: The result form shows a meal-type selection with Dinner highlighted, along with Rescan and See breakdown buttons; the next screen displays the nutrition breakdown.",
+          "12.0-15.1s: Nutrition breakdown shows 320 kcal, 35 g protein, 25 g carbs, and 8 g fat. A later screen shows a “Meal added to your diary” confirmation."
+        ],
+        "privacy_concerns": [
+          "The embedded video displays the account handle proteinhouse_uae."
+        ],
+        "usable_for_marketing": true
+      }
+    },
+    {
+      "id": "library:screen-recording-20261101-183852",
+      "filename": "library-screen-recording-20261101-183852.mp4",
+      "drive_file_id": "1qdD3c_tDCrpVbqXHLOtPFcNSHT2wWIck",
+      "drive_name": "Screen_Recording_20261101_183852.mp4",
+      "status": "pending",
+      "added_at": "2026-11-01T17:56:16.151Z",
+      "duration_seconds": 20.609633,
+      "sha256": "ad56923f94f50eacdce6eb4f5835135ec12207bac7a41254a14e71bd448dc173",
+      "ai": {
+        "feature": "ai_coach",
+        "title": "AI Coach meal-plan conversation",
+        "description": "The recording shows the AI Coach tools, then a chat where a user asks what they can do instead. The coach displays meal-planning guidance and a dated plan with options to skip, review, or implement it; a later message confirms planned meals were added to Meal Diary.",
+        "recorded_interactions": [
+          "0.0-1.7s: AI Coach tools screen shows Scan food, Scan equipment, AI Trainer, and Body scan cards.",
+          "2.6-3.4s: AI Coach chat displays a long nutrition and meal-plan response beneath an activity-sharing notice.",
+          "4.3-7.7s: The chat input is used to compose “what can I do instead?”; the on-screen keyboard is visible while the text is entered.",
+          "8.6-12.0s: The submitted question appears in the chat and the coach response is shown, including nutrition guidance and a medical-advice disclaimer.",
+          "12.9-15.5s: A “Your plan is ready below” card appears with a date, workout and planned-meal counts, and Skip, Implement, and Review plan options.",
+          "16.3-18.9s: The plan card remains visible; the Implement option is shown, followed by a plan status indicating meals were added.",
+          "19.8-20.6s: The coach chat shows a confirmation that planned meals were added to Meal Diary."
+        ],
+        "privacy_concerns": [
+          "The chat includes health and nutrition-related content, a plan date, and workout/planned-meal counts; no visible real name, email, phone number, or face."
+        ],
+        "usable_for_marketing": true
+      }
+    },
+    {
+      "id": "library:screen-recording-20261102-175944",
+      "filename": "library-screen-recording-20261102-175944.mp4",
+      "drive_file_id": "1BKBgEfhCvrAqrLbyHoD6HPPVcEzEJuth",
+      "drive_name": "Screen_Recording_20261102_175944.mp4",
+      "status": "pending",
+      "added_at": "2026-11-02T17:01:02.131Z",
+      "duration_seconds": 14.250856,
+      "sha256": "93a0a9f9d9fe5f1119dfa64cb6230e95586778ca34c382d4feb08f4ecebc86d8",
+      "ai": {
+        "feature": "scan_equipment",
+        "title": "Scan equipment to identify a seated shoulder press machine",
+        "description": "The Scan equipment screen shows a machine framed in the camera view while it is being recognized. The identified result is labeled “seated shoulder press machine,” with primary muscle tags and instructions. A New routine screen shows the machine added as an exercise.",
+        "recorded_interactions": [
+          "0.0-1.8s: Scan equipment camera screen displays framing instructions and capture controls.",
+          "1.8-6.5s: A seated shoulder press machine appears in the camera frame with a “Recognizing machine...” indicator.",
+          "6.5-8.3s: An identified equipment card appears for “seated shoulder press machine,” with muscle tags and usage instructions.",
+          "8.3-9.5s: New routine screen shows the seated shoulder press machine listed under Exercises.",
+          "9.5-10.7s: New routine screen remains visible with the same exercise listed.",
+          "10.7-14.25s: The identified seated shoulder press machine information screen is shown again with Scan again and Add to workout controls."
+        ],
+        "privacy_concerns": [],
+        "usable_for_marketing": true
+      }
+    },
+    {
+      "id": "library:screen-recording-20261102-175749",
+      "filename": "library-screen-recording-20261102-175749.mp4",
+      "drive_file_id": "1JUXEDRXS-pThNdIsVV-kdhJosQxROti-",
+      "drive_name": "Screen_Recording_20261102_175749.mp4",
+      "status": "pending",
+      "added_at": "2026-11-02T17:01:14.731Z",
+      "duration_seconds": 11.818089,
+      "sha256": "714bcbb102b5464b7d261d3f95a1869bd9bf7e4bbc573c4659518b4e51b697c9",
+      "ai": {
+        "feature": "training_marketplace",
+        "title": "Browsing training plans and workout routines",
+        "description": "The recording shows the Train dashboard, then the Coach area with a list of training plans and custom routines. It displays details for a 25-minute full-body routine and a plate-loaded chest press routine, including their exercise lists and Start workout buttons. No workout in progress is shown.",
+        "recorded_interactions": [
+          "0.0-0.5s: Train dashboard with a 25-minute full-body workout listed under Today’s plan.",
+          "0.5-2.0s: Coach area showing AI Coach, Training plans, and a list of plans and routines.",
+          "2.0-2.5s: Detail page for “25.Minute Quick Strength — Full Body (Supersets),” with exercises and a Start workout button.",
+          "2.5-4.9s: The full-body routine’s exercise list is shown at different scroll positions; the Start workout button remains visible.",
+          "4.9-5.9s: Coach plans and custom routines list is visible again.",
+          "5.9-7.4s: Detail page for “plate-loaded chest press routine,” showing one exercise and a Start workout button.",
+          "7.4-10.8s: Coach plans and custom routines list appears at different scroll positions.",
+          "10.8-11.8s: Train dashboard with the full-body workout listed under Today’s plan."
+        ],
+        "privacy_concerns": [],
+        "usable_for_marketing": true
+      }
+    },
+    {
+      "id": "library:screen-recording-20261102-174625",
+      "filename": "library-screen-recording-20261102-174625.mp4",
+      "drive_file_id": "1nnbdTdPvuqApQb4BVKYwc4GlGRkz63sj",
+      "drive_name": "Screen_Recording_20261102_174625.mp4",
+      "status": "pending",
+      "added_at": "2026-11-02T17:01:29.344Z",
+      "duration_seconds": 23.285467,
+      "sha256": "9e234fb44a17e8bbd333800b831b8a11428d162fd8238da0fabb4a763c882187",
+      "ai": {
+        "feature": "ai_coach",
+        "title": "AI Coach creates a workout from a chat request",
+        "description": "The AI Coach chat shows a user asking for a shorter gym session, a detailed workout response, and a later workout-added confirmation with a plan card.",
+        "recorded_interactions": [
+          "0.0-1.9s: AI Coach chat shows a plan card, a meal-diary update, and suggested prompts.",
+          "1.9-2.9s: A request for a shorter gym session is visible in the message field with the keyboard open.",
+          "2.9-4.9s: The request appears as a sent chat message; a reviewing-plans indicator is shown.",
+          "4.9-8.7s: AI Coach displays a detailed workout plan with warm-up, supersets, and notes.",
+          "8.7-13.6s: The message field is used to type “yes implement this today”; the keyboard is visible.",
+          "13.6-16.5s: The typed message appears as a sent chat bubble, followed by a reviewing-plans indicator.",
+          "16.5-23.3s: The chat shows “Added 1 workout to Train” and a workout plan card."
+        ],
+        "privacy_concerns": [
+          "A banner indicates activity sharing for “Today's readings” is enabled; the screen also contains a personal fitness request and workout-plan details."
+        ],
+        "usable_for_marketing": true
+      }
+    }
+  ]
+}

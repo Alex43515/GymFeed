@@ -91,10 +91,10 @@ test("approval uses a separate token", async (t) => {
   assert.equal(approved.json().method, "approveContent");
 });
 
-test("automatic idea approval records an Approved - Blocked reason when Drive intake fails", async (t) => {
+test("automatic idea approval records an Approved - Blocked reason when the stored recording is missing", async (t) => {
   const updates = [];
   const acknowledgments = [];
-  const content = { id: "video-1", status: "planned", decision: { content: { scenes: [] }, campaign: { id: "campaign-1" } } };
+  const content = { id: "video-1", status: "planned", content_type: "video", decision: { content: { scenes: [{ asset_type: "app_capture", capture_ref: "requested:proof" }] }, campaign: { id: "campaign-1" } } };
   const cmo = {
     ideaDecision: async () => ({ action: "idea_reviewed" }),
     repository: {
@@ -107,9 +107,7 @@ test("automatic idea approval records an Approved - Blocked reason when Drive in
   };
   const app = buildApp({
     config,
-    orchestrator: fakeOrchestrator(),
-    cmo,
-    captureIngestor: { importApprovedPlan: async () => { throw new Error("Required Drive video is missing: proof.mp4"); } },
+    orchestrator: { ...fakeOrchestrator(), appCaptureResolver: async () => { throw new Error("Missing verified app recording: proof.mp4"); } }, cmo,
     logger: false,
   });
   t.after(() => app.close());
@@ -126,11 +124,11 @@ test("automatic idea approval records an Approved - Blocked reason when Drive in
   assert.match(acknowledgments[0], /Approved - Blocked.*proof\.mp4/);
 });
 
-test("automatic idea approval imports assets before starting exactly one item", async (t) => {
+test("automatic idea approval verifies the stored recording before starting exactly one item", async (t) => {
   const calls = [];
-  const content = { id: "video-1", status: "planned", decision: { content: { scenes: [] }, campaign: { id: "campaign-1" } } };
+  const content = { id: "video-1", status: "planned", content_type: "video", decision: { content: { scenes: [{ asset_type: "app_capture", capture_ref: "requested:proof" }] }, campaign: { id: "campaign-1" } } };
   const cmo = {
-    ideaDecision: async (_entry, options) => { calls.push({ approval: options }); return { action: "idea_reviewed" }; },
+    ideaDecision: async (_entry, options) => { calls.push({ approval: options }); return { action: "idea_reviewed", approvalCycle: "2026-10-03T18:35:39Z" }; },
     repository: {
       contentById: async () => structuredClone(content),
       updateContent: async (_id, patch) => { calls.push({ update: patch }); return { ...content, ...patch }; },
@@ -142,9 +140,7 @@ test("automatic idea approval imports assets before starting exactly one item", 
   };
   const app = buildApp({
     config,
-    orchestrator: fakeOrchestrator(),
-    cmo,
-    captureIngestor: { importApprovedPlan: async () => ({ captures: [{ sha256: "abc" }], images: [{ sha256: "def" }] }) },
+    orchestrator: { ...fakeOrchestrator(), appCaptureResolver: async () => ({ sha256: "abc" }) }, cmo,
     logger: false,
   });
   t.after(() => app.close());
@@ -159,7 +155,46 @@ test("automatic idea approval imports assets before starting exactly one item", 
   assert.deepEqual(calls[0], { approval: { deferProduction: true, acknowledge: false } });
   assert.equal(calls.find((call) => call.execute).execute.action, "start_item");
   assert.equal(calls.find((call) => call.execute).execute.contentId, "video-1");
-  assert.match(calls.find((call) => call.message).message, /Drive assets verified/);
+  assert.equal(calls.find((call) => call.execute).execute.requestKey, "item:video-1:2:2026-10-03T18:35:39Z:abc");
+  assert.match(calls.find((call) => call.message).message, /source recordings verified/);
+});
+
+test("a blocked replacement retry consumes the content approval before intake and never publishes", async (t) => {
+  const calls = [];
+  const content = { id: "video-1", status: "planned", content_type: "video", asset_urls: [], decision: {
+    review_revision: 2, content: { scenes: [{ asset_type: "app_capture", capture_ref: "requested:proof" }] }, campaign: { id: "campaign-1", production_blocked: true, production_block_kind: "capture" },
+  } };
+  const cmo = {
+    repository: { contentById: async () => structuredClone(content), updateContent: async (_id, patch) => ({ ...content, ...patch }) },
+    approvalSheet: {
+      markContentGenerationRetry: async () => { calls.push("consume"); return { marked: true }; },
+      markIdeaDecision: async () => {},
+    },
+    ideaDecision: async () => { calls.push("approve-plan"); return { approvalCycle: "cycle" }; },
+    sync: async () => ({ campaign: { id: "campaign-1" } }),
+    execute: async ({ action }) => { calls.push(action); return { action: "batch_ready_for_asset_review" }; },
+  };
+  const app = buildApp({ config, orchestrator: { ...fakeOrchestrator(), appCaptureResolver: async () => { calls.push("verify"); return { sha256: "abc" }; } }, cmo, logger: false,
+  });
+  t.after(() => app.close());
+  const response = await app.inject({ method: "POST", url: "/v1/cmo/approve-import-and-start",
+    headers: { "x-marketing-token": config.MARKETING_INTERNAL_TOKEN }, payload: { entry: {
+      ideaId: "video-1", campaignId: "campaign-1", version: 2, decision: "Approve",
+      sourceContentReview: { contentId: "video-1", revision: 2, decision: "Approve" },
+    } },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().action, "idea_approved_generated");
+  assert.deepEqual(calls, ["consume", "approve-plan", "verify", "start_item"]);
+  content.asset_urls = ["completed.mp4"];
+  const stale = await app.inject({ method: "POST", url: "/v1/cmo/approve-import-and-start",
+    headers: { "x-marketing-token": config.MARKETING_INTERNAL_TOKEN }, payload: { entry: {
+      ideaId: "video-1", campaignId: "campaign-1", version: 2, decision: "Approve",
+      sourceContentReview: { contentId: "video-1", revision: 2 },
+    } },
+  });
+  assert.equal(stale.json().action, "asset_generation_retry_skipped");
+  assert.equal(calls.length, 4);
 });
 
 test("automatic idea approval returns a reviewable result when generated media fails QA", async (t) => {
@@ -180,7 +215,6 @@ test("automatic idea approval returns a reviewable result when generated media f
     config,
     orchestrator: fakeOrchestrator(),
     cmo,
-    captureIngestor: { importApprovedPlan: async () => ({ captures: [], images: [] }) },
     logger: false,
   });
   t.after(() => app.close());
@@ -217,7 +251,6 @@ test("automatic idea approval records production failures as Approved - Blocked"
     config,
     orchestrator: fakeOrchestrator(),
     cmo,
-    captureIngestor: { importApprovedPlan: async () => ({ captures: [{ sha256: "abc" }], images: [] }) },
     logger: false,
   });
   t.after(() => app.close());
@@ -233,4 +266,5 @@ test("automatic idea approval records production failures as Approved - Blocked"
   assert.equal(response.json().action, "idea_approved_blocked");
   assert.match(messages[0], /Approved - Blocked.*budget exceeded/);
   assert.equal(updates.at(-1).decision.campaign.production_blocked, true);
+    assert.equal(updates.at(-1).status, "failed");
 });

@@ -92,6 +92,11 @@ outputs/
 supabase/.temp/
 firebase/functions/node_modules/
 marketing/node_modules/
+marketing/dashboard/node_modules/
+marketing/dashboard/.next/
+marketing/dashboard/next-env.d.ts
+marketing/dashboard/tsconfig.tsbuildinfo
+marketing/.dashboard-runtime/
 scripts/node_modules/
 website/full_app/
 website/*.zip
