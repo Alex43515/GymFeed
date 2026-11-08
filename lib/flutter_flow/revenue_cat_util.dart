@@ -124,8 +124,11 @@ Future loadOfferings() async {
     return;
   }
   try {
-    _offerings = await Purchases.getOfferings();
-  } on PlatformException catch (e) {
+    // Callers wait on this before showing a paywall, so a store that hangs or
+    // returns something unreadable must not stop them.
+    _offerings =
+        await Purchases.getOfferings().timeout(const Duration(seconds: 8));
+  } catch (e) {
     print("Error loading offerings info: $e");
   }
 }

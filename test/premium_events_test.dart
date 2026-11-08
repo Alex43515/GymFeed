@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gym_feed/ai_workout/coach_events/coach_events_widget.dart';
@@ -9,6 +10,19 @@ import 'package:gym_feed/ai_workout/premium/ai_usage_gate.dart';
 import 'package:gym_feed/backend/supabase/repositories/training_repository.dart';
 
 void main() {
+  const billingChannel = MethodChannel('purchases_flutter');
+
+  setUp(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(billingChannel, (call) async => null);
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(billingChannel, null);
+  });
+
   test('only the designated QA auth user receives unlimited premium usage', () {
     expect(
       hasPremiumTesterOverride('a9fd1bc3-61a8-43a0-b96e-b6e7f0c6d060'),
@@ -177,6 +191,29 @@ void main() {
 
     expect(find.byKey(const ValueKey('event-card-strength')), findsNothing);
     expect(find.byKey(const ValueKey('event-card-yoga')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the real Upgrade button on Coach opens the paywall',
+      (tester) async {
+    configurePhone(tester);
+    await tester.pumpWidget(phoneApp(CoachHomeWidget(
+      statsLoader: () async => const CoachStats(),
+      premiumStatusLoader: () async => PremiumStatus.fromServer(const {
+        'seconds_left': 86400,
+        'invites_used': 0,
+        'invites_max': 4,
+      }, paid: false),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const ValueKey('coach-upgrade')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('coach-upgrade')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PaymentWidget), findsOneWidget);
+    expect(find.text('Premium plan'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

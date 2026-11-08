@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '/ai_workout/payment/payment_widget.dart';
 import '/ai_workout/premium/premium_access.dart';
 import '/backend/supabase/supabase.dart';
-import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
 
 export '/ai_workout/premium/premium_access.dart'
     show
@@ -87,9 +86,9 @@ class AiUsageGate {
   }
 }
 
+/// Opens the paywall straight away. The paywall loads the store's price
+/// itself, so a slow or failing store can never stop it from appearing.
 Future<void> openPremiumUpgrade(BuildContext context) async {
-  await revenue_cat.loadOfferings();
-  if (!context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       fullscreenDialog: true,

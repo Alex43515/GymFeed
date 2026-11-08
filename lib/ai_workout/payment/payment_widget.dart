@@ -1,3 +1,4 @@
+import '/ai_workout/premium/premium_access.dart';
 import '/components/eula/eula_widget.dart';
 import '/components/privacy_plocy/privacy_plocy_widget.dart';
 import '/custom_code/widgets/create_ui.dart';
@@ -41,11 +42,10 @@ class _PaymentWidgetState extends State<PaymentWidget> {
     _model = createModel(context, () => PaymentModel());
     _tab = widget.initialPremium ? 1 : 0;
 
-    if (revenue_cat.offerings == null) {
-      revenue_cat.loadOfferings().then((_) {
-        if (mounted) safeSetState(() {});
-      });
-    }
+    // The page is already on screen; the price fills in when the store answers.
+    revenue_cat.loadOfferings().then((_) {
+      if (mounted) safeSetState(() {});
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
@@ -307,6 +307,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
       );
       if (!mounted) return;
       if (outcome == revenue_cat.PurchaseOutcome.active) {
+        PremiumAccess.instance.invalidate();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('GymFeed Pro is now active.')),
         );
@@ -386,6 +387,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                       final premiumActive = restored &&
                           revenue_cat.activeEntitlementIds
                               .contains('premium_features');
+                      if (premiumActive) PremiumAccess.instance.invalidate();
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
