@@ -177,7 +177,9 @@ void main() {
     test('invite text links to the store download page', () {
       final text = gymFeedInviteText(username: 'alexZ');
       expect(text, contains('https://gymfeed.io/download'));
-      expect(text, contains("I'm @alexZ."));
+      expect(text, contains('enter @alexZ under "Who invited you?"'));
+      expect(text, contains('7 extra days of Premium'));
+      expect(gymFeedInviteText(username: '@alexZ'), text);
       expect(text, contains('Founding'));
       expect(gymFeedInviteText(), isNot(contains('@')));
     });

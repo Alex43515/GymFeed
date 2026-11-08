@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '/ai_workout/coach_home/coach_home_widget.dart';
 import '/backend/supabase/repositories/notification_repository.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
 import '/backend/supabase/supabase_records.dart';
@@ -15,6 +16,15 @@ class NotificationsWidget extends StatefulWidget {
 
   static String routeName = 'Notifications';
   static String routePath = 'notifications';
+
+  /// Server-sent reminder that free Premium days are ending
+  /// (queue_premium_reminders). It has no actor and opens the Coach page,
+  /// where the days and the invite button are.
+  static bool isPremiumReminder(AppNotification item) =>
+      item.type.toLowerCase() == 'premium_reminder';
+
+  static const premiumReminderText =
+      'Your free Premium ends soon. Invite a friend and you both get 7 more days.';
 
   @override
   State<NotificationsWidget> createState() => _NotificationsWidgetState();
@@ -104,6 +114,10 @@ class _NotificationsWidgetState extends State<NotificationsWidget> {
       await _notifications.markRead(item.id).catchError((_) {});
     }
     if (!mounted) return;
+    if (NotificationsWidget.isPremiumReminder(item)) {
+      context.goNamed(CoachHomeWidget.routeName);
+      return;
+    }
     if (item.postId?.isNotEmpty == true) {
       context.pushNamed(
         PostDetailsWidget.routeName,
@@ -297,6 +311,9 @@ class _NotificationsWidgetState extends State<NotificationsWidget> {
       );
 
   Widget _notificationRow(AppNotification item) {
+    if (NotificationsWidget.isPremiumReminder(item)) {
+      return _premiumReminderRow(item);
+    }
     final follow = _isFollow(item);
     final accent = follow ? const Color(0xFF3E9BFF) : const Color(0xFFFF4F8B);
     final actor = item.actorDisplayName.trim().isNotEmpty
@@ -367,6 +384,75 @@ class _NotificationsWidgetState extends State<NotificationsWidget> {
                     errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                   ),
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _premiumReminderRow(AppNotification item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('notification-premium-reminder-${item.id}'),
+        onTap: () => _open(item),
+        borderRadius: BorderRadius.circular(17),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: item.isRead ? Colors.transparent : const Color(0x1716E77D),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(
+              color: item.isRead ? Colors.transparent : const Color(0x4316E77D),
+            ),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 52,
+                height: 52,
+                child: Center(
+                  child: CircleAvatar(
+                    radius: 24,
+                    backgroundColor: _green,
+                    child: Icon(
+                      Icons.workspace_premium_rounded,
+                      color: Colors.black,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: RichText(
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                    children: [
+                      const TextSpan(
+                        text: 'GymFeed ',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const TextSpan(text: NotificationsWidget.premiumReminderText),
+                      TextSpan(
+                        text: '  ${_relativeTime(item.createdAt)}',
+                        style: const TextStyle(color: _muted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: _muted),
             ],
           ),
         ),

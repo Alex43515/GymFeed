@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '/ai_workout/coach_tools/coach_tools_widget.dart';
+import '/ai_workout/premium/premium_access.dart';
+import '/auth/firebase_auth/auth_util.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
 import '/backend/share_links.dart';
 import '/backend/supabase/repositories/founding_repository.dart';
@@ -87,6 +89,10 @@ class FirstRunFlow {
     if (_running || userId.isEmpty || await isDone(userId)) return;
     _running = true;
     try {
+      // The popup says the free Premium days start now, so start them: the
+      // first status request creates the server row (and queues the welcome
+      // email).
+      unawaited(PremiumAccess.instance.status(refresh: true));
       FoundingStatus status;
       try {
         status = await statusLoader();
@@ -115,7 +121,10 @@ class FirstRunFlow {
     );
     if (!context.mounted) return;
     if (choice == WelcomeChoice.invite) {
-      unawaited(shareGymFeedInvite());
+      // The friend needs this user's username for the +7 days referral.
+      unawaited(shareGymFeedInvite(
+        username: valueOrDefault(currentUserDocument?.username, ''),
+      ));
     }
 
     if (askForPush && _canAskForPush) {

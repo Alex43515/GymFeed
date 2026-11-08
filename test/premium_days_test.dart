@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +8,9 @@ import 'package:gym_feed/ai_workout/premium/ai_usage_gate.dart';
 import 'package:gym_feed/ai_workout/premium/invite_friends.dart';
 import 'package:gym_feed/ai_workout/premium/premium_access.dart';
 import 'package:gym_feed/app_state.dart';
+import 'package:gym_feed/backend/share_links.dart';
+import 'package:gym_feed/backend/supabase/repositories/notification_repository.dart';
+import 'package:gym_feed/pages/misc/notifications/notifications_widget.dart';
 import 'package:gym_feed/singup/onboarding/sign_up/sign_up_widget.dart';
 
 void main() {
@@ -240,6 +245,25 @@ void main() {
       expect(text, contains('https://gymfeed.io/download'));
     });
 
+    test('every invite button sends the referral text with the username', () {
+      expect(gymFeedInviteText(username: 'alex_fit'),
+          referralInviteText(username: 'alex_fit'));
+      final popup =
+          File('lib/components/first_run/first_run_flow.dart').readAsStringSync();
+      expect(popup, contains('shareGymFeedInvite('));
+      expect(popup, contains('currentUserDocument?.username'));
+      final followers = File(
+              'lib/components/profile_follow_list/profile_follow_list_widget.dart')
+          .readAsStringSync();
+      expect(followers, contains('username: username,'));
+    });
+
+    test('the Founding popup starts the free days', () {
+      final popup =
+          File('lib/components/first_run/first_run_flow.dart').readAsStringSync();
+      expect(popup, contains('PremiumAccess.instance.status(refresh: true)'));
+    });
+
     test('pending invite usernames are normalised', () {
       expect(PendingInvite.normalize('  @@alice '), 'alice');
       expect(PendingInvite.normalize(''), '');
@@ -301,6 +325,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(closedWith?.ok, isTrue);
       expect(find.byKey(const ValueKey('redeem-invite-input')), findsNothing);
+    });
+  });
+
+  group('Premium reminder', () {
+    test('server reminder items are recognised and explained', () {
+      expect(
+          NotificationsWidget.isPremiumReminder(
+              AppNotification({'type': 'premium_reminder'})),
+          isTrue);
+      expect(
+          NotificationsWidget.isPremiumReminder(
+              AppNotification({'type': 'like'})),
+          isFalse);
+      expect(NotificationsWidget.premiumReminderText,
+          contains('Invite a friend and you both get 7 more days.'));
+    });
+
+    test('tapping the reminder opens the Coach page', () {
+      final source = File('lib/pages/misc/notifications/notifications_widget.dart')
+          .readAsStringSync();
+      expect(source, contains('context.goNamed(CoachHomeWidget.routeName)'));
     });
   });
 }

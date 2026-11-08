@@ -67,10 +67,19 @@ Future<void> shareGymFeedTrainingPlan({
 const gymFeedDownloadUrl = '$gymFeedWebOrigin/download';
 
 /// Text a user sends to bring a friend (gym partner) to GymFeed.
-String gymFeedInviteText({String username = ''}) {
-  final handle = username.trim();
-  final from = handle.isEmpty ? '' : " I'm @$handle.";
-  return 'Join me on GymFeed, the first 1,000 get Founding perks.$from\n'
+///
+/// With the sender's username it tells the friend to enter it under
+/// "Who invited you?" at sign-up, which is what gives both of them the
+/// referral bonus (server function redeem_invite: +7 days each, up to 4
+/// friends). Every invite button uses this text.
+String gymFeedInviteText({String username = '', int bonusDays = 7}) {
+  final handle = username.trim().replaceFirst(RegExp(r'^@+'), '');
+  final enter = handle.isEmpty
+      ? ''
+      : ' When you sign up, enter @$handle under "Who invited you?" and we '
+          'both get $bonusDays extra days of Premium.';
+  return 'Join me on GymFeed, the app that keeps me on track at the gym. '
+      'The first 1,000 members get Founding perks.$enter\n'
       '$gymFeedDownloadUrl';
 }
 

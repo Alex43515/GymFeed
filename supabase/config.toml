@@ -28,3 +28,6 @@ verify_jwt = false
 
 [functions.push-worker]
 verify_jwt = false
+
+[functions.lifecycle-email]
+verify_jwt = false

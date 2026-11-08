@@ -4,7 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '/ai_workout/premium/premium_access.dart';
-import '/backend/share_links.dart' show gymFeedDownloadUrl;
+import '/backend/share_links.dart' show gymFeedInviteText;
 
 /// Username typed into "Who invited you?" during signup. It is kept until the
 /// verified profile exists and the invite has been redeemed.
@@ -43,15 +43,11 @@ class PendingInvite {
 
 /// Share text for the referral program. It tells the friend exactly what to
 /// type, because the bonus only arrives when they enter the username.
-String referralInviteText({required String username, int bonusDays = 7}) {
-  final handle = PendingInvite.normalize(username);
-  final enter = handle.isEmpty
-      ? ''
-      : ' When you sign up, enter @$handle under "Who invited you?" and we both get $bonusDays extra days of Premium.';
-  return 'Join me on GymFeed, the app that keeps me on track at the gym. '
-      'The first 1,000 members get Founding perks.$enter\n'
-      '$gymFeedDownloadUrl';
-}
+String referralInviteText({required String username, int bonusDays = 7}) =>
+    gymFeedInviteText(
+      username: PendingInvite.normalize(username),
+      bonusDays: bonusDays,
+    );
 
 Future<void> shareReferralInvite(
   BuildContext context, {
