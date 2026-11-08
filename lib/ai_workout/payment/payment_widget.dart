@@ -23,6 +23,8 @@ class PaymentWidget extends StatefulWidget {
 class _PaymentWidgetState extends State<PaymentWidget> {
   late PaymentModel _model;
 
+  static const _surface = Color(0xFF151515);
+
   // 0 = Free, 1 = Premium. Matches the two tabs in the paywall design.
   int _tab = 0;
   bool _billingBusy = false;
@@ -63,51 +65,156 @@ class _PaymentWidgetState extends State<PaymentWidget> {
       child: InkWell(
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(12.0),
         onTap: () => safeSetState(() => _tab = index),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10.0),
-              child: Text(
-                label,
-                style: theme.bodyMedium.override(
-                  fontFamily: 'Poppins',
-                  color: active ? theme.tertiary : kCreateHint,
-                  fontSize: 16.0,
-                  letterSpacing: 0.0,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 40.0,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? theme.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(12.0),
+          ),
+          child: Text(
+            label,
+            style: theme.bodyMedium.override(
+              fontFamily: 'Poppins',
+              color: active ? Colors.black : kCreateHint,
+              fontSize: 15.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w600,
             ),
-            Container(
-              height: 2.0,
-              color: active ? theme.primary : const Color(0xFF2A2A2A),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _feature(String text) {
+  Widget _priceCard({required bool isFree, required String premiumPrice}) {
+    final theme = FlutterFlowTheme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 18.0),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(18.0),
+        border: Border.all(
+          color: isFree ? const Color(0x33FFFFFF) : theme.primary,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            isFree ? 'Free plan' : 'Premium plan',
+            style: theme.bodyMedium.override(
+              fontFamily: 'Poppins',
+              color: isFree ? kCreateHint : theme.primary,
+              fontSize: 14.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4.0),
+          Text(
+            isFree
+                ? 'Free'
+                : premiumPrice.isEmpty
+                    ? 'Monthly'
+                    : premiumPrice,
+            style: theme.headlineMedium.override(
+              fontFamily: 'Poppins',
+              color: theme.tertiary,
+              fontSize: 38.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            isFree ? 'No subscription needed' : 'Per month',
+            style: theme.bodyMedium.override(
+              fontFamily: 'Poppins',
+              color: kCreateHint,
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _feature(IconData icon, String title, String detail) {
     final theme = FlutterFlowTheme.of(context);
     return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 16.0),
+      padding: const EdgeInsets.only(bottom: 14.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle_rounded, color: theme.primary, size: 22.0),
+          Container(
+            width: 42.0,
+            height: 42.0,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFF103820),
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: Icon(icon, color: theme.primary, size: 21.0),
+          ),
           const SizedBox(width: 12.0),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.bodyMedium.override(
+                    fontFamily: 'Poppins',
+                    color: theme.tertiary,
+                    fontSize: 15.0,
+                    letterSpacing: 0.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 1.0),
+                Text(
+                  detail,
+                  style: theme.bodyMedium.override(
+                    fontFamily: 'Poppins',
+                    color: kCreateHint,
+                    fontSize: 13.0,
+                    letterSpacing: 0.0,
+                    lineHeight: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _note(IconData icon, String text) {
+    final theme = FlutterFlowTheme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14.0),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: theme.primary, size: 18.0),
+          const SizedBox(width: 10.0),
           Expanded(
             child: Text(
               text,
               style: theme.bodyMedium.override(
                 fontFamily: 'Poppins',
                 color: theme.tertiary,
-                fontSize: 15.0,
+                fontSize: 13.0,
                 letterSpacing: 0.0,
-                fontWeight: FontWeight.normal,
                 lineHeight: 1.35,
               ),
             ),
@@ -310,116 +417,106 @@ class _PaymentWidgetState extends State<PaymentWidget> {
               ),
               const SizedBox(height: 16.0),
               // Tabs
-              Row(children: [_tabButton('Free', 0), _tabButton('Premium', 1)]),
+              Container(
+                padding: const EdgeInsets.all(4.0),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(16.0),
+                ),
+                child: Row(
+                  children: [_tabButton('Free', 0), _tabButton('Premium', 1)],
+                ),
+              ),
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 22.0),
+                      const SizedBox(height: 20.0),
                       Text(
-                        'Start Your Fitness Journey with GymFeed',
+                        isFree
+                            ? 'Train and share for free'
+                            : 'Your AI coach for training and food',
                         textAlign: TextAlign.center,
                         style: theme.headlineMedium.override(
                           fontFamily: 'Poppins',
                           color: theme.tertiary,
-                          fontSize: 27.0,
+                          fontSize: 25.0,
                           letterSpacing: 0.0,
                           fontWeight: FontWeight.w700,
                           lineHeight: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 10.0),
+                      const SizedBox(height: 8.0),
                       Text(
-                        'Elevate your fitness and health experience with our premium AI features',
+                        isFree
+                            ? 'Track your workouts and stay connected with your gym community.'
+                            : 'Scan meals and gym machines, and get coaching that fits your day.',
                         textAlign: TextAlign.center,
                         style: theme.bodyMedium.override(
                           fontFamily: 'Poppins',
                           color: kCreateHint,
                           fontSize: 14.0,
                           letterSpacing: 0.0,
+                          lineHeight: 1.35,
                         ),
                       ),
-                      const SizedBox(height: 22.0),
-                      // Price
-                      Center(
-                        child: Text(
-                          isFree
-                              ? '0€'
-                              : premiumPrice.isEmpty
-                                  ? 'Monthly'
-                                  : premiumPrice,
-                          style: theme.headlineMedium.override(
-                            fontFamily: 'Poppins',
-                            color: theme.tertiary,
-                            fontSize: 44.0,
-                            letterSpacing: 0.0,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 2.0),
-                      Center(
-                        child: Text(
-                          'Per month',
-                          style: theme.bodyMedium.override(
-                            fontFamily: 'Poppins',
-                            color: kCreateHint,
-                            fontSize: 14.0,
-                            letterSpacing: 0.0,
-                          ),
-                        ),
-                      ),
+                      const SizedBox(height: 18.0),
+                      _priceCard(isFree: isFree, premiumPrice: premiumPrice),
                       const SizedBox(height: 20.0),
-                      // Plan chip (outlined)
-                      Container(
-                        width: double.infinity,
-                        height: 54.0,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(16.0),
-                          border: Border.all(
-                            color: isFree
-                                ? const Color(0x33FFFFFF)
-                                : theme.primary,
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Text(
-                          isFree ? 'Free plan' : 'Premium plan',
-                          style: theme.bodyMedium.override(
-                            fontFamily: 'Poppins',
-                            color: theme.tertiary,
-                            fontSize: 16.0,
-                            letterSpacing: 0.0,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 22.0),
-                      // Features
+                      // What each plan really includes. The 40 matches the
+                      // daily limit in the claim_ai_use server function.
                       if (isFree) ...[
-                        _feature('Customer Support'),
-                        _feature('Unlimited numbers of creations'),
                         _feature(
-                            '3 shared uses of Scan food, Scan equipment, and AI Trainer'),
+                          Icons.dynamic_feed_rounded,
+                          'Feed and community',
+                          'Post your progress, follow friends and join events',
+                        ),
+                        _feature(
+                          Icons.playlist_add_check_rounded,
+                          'Workout tracking',
+                          'Log your sets and build your routines',
+                        ),
+                        _feature(
+                          Icons.menu_book_rounded,
+                          'Training plans',
+                          'Follow ready-made plans from the community',
+                        ),
+                        _note(
+                          Icons.card_giftcard_rounded,
+                          'New members get free Premium days. Invite a friend and you both get 7 more days, up to 4 friends.',
+                        ),
                       ] else ...[
-                        _feature('Customer Support'),
-                        _feature('Unlimited numbers of creations'),
-                        _feature('Unlimited food and equipment scans'),
-                        _feature('Unlimited AI Trainer conversations'),
-                        _feature('Detailed body composition reports'),
-                        _feature('One month of GymFeed Pro access'),
+                        _feature(
+                          Icons.restaurant_rounded,
+                          'Food scanner',
+                          'Calories and macros from a photo',
+                        ),
+                        _feature(
+                          Icons.fitness_center_rounded,
+                          'Equipment scanner',
+                          'Identify a machine and see how to use it',
+                        ),
+                        _feature(
+                          Icons.auto_awesome_rounded,
+                          'AI Trainer',
+                          'Chat about training and nutrition, and get workout and meal plans',
+                        ),
+                        _note(
+                          Icons.info_outline_rounded,
+                          'Includes up to 40 scans and AI Trainer messages a day.',
+                        ),
                       ],
-                      const SizedBox(height: 8.0),
+                      const SizedBox(height: 12.0),
                     ],
                   ),
                 ),
               ),
               // Bottom CTA + terms
               Text(
-                'Auto-renewable. Cancel anytime',
+                isFree
+                    ? 'Upgrade anytime'
+                    : 'Auto-renews monthly. Cancel anytime.',
                 textAlign: TextAlign.center,
                 style: theme.bodySmall.override(
                   fontFamily: 'Poppins',

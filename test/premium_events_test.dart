@@ -122,7 +122,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pro active'), findsOneWidget);
-    expect(find.text('GymFeed Pro active · Unlimited AI tools'), findsOneWidget);
+    expect(find.text('GymFeed Pro active · All AI tools'), findsOneWidget);
     expect(find.byKey(const ValueKey('coach-premium-banner')), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -189,8 +189,46 @@ void main() {
     await tester.pump();
 
     expect(find.text('Premium plan'), findsOneWidget);
-    expect(find.text('One month of GymFeed Pro access'), findsOneWidget);
     expect(find.text('Subscribe'), findsOneWidget);
+    expect(find.text('Per month'), findsOneWidget);
+    expect(find.text('Auto-renews monthly. Cancel anytime.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('paywall lists what Premium includes and its daily limit',
+      (tester) async {
+    configurePhone(tester);
+    await tester.pumpWidget(phoneApp(
+      const Scaffold(body: PaymentWidget(initialPremium: true)),
+    ));
+    await tester.pump();
+
+    expect(find.text('Food scanner'), findsOneWidget);
+    expect(find.text('Equipment scanner'), findsOneWidget);
+    expect(find.text('AI Trainer'), findsOneWidget);
+    expect(find.text('Includes up to 40 scans and AI Trainer messages a day.'),
+        findsOneWidget);
+    expect(find.textContaining(RegExp('unlimited', caseSensitive: false)),
+        findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('free tab describes the free plan and leads to Premium',
+      (tester) async {
+    configurePhone(tester);
+    await tester.pumpWidget(phoneApp(const Scaffold(body: PaymentWidget())));
+    await tester.pump();
+
+    expect(find.text('Free plan'), findsOneWidget);
+    expect(find.text('Feed and community'), findsOneWidget);
+    expect(find.textContaining('free Premium days'), findsOneWidget);
+    expect(find.textContaining('3 shared uses'), findsNothing);
+    expect(find.textContaining(RegExp('unlimited', caseSensitive: false)),
+        findsNothing);
+
+    await tester.tap(find.text('Try Premium'));
+    await tester.pumpAndSettle();
+    expect(find.text('Premium plan'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

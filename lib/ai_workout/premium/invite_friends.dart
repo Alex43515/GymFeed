@@ -263,8 +263,8 @@ class PremiumDaysCard extends StatelessWidget {
             active
                 ? invites
                 : status.serverKnown
-                    ? 'Invite a friend for ${status.referralBonusDays} more days, or upgrade for unlimited AI tools.'
-                    : 'Unlimited AI scans and coaching.',
+                    ? 'Invite a friend for ${status.referralBonusDays} more days, or upgrade to keep your AI tools.'
+                    : 'AI scans and coaching.',
             style: _text(12, color: const Color(0xFFB9E8CB)),
           ),
           if (!active && status.serverKnown) ...[
@@ -346,7 +346,7 @@ class PremiumDaysCard extends StatelessWidget {
           const Icon(Icons.workspace_premium_rounded, color: _green),
           const SizedBox(width: 11),
           Expanded(
-            child: Text('GymFeed Pro active · Unlimited AI tools',
+            child: Text('GymFeed Pro active · All AI tools',
                 style: _text(13, weight: FontWeight.w700)),
           ),
         ],
