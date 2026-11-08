@@ -1,9 +1,42 @@
-import 'dart:ui' show Rect;
-
+import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
 const gymFeedAppScheme = 'com.flutterflow.gymfeedofficial';
 const gymFeedWebOrigin = 'https://gymfeed.io';
+
+/// Where the share sheet is anchored. iPads and iPhones on iOS 26 refuse to
+/// open it without a non-empty rectangle inside the screen, and throw instead.
+Rect shareSheetOrigin([BuildContext? context]) {
+  final box = context?.findRenderObject();
+  if (box is RenderBox && box.hasSize && !box.size.isEmpty) {
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+  final view = WidgetsBinding.instance.platformDispatcher.views.first;
+  final size = view.physicalSize / view.devicePixelRatio;
+  return Rect.fromCenter(center: size.center(Offset.zero), width: 2, height: 2);
+}
+
+/// Opens the profile in the app (App Links and Universal Links), or a landing
+/// page with the store buttons when GymFeed is not installed.
+String gymFeedProfileShareUrl(String username) {
+  final handle = username.trim().replaceFirst(RegExp(r'^@+'), '');
+  if (handle.isEmpty) throw ArgumentError.value(username, 'username');
+  return '$gymFeedWebOrigin/u/${Uri.encodeComponent(handle)}';
+}
+
+Future<void> shareGymFeedProfile({
+  required String username,
+  String displayName = '',
+  Rect? sharePositionOrigin,
+}) {
+  final handle = username.trim().replaceFirst(RegExp(r'^@+'), '');
+  final name = displayName.trim().isEmpty ? '@$handle' : displayName.trim();
+  return Share.share(
+    'View @$handle on GymFeed\n${gymFeedProfileShareUrl(handle)}',
+    subject: '$name on GymFeed',
+    sharePositionOrigin: sharePositionOrigin ?? shareSheetOrigin(),
+  );
+}
 
 String gymFeedPostShareUrl(String postId) {
   final id = postId.trim();
@@ -90,6 +123,6 @@ Future<void> shareGymFeedInvite({
   return Share.share(
     gymFeedInviteText(username: username),
     subject: 'Join me on GymFeed',
-    sharePositionOrigin: sharePositionOrigin,
+    sharePositionOrigin: sharePositionOrigin ?? shareSheetOrigin(),
   );
 }

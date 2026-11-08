@@ -5,6 +5,7 @@ import '/backend/backend.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
 import '/backend/supabase/repositories/training_plan_repository.dart';
 import '/backend/supabase/repositories/training_repository.dart';
+import '/components/first_run/tour_anchor.dart';
 import '/components/founding_badge/founding_badge.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/components/post_type_badge/post_type_badge.dart';
@@ -229,7 +230,8 @@ class _MobileProfileViewState extends State<MobileProfileView> {
                         const SizedBox(width: 10),
                         _headerButton('Share profile', widget.onShare,
                             background: const Color(0xFFAAB5BF),
-                            foreground: Colors.white),
+                            foreground: Colors.white,
+                            tourId: 'profile-share'),
                       ]
                     : [
                         _headerButton(
@@ -264,25 +266,31 @@ class _MobileProfileViewState extends State<MobileProfileView> {
   }
 
   Widget _headerButton(String label, VoidCallback? onPressed,
-      {required Color background, required Color foreground}) {
+      {required Color background, required Color foreground, String? tourId}) {
     return Expanded(
-      child: SizedBox(
-        height: 48,
-        child: FilledButton(
-          onPressed: onPressed,
-          style: FilledButton.styleFrom(
-            backgroundColor: background,
-            foregroundColor: foreground,
-            disabledBackgroundColor: background.withValues(alpha: .6),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: _tourAnchored(
+        tourId,
+        SizedBox(
+          height: 48,
+          child: FilledButton(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: background,
+              foregroundColor: foreground,
+              disabledBackgroundColor: background.withValues(alpha: .6),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+            ),
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
-          child:
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
         ),
       ),
     );
   }
+
+  Widget _tourAnchored(String? id, Widget child) =>
+      id == null ? child : TourAnchor(id: id, child: child);
 
   Widget _stat(String label, String value, {VoidCallback? onTap}) => Expanded(
         child: InkWell(

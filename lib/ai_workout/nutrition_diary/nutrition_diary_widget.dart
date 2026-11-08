@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '/components/first_run/bubble_tour.dart';
+import '/components/first_run/tour_anchor.dart';
 import '/backend/supabase/repositories/meal_repository.dart';
 import '/backend/supabase/repositories/starter_plan_repository.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -87,6 +89,13 @@ class _NutritionDiaryWidgetState extends State<NutritionDiaryWidget> {
         _day = day;
         _loading = false;
       });
+      if (day.plannedMeals.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          BubbleTour.showTipOnce(
+              BubbleTour.mealPlanTipId, BubbleTour.mealPlanTip);
+        });
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -347,29 +356,39 @@ class _NutritionDiaryWidgetState extends State<NutritionDiaryWidget> {
           _MacroCard(day: day),
           const SizedBox(height: 20),
           if (day.plannedMeals.isNotEmpty) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    isToday
-                        ? "Today's meal plan"
-                        : '${DateFormat('EEEE').format(_selectedDate)} meal plan',
-                    style: _diaryText(size: 16, weight: FontWeight.w700),
+            TourAnchor(
+              id: 'diary-plan',
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isToday
+                          ? "Today's meal plan"
+                          : '${DateFormat('EEEE').format(_selectedDate)} meal plan',
+                      style: _diaryText(size: 16, weight: FontWeight.w700),
+                    ),
                   ),
-                ),
-                Text('AI plan',
-                    style: _diaryText(
-                        size: 10, color: _diaryGreen, weight: FontWeight.w700)),
-              ],
+                  Text('AI plan',
+                      style: _diaryText(
+                          size: 10,
+                          color: _diaryGreen,
+                          weight: FontWeight.w700)),
+                ],
+              ),
             ),
             const SizedBox(height: 10),
             for (final planned in day.plannedMeals) ...[
-              _PlannedMealCard(
-                meal: planned,
-                logged: day.meals
-                    .any((meal) => meal.starterPlanMealId == planned.id),
-                onOpen: () => _openPlannedMeal(planned),
-                onLog: () => _logPlannedMeal(planned),
+              TourAnchor(
+                id: planned == day.plannedMeals.first
+                    ? 'diary-plan-meal'
+                    : 'diary-plan-other',
+                child: _PlannedMealCard(
+                  meal: planned,
+                  logged: day.meals
+                      .any((meal) => meal.starterPlanMealId == planned.id),
+                  onOpen: () => _openPlannedMeal(planned),
+                  onLog: () => _logPlannedMeal(planned),
+                ),
               ),
               const SizedBox(height: 10),
             ],

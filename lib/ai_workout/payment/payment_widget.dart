@@ -500,6 +500,11 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                           'Identify a machine and see how to use it',
                         ),
                         _feature(
+                          Icons.accessibility_new_rounded,
+                          'Body scan',
+                          'Full body composition report from a photo',
+                        ),
+                        _feature(
                           Icons.auto_awesome_rounded,
                           'AI Trainer',
                           'Chat about training and nutrition, and get workout and meal plans',

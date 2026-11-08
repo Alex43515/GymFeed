@@ -10,9 +10,10 @@ import 'package:flutter/material.dart';
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 import 'package:share_plus/share_plus.dart';
+import '/backend/share_links.dart' show shareSheetOrigin;
 
 Future<void> shareViaSystemShare(String message) async {
-  await Share.share(message);
+  await Share.share(message, sharePositionOrigin: shareSheetOrigin());
 }
 // Set your action name, define your arguments and return parameter,
 // and then add the boilerplate code using the green button on the right!

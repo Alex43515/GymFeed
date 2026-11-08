@@ -2,15 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '/ai_workout/coach_tools/coach_tools_widget.dart';
 import '/ai_workout/premium/premium_access.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
 import '/backend/share_links.dart';
 import '/backend/supabase/repositories/founding_repository.dart';
 import '/backend/supabase/supabase.dart';
+import '/components/first_run/bubble_tour.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
 const _green = Color(0xFF16E77D);
@@ -39,6 +40,8 @@ class FirstRunFlow {
 
   static const _prefix = 'gymfeed_first_run_done_v1_';
   static bool _running = false;
+
+  static bool get isRunning => _running;
 
   /// Overridable in tests.
   @visibleForTesting
@@ -76,6 +79,38 @@ class FirstRunFlow {
     } catch (_) {}
   }
 
+  // True from the plan-generation screen until the athlete leaves the plan
+  // summary. The metadata stage cannot tell: it says answers_complete both
+  // during generation and long after.
+  static bool _finishingRegistration = false;
+
+  static void beginFinishingRegistration() => _finishingRegistration = true;
+
+  /// Registration runs from the email step through plan generation. Nothing
+  /// from this flow may appear before it ends, even though the Feed is built
+  /// underneath every signup screen (they are nested routes of '/').
+  static bool registrationOpen(String? onboardingStage) =>
+      _finishingRegistration ||
+      onboardingStage == 'awaiting_email' ||
+      onboardingStage == 'questions';
+
+  /// Called when registration is over and the athlete has landed in the app.
+  static void startAfterRegistration() {
+    _finishingRegistration = false;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      final context = appNavigatorKey.currentContext;
+      if (context != null) unawaited(maybeStart(context));
+    });
+  }
+
+  static User? _currentUser() {
+    try {
+      return supabase.auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Called at login. Returning users keep today's behaviour (silent token
   /// refresh); new users get the permission prompt from the flow instead.
   static Future<void> registerPushUnlessDeferred(String userId) async {
@@ -85,24 +120,32 @@ class FirstRunFlow {
 
   /// Starts the flow from Home if this account has not seen it yet.
   static Future<void> maybeStart(BuildContext context) async {
-    final userId = supabase.auth.currentUser?.id ?? '';
-    if (_running || userId.isEmpty || await isDone(userId)) return;
+    final user = _currentUser();
+    final userId = user?.id ?? '';
+    if (_running || userId.isEmpty) return;
+    if (registrationOpen(
+        user?.userMetadata?['gymfeed_onboarding_stage']?.toString())) {
+      return;
+    }
     _running = true;
     try {
-      // The popup says the free Premium days start now, so start them: the
-      // first status request creates the server row (and queues the welcome
-      // email).
-      unawaited(PremiumAccess.instance.status(refresh: true));
-      FoundingStatus status;
-      try {
-        status = await statusLoader();
-      } catch (_) {
-        status = const FoundingStatus();
+      if (!await isDone(userId)) {
+        // The popup says the free Premium days start now, so start them: the
+        // first status request creates the server row (and queues the welcome
+        // email).
+        unawaited(PremiumAccess.instance.status(refresh: true));
+        FoundingStatus status;
+        try {
+          status = await statusLoader();
+        } catch (_) {
+          status = const FoundingStatus();
+        }
+        if (!context.mounted) return;
+        await run(context, status: status);
+        await markDone(userId);
+        unawaited(FoundingRegistry.instance.ensureLoaded(force: true));
       }
-      if (!context.mounted) return;
-      await run(context, status: status);
-      await markDone(userId);
-      unawaited(FoundingRegistry.instance.ensureLoaded(force: true));
+      if (!kIsWeb) await BubbleTour.maybeStart(userId);
     } finally {
       _running = false;
     }
@@ -142,15 +185,12 @@ class FirstRunFlow {
       if (!context.mounted) return;
     }
 
-    final tryCoach = await Navigator.of(context).push<bool>(
+    await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => const FirstRunWalkthrough(),
       ),
     );
-    if (tryCoach == true && context.mounted) {
-      context.pushNamed(CoachTrainerWidget.routeName);
-    }
   }
 
   static bool get _canAskForPush =>
@@ -384,7 +424,7 @@ const _walkthroughPages = [
   ),
 ];
 
-/// Three short screens. "Skip" any time; the last one leads to the AI coach.
+/// Three short screens. "Skip" any time; the guided tour comes next.
 /// Pops `true` when the user taps "Try the AI coach".
 class FirstRunWalkthrough extends StatefulWidget {
   const FirstRunWalkthrough({super.key});
@@ -511,7 +551,7 @@ class _FirstRunWalkthroughState extends State<FirstRunWalkthrough> {
                         borderRadius: BorderRadius.circular(14)),
                   ),
                   child: Text(
-                    _isLast ? 'Try the AI coach' : 'Next',
+                    _isLast ? 'Show me around' : 'Next',
                     style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 15),
                   ),

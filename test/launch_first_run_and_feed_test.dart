@@ -184,11 +184,10 @@ void main() {
       await tester.tap(find.byKey(const Key('walkthrough-next')));
       await tester.pumpAndSettle();
       expect(find.text('Training Plans'), findsOneWidget);
-      expect(find.text('Try the AI coach'), findsOneWidget);
+      expect(find.text('Show me around'), findsOneWidget);
       expect(find.byKey(const Key('walkthrough-skip')), findsOneWidget);
 
-      // The last button leads to the AI coach; the test host has no router,
-      // so stop at the walkthrough result instead of navigating.
+      // The guided tour comes next; it has its own tests.
       debugDefaultTargetPlatformOverride = null;
     });
 

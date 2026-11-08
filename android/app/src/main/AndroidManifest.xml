@@ -75,6 +75,7 @@
                 <data android:scheme="https" />
                 <data android:host="gymfeed.io" />
                 <data android:pathPrefix="/post/" />
+                <data android:pathPrefix="/u/" />
                 <data android:pathPrefix="/trainingPlan" />
             </intent-filter>
 

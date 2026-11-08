@@ -1,3 +1,4 @@
+import '/components/first_run/tour_anchor.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/supabase/repositories/chat_repository.dart';
@@ -177,10 +178,13 @@ class _FeedWidgetState extends State<FeedWidget> {
             },
             backgroundColor: FlutterFlowTheme.of(context).primary,
             elevation: 8.0,
-            child: Icon(
-              Icons.add,
-              color: FlutterFlowTheme.of(context).secondary,
-              size: 40.0,
+            child: TourAnchor(
+              id: 'feed-create',
+              child: Icon(
+                Icons.add,
+                color: FlutterFlowTheme.of(context).secondary,
+                size: 40.0,
+              ),
             ),
           ),
         ),

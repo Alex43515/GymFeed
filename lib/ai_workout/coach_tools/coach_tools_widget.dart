@@ -1757,10 +1757,18 @@ class CoachBodyScanWidget extends StatefulWidget {
     super.key,
     this.initialResultForTesting,
     this.showAnalyzingForTesting = false,
+    this.useGate,
+    this.refundUse,
+    this.upgradeOpener,
+    this.mediaPicker,
   });
 
   final Map<String, dynamic>? initialResultForTesting;
   final bool showAnalyzingForTesting;
+  final Future<AiUseDecision> Function()? useGate;
+  final Future<void> Function()? refundUse;
+  final Future<void> Function()? upgradeOpener;
+  final Future<List<SelectedFile>?> Function()? mediaPicker;
 
   static String routeName = 'coachBodyScan';
   static String routePath = 'coachBodyScan';
@@ -1820,18 +1828,28 @@ class _CoachBodyScanWidgetState extends State<CoachBodyScanWidget>
 
   Future<void> _start() async {
     if (_loading) return;
-    final files = await selectMediaWithSourceBottomSheet(
-      context: context,
-      maxWidth: 1600,
-      maxHeight: 2000,
-      imageQuality: 88,
-      allowPhoto: true,
-      pickerFontFamily: 'Poppins',
-      textColor: Colors.white,
-      backgroundColor: _surface,
-    );
+    final files = await (widget.mediaPicker?.call() ??
+        selectMediaWithSourceBottomSheet(
+          context: context,
+          maxWidth: 1600,
+          maxHeight: 2000,
+          imageQuality: 88,
+          allowPhoto: true,
+          pickerFontFamily: 'Poppins',
+          textColor: Colors.white,
+          backgroundColor: _surface,
+        ));
     if (files == null || files.isEmpty || !mounted) return;
     final file = files.first;
+    final decision = await (widget.useGate?.call() ?? AiUsageGate().claimUse());
+    if (!mounted) return;
+    if (!await handleDeniedAiUse(
+      context,
+      decision,
+      upgradeOpener: widget.upgradeOpener,
+    )) {
+      return;
+    }
     setState(() {
       _image = file.bytes;
       _loading = true;
@@ -1901,6 +1919,9 @@ class _CoachBodyScanWidgetState extends State<CoachBodyScanWidget>
     } catch (error, stackTrace) {
       debugPrint('Body scan failed: $error');
       debugPrintStack(stackTrace: stackTrace);
+      if (decision.counted) {
+        await (widget.refundUse?.call() ?? AiUsageGate().refundUse());
+      }
       _analysisTimer?.cancel();
       _scanLineController.stop();
       if (!mounted) return;
@@ -2053,31 +2074,34 @@ class _CoachBodyScanWidgetState extends State<CoachBodyScanWidget>
                           AnimatedBuilder(
                             animation: _scanLineController,
                             builder: (context, _) => LayoutBuilder(
-                              builder: (context, constraints) => Positioned(
-                                left: 30,
-                                right: 30,
-                                top: 35 +
-                                    (constraints.maxHeight - 70) *
-                                        _scanLineController.value,
-                                child: Container(
-                                  height: 2,
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.transparent,
-                                        _green,
-                                        Colors.transparent,
+                              builder: (context, constraints) =>
+                                  Stack(children: [
+                                Positioned(
+                                  left: 30,
+                                  right: 30,
+                                  top: 35 +
+                                      (constraints.maxHeight - 70) *
+                                          _scanLineController.value,
+                                  child: Container(
+                                    height: 2,
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.transparent,
+                                          _green,
+                                          Colors.transparent,
+                                        ],
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color: Color(0xAA22E06B),
+                                            blurRadius: 14,
+                                            spreadRadius: 2),
                                       ],
                                     ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                          color: Color(0xAA22E06B),
-                                          blurRadius: 14,
-                                          spreadRadius: 2),
-                                    ],
                                   ),
-                                ),
-                              ),
+                                )
+                              ]),
                             ),
                           ),
                           Align(

@@ -7,6 +7,7 @@ import 'package:gym_feed/ai_workout/coach_home/coach_home_widget.dart';
 import 'package:gym_feed/ai_workout/coach_tools/coach_tools_widget.dart';
 import 'package:gym_feed/ai_workout/payment/payment_widget.dart';
 import 'package:gym_feed/ai_workout/premium/ai_usage_gate.dart';
+import 'package:gym_feed/components/first_run/tour_anchor.dart';
 import 'package:gym_feed/backend/supabase/repositories/training_repository.dart';
 
 void main() {
@@ -194,6 +195,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the guided tour can find its targets on Coach', (tester) async {
+    configurePhone(tester);
+    await tester.pumpWidget(phoneApp(CoachHomeWidget(
+      statsLoader: () async => const CoachStats(),
+      premiumStatusLoader: () async => PremiumStatus.fromServer(const {
+        'seconds_left': 86400,
+        'invites_used': 0,
+        'invites_max': 4,
+      }, paid: false),
+    )));
+    await tester.pumpAndSettle();
+
+    for (final id in const [
+      'coach-premium',
+      'coach-invite',
+      'coach-tool-trainer',
+      'coach-tool-equipment',
+      'coach-tool-body',
+      'coach-tool-food',
+      'coach-diary',
+      'coach-progress',
+      'coach-health',
+    ]) {
+      expect(TourAnchor.find(id), isNotNull, reason: id);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the real Upgrade button on Coach opens the paywall',
       (tester) async {
     configurePhone(tester);
@@ -242,6 +271,7 @@ void main() {
 
     expect(find.text('Food scanner'), findsOneWidget);
     expect(find.text('Equipment scanner'), findsOneWidget);
+    expect(find.text('Body scan'), findsOneWidget);
     expect(find.text('AI Trainer'), findsOneWidget);
     expect(find.text('Includes up to 40 scans and AI Trainer messages a day.'),
         findsOneWidget);

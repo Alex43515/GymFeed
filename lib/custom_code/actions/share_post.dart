@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 import 'package:share_plus/share_plus.dart';
+import '/backend/share_links.dart' show shareSheetOrigin;
 import 'dart:io';
 import '/backend/share_links.dart';
 
@@ -25,9 +26,10 @@ Future<void> sharePost(
   final File imageFile = File(imagePath);
   if (await imageFile.exists()) {
     final XFile xFile = XFile(imagePath);
-    await Share.shareXFiles([xFile], text: content);
+    await Share.shareXFiles([xFile],
+        text: content, sharePositionOrigin: shareSheetOrigin());
   } else {
-    await Share.share(content);
+    await Share.share(content, sharePositionOrigin: shareSheetOrigin());
   }
 }
 

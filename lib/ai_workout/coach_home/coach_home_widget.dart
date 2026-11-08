@@ -3,6 +3,7 @@ import '/ai_workout/coach_home/coach_section_switcher.dart';
 import '/ai_workout/premium/ai_usage_gate.dart';
 import '/ai_workout/premium/invite_friends.dart';
 import '/backend/supabase/supabase.dart';
+import '/components/first_run/tour_anchor.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -328,8 +329,7 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
         FutureBuilder<PremiumStatus>(
           future: _usageFuture,
           builder: (context, snapshot) {
-            final status =
-                snapshot.data ?? const PremiumStatus(paid: false);
+            final status = snapshot.data ?? const PremiumStatus(paid: false);
             final active = status.isPremium;
             final days = status.daysLeft;
             return Container(
@@ -384,11 +384,14 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
       future: _usageFuture,
       builder: (context, snapshot) {
         final status = snapshot.data ?? const PremiumStatus(paid: false);
-        return PremiumDaysCard(
-          status: status,
-          onUpgrade: _openUpgrade,
-          onInvite: _inviteFriend,
-          onRedeemInvite: _redeemInvite,
+        return TourAnchor(
+          id: 'coach-premium',
+          child: PremiumDaysCard(
+            status: status,
+            onUpgrade: _openUpgrade,
+            onInvite: _inviteFriend,
+            onRedeemInvite: _redeemInvite,
+          ),
         );
       },
     );
@@ -530,47 +533,50 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
 
   Widget _toolCard(BuildContext context, _CoachToolData data) {
     final theme = FlutterFlowTheme.of(context);
-    return Semantics(
-      button: true,
-      label: '${data.title}. ${data.subtitle}',
-      child: InkWell(
-        onTap: _openingTool ? null : () => _openTool(data.tool),
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _surfaceBorder),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _iconSurface,
-                  borderRadius: BorderRadius.circular(14),
+    return TourAnchor(
+      id: 'coach-tool-${data.tool.name}',
+      child: Semantics(
+        button: true,
+        label: '${data.title}. ${data.subtitle}',
+        child: InkWell(
+          onTap: _openingTool ? null : () => _openTool(data.tool),
+          borderRadius: BorderRadius.circular(18),
+          child: Ink(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _surfaceBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _iconSurface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(data.icon, color: theme.primary, size: 22),
                 ),
-                alignment: Alignment.center,
-                child: Icon(data.icon, color: theme.primary, size: 22),
-              ),
-              const Spacer(),
-              Text(
-                data.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: _style(context, size: 15, weight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                data.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: _style(context, size: 12, color: _muted, height: 1.25),
-              ),
-            ],
+                const Spacer(),
+                Text(
+                  data.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _style(context, size: 15, weight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  data.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _style(context, size: 12, color: _muted, height: 1.25),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -676,6 +682,8 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
             backgroundColor: _surface,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
+              // The guided tour points at cards further down the page.
+              cacheExtent: 1500,
               slivers: [
                 SliverPadding(
                   padding: EdgeInsetsDirectional.fromSTEB(
@@ -734,13 +742,22 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
                   sliver: SliverToBoxAdapter(
                     child: Column(
                       children: [
-                        _nutritionDiaryCard(context),
+                        TourAnchor(
+                          id: 'coach-diary',
+                          child: _nutritionDiaryCard(context),
+                        ),
                         const SizedBox(height: 14),
-                        _progressCard(context),
+                        TourAnchor(
+                          id: 'coach-progress',
+                          child: _progressCard(context),
+                        ),
                         const SizedBox(height: 14),
-                        ConnectedHealthEntryCard(
-                            onTap: () => context
-                                .pushNamed(ConnectedHealthWidget.routeName)),
+                        TourAnchor(
+                          id: 'coach-health',
+                          child: ConnectedHealthEntryCard(
+                              onTap: () => context
+                                  .pushNamed(ConnectedHealthWidget.routeName)),
+                        ),
                         const SizedBox(height: 14),
                         _statsCard(context),
                       ],

@@ -9,6 +9,9 @@ RewriteRule ^ https://gymfeed.io%{REQUEST_URI} [R=301,L]
 # Shared links get crawlable metadata, an app button and a web-app fallback.
 RewriteRule ^post/([0-9a-fA-F-]{36})/?$ post.php?id=$1 [L,QSA]
 
+# Scanned profile QR codes and shared profile links.
+RewriteRule ^u/([A-Za-z0-9_.-]+)/?$ profile.php?u=$1 [L,QSA]
+
 # Keep public static pages indexable without booting the application.
 RewriteRule ^(download|privacy|terms|support)/?$ $1/index.html [L]
 
@@ -32,5 +35,9 @@ RewriteRule ^ index.html [L]
 </IfModule>
 
 <Files "assetlinks.json">
+  ForceType application/json
+</Files>
+
+<Files "apple-app-site-association">
   ForceType application/json
 </Files>

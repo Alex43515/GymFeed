@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '/components/first_run/bubble_tour.dart';
+import '/components/first_run/tour_anchor.dart';
 import '/ai_workout/coach_home/coach_section_switcher.dart';
 import '/ai_workout/coach_events/event_details_sheet.dart';
 import '/ai_workout/starter_plan/starter_plan_service.dart';
@@ -186,7 +188,13 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
   Future<void> _ensureStarterPlan() async {
     try {
       final plan = await StarterPlanService().ensureRequestedPlan();
-      if (plan?.status == 'ready' && mounted) await _refreshLocal();
+      if (plan?.status == 'ready' && mounted) {
+        await _refreshLocal();
+        if (mounted) {
+          unawaited(BubbleTour.showTipOnce(
+              BubbleTour.planAddedTipId, BubbleTour.planAddedTip));
+        }
+      }
     } catch (_) {
       // Signup is never blocked by a temporary AI or network outage. A later
       // visit/pull-to-refresh retries the already-requested plan.
@@ -1159,6 +1167,8 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                             backgroundColor: _card,
                             child: ListView(
                               physics: const AlwaysScrollableScrollPhysics(),
+                              // The guided tour points at the plans card below.
+                              cacheExtent: 2000,
                               padding: EdgeInsets.fromLTRB(
                                   horizontal, 16, horizontal, 28),
                               children: [
@@ -1167,7 +1177,10 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                   onSelected: _selectCoachSection,
                                 ),
                                 _header(history.length),
-                                _weekStrip(),
+                                TourAnchor(
+                                  id: 'train-calendar',
+                                  child: _weekStrip(),
+                                ),
                                 const SizedBox(height: 21),
                                 Row(
                                   children: [
@@ -1211,7 +1224,10 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                 const SizedBox(height: 18),
                                 _aiCoachCard(),
                                 const SizedBox(height: 10),
-                                _trainingPlansCard(),
+                                TourAnchor(
+                                  id: 'train-plans',
+                                  child: _trainingPlansCard(),
+                                ),
                                 const SizedBox(height: 20),
                                 _tabs(),
                                 const SizedBox(height: 16),

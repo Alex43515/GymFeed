@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '/components/first_run/first_run_flow.dart';
 import '/ai_workout/starter_plan/starter_plan_service.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/auth/supabase_auth/email_verification_service.dart';
@@ -68,6 +69,7 @@ class _AllDone2WidgetState extends State<AllDone2Widget> {
     super.initState();
     _model = createModel(context, () => AllDone2Model());
     _accountReady = currentUserUid.isNotEmpty && currentUserEmailVerified;
+    FirstRunFlow.beginFinishingRegistration();
   }
 
   @override
@@ -199,9 +201,11 @@ class _AllDone2WidgetState extends State<AllDone2Widget> {
       return;
     }
     if (_state == _PlanBuildState.ready) {
+      // Registration ends when the athlete leaves the plan summary.
       context.goNamed(StarterPlanReadyWidget.routeName);
     } else {
       context.goNamed(FeedWidget.routeName);
+      FirstRunFlow.startAfterRegistration();
     }
   }
 
@@ -406,13 +410,11 @@ class _AllDone2WidgetState extends State<AllDone2Widget> {
       case _PlanBuildState.preview:
         return 'Create my 28-day plan';
       case _PlanBuildState.building:
-        return _accountReady
-            ? 'Continue — finish plan in background'
-            : 'Building your plan…';
+        return 'Building your plan…';
       case _PlanBuildState.ready:
         return 'View my 28-day plan';
       case _PlanBuildState.deferred:
-        return 'Continue to Feed';
+        return 'Continue — finish plan in background';
       case _PlanBuildState.error:
         return 'Review answers';
     }

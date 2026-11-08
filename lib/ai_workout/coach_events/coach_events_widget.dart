@@ -1,3 +1,4 @@
+import '/components/first_run/tour_anchor.dart';
 import '/ai_workout/coach_home/coach_section_switcher.dart';
 import '/ai_workout/coach_events/event_details_sheet.dart';
 import '/backend/supabase/repositories/training_repository.dart';
@@ -474,18 +475,22 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
                       onSelected: _selectSection,
                     ),
                     const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text('Upcoming activities',
-                              style: _text(size: 21, weight: FontWeight.w700)),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: Text('View more',
-                              style: _text(size: 12, color: _muted)),
-                        ),
-                      ],
+                    TourAnchor(
+                      id: 'events-page',
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text('Upcoming activities',
+                                style:
+                                    _text(size: 21, weight: FontWeight.w700)),
+                          ),
+                          TextButton(
+                            onPressed: () {},
+                            child: Text('View more',
+                                style: _text(size: 12, color: _muted)),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 10),
                     if (snapshot.connectionState == ConnectionState.waiting)
@@ -657,8 +662,8 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
                         padding: const EdgeInsets.symmetric(vertical: 50),
                         child: Text(
                           _query.trim().isNotEmpty
-                                  ? 'No events match “${_query.trim()}”.'
-                                  : 'No events match this filter.',
+                              ? 'No events match “${_query.trim()}”.'
+                              : 'No events match this filter.',
                           textAlign: TextAlign.center,
                           style: _text(color: _muted),
                         ),

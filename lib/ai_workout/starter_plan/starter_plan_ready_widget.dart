@@ -1,3 +1,4 @@
+import '/components/first_run/first_run_flow.dart';
 import '/ai_workout/starter_plan/starter_plan_service.dart';
 import '/backend/supabase/repositories/starter_plan_repository.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -35,6 +36,13 @@ class _StarterPlanReadyWidgetState extends State<StarterPlanReadyWidget> {
   StarterPlan? _plan;
   bool _loading = true;
   String? _error;
+
+  @override
+  void dispose() {
+    // Leaving the plan summary is the end of registration.
+    FirstRunFlow.startAfterRegistration();
+    super.dispose();
+  }
 
   @override
   void initState() {

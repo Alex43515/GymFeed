@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '/components/first_run/tour_anchor.dart';
 import '/ai_workout/premium/premium_access.dart';
 import '/backend/share_links.dart' show gymFeedInviteText;
 
@@ -214,8 +215,7 @@ class PremiumDaysCard extends StatelessWidget {
   static const _muted = Color(0xFF9A9A9A);
 
   TextStyle _text(double size,
-          {Color color = Colors.white,
-          FontWeight weight = FontWeight.w400}) =>
+          {Color color = Colors.white, FontWeight weight = FontWeight.w400}) =>
       TextStyle(
           fontFamily: 'Poppins',
           fontSize: size,
@@ -276,20 +276,24 @@ class PremiumDaysCard extends StatelessWidget {
             children: [
               if (status.serverKnown && status.canInvite)
                 Expanded(
-                  child: FilledButton.icon(
-                    key: const ValueKey('coach-invite-friend'),
-                    onPressed: onInvite,
-                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
-                    label: Text('Invite a friend',
-                        style: _text(13,
-                            color: const Color(0xFF062313),
-                            weight: FontWeight.w700)),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _green,
-                      foregroundColor: const Color(0xFF062313),
-                      padding: const EdgeInsets.symmetric(vertical: 11),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
+                  child: TourAnchor(
+                    id: 'coach-invite',
+                    child: FilledButton.icon(
+                      key: const ValueKey('coach-invite-friend'),
+                      onPressed: onInvite,
+                      icon:
+                          const Icon(Icons.person_add_alt_1_rounded, size: 17),
+                      label: Text('Invite a friend',
+                          style: _text(13,
+                              color: const Color(0xFF062313),
+                              weight: FontWeight.w700)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _green,
+                        foregroundColor: const Color(0xFF062313),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
                     ),
                   ),
                 ),
@@ -324,8 +328,7 @@ class PremiumDaysCard extends StatelessWidget {
               ),
               child: Text('Invited by a friend? Enter their username',
                   style: _text(12,
-                      color: const Color(0xFFB9E8CB),
-                      weight: FontWeight.w600)),
+                      color: const Color(0xFFB9E8CB), weight: FontWeight.w600)),
             ),
           ],
         ],

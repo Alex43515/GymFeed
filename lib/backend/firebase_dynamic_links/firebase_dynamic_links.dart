@@ -110,14 +110,23 @@ String appLocationFromIncomingLink(Uri uri) {
 
   final isGymFeedWebLink = (uri.scheme == 'https' || uri.scheme == 'http') &&
       uri.host.toLowerCase() == 'gymfeed.io';
-  if (isGymFeedWebLink && uri.pathSegments.length == 2) {
-    final section = uri.pathSegments.first.toLowerCase();
-    final postId = uri.pathSegments.last.trim();
-    if (section == 'post' && postId.isNotEmpty) {
-      return Uri(
-        path: '/postDetails',
-        queryParameters: {'post': postId},
-      ).toString();
+  if (isGymFeedWebLink) {
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    if (segments.length == 2) {
+      final section = segments.first.toLowerCase();
+      final value = segments.last.trim();
+      if (section == 'post' && value.isNotEmpty) {
+        return Uri(
+          path: '/postDetails',
+          queryParameters: {'post': value},
+        ).toString();
+      }
+      if (section == 'u' && value.isNotEmpty) {
+        return Uri(
+          path: '/profileOther',
+          queryParameters: {'username': value},
+        ).toString();
+      }
     }
   }
 

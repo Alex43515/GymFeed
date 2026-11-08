@@ -110,7 +110,7 @@ void main() {
     expect(find.byKey(const ValueKey('starter-plan-deferred')), findsOneWidget);
     expect(
         find.text('Your plan is finishing in the background'), findsOneWidget);
-    expect(find.text('Continue to Feed'), findsOneWidget);
+    expect(find.text('Continue — finish plan in background'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -130,11 +130,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('create-starter-plan')));
     await tester.pump();
     expect(find.byKey(const ValueKey('starter-plan-building')), findsOneWidget);
+    // Nothing to tap until the wait is over.
+    expect(find.text('Continue — finish plan in background'), findsNothing);
+    expect(find.text('Building your plan…'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+              find.byKey(const ValueKey('create-starter-plan')))
+          .onPressed,
+      isNull,
+    );
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(find.byKey(const ValueKey('starter-plan-deferred')), findsOneWidget);
-    expect(find.text('Continue to Feed'), findsOneWidget);
+    expect(find.text('Continue — finish plan in background'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('create-starter-plan')));
     expect(verificationOpened, isTrue);

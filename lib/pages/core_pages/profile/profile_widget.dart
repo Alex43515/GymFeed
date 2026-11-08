@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '/components/profile_share/profile_share_sheet.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/editsettings/editsettings_widget.dart';
@@ -94,10 +95,10 @@ class _ProfileWidgetState extends State<ProfileWidget> {
             await context.pushNamed(EditProfileWidget.routeName);
             _refreshProfile();
           },
-          onShare: () => Share.share(
-            'View @${profile.username} on GymFeed\n'
-            'https://gymfeed.io/u/${Uri.encodeComponent(profile.username)}',
-            subject: '${profile.displayName} on GymFeed',
+          onShare: () => showProfileShareSheet(
+            context,
+            username: profile.username,
+            displayName: profile.displayName,
           ),
           onMore: _showSettings,
         );
