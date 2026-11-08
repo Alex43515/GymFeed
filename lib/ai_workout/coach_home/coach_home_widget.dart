@@ -7,6 +7,7 @@ import '/components/nav_bar/nav_bar_widget.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
+import '/health/connected_health_widget.dart';
 import 'package:flutter/material.dart';
 
 class CoachStats {
@@ -736,6 +737,10 @@ class _CoachHomeWidgetState extends State<CoachHomeWidget> {
                         _nutritionDiaryCard(context),
                         const SizedBox(height: 14),
                         _progressCard(context),
+                        const SizedBox(height: 14),
+                        ConnectedHealthEntryCard(
+                            onTap: () => context
+                                .pushNamed(ConnectedHealthWidget.routeName)),
                         const SizedBox(height: 14),
                         _statsCard(context),
                       ],

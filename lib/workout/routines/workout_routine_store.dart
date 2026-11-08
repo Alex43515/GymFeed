@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import '/auth/firebase_auth/auth_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'workout_routine_models.dart';
+import 'workout_units.dart';
 
 class WorkoutRoutineStore {
   WorkoutRoutineStore._();
@@ -10,6 +12,22 @@ class WorkoutRoutineStore {
   static String get _scope => currentUserUid.isEmpty ? 'guest' : currentUserUid;
   static String get _routineKey => 'gymfeed_routines_v1_$_scope';
   static String get _historyKey => 'gymfeed_workout_history_v1_$_scope';
+  static String get _weightUnitKey => 'gymfeed_workout_weight_unit_v1_$_scope';
+  static final weightUnitChanges = ValueNotifier<int>(0);
+
+  static Future<WorkoutWeightUnit> loadWeightUnit() async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getString(_weightUnitKey) == 'kg'
+        ? WorkoutWeightUnit.kg
+        : WorkoutWeightUnit.lb;
+  }
+
+  static Future<void> saveWeightUnit(WorkoutWeightUnit unit) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_weightUnitKey, unit.name);
+    weightUnitChanges.value++;
+  }
+
   static String _progressKey(String routineId) =>
       'gymfeed_workout_progress_v1_${_scope}_${base64Url.encode(utf8.encode(routineId))}';
   static String get _scheduleKey => 'gymfeed_workout_schedule_v1_$_scope';
@@ -89,8 +107,7 @@ class WorkoutRoutineStore {
   }
 
   static String get _planSyncKey => 'gymfeed_training_plan_sync_v1_$_scope';
-  static String get _planVideosKey =>
-      'gymfeed_training_plan_videos_v1_$_scope';
+  static String get _planVideosKey => 'gymfeed_training_plan_videos_v1_$_scope';
   static final _planRoutineId = RegExp(r'^(plan-.+)-v\d+-d\d+$');
 
   static Future<Map<String, Map<String, String>>> _loadPlanVideos(
@@ -298,8 +315,8 @@ class WorkoutRoutineStore {
 
   static Future<void> saveWorkoutProgress(WorkoutHistoryItem item) async {
     final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_progressKey(item.routineId),
-        jsonEncode(item.toJson()));
+    await preferences.setString(
+        _progressKey(item.routineId), jsonEncode(item.toJson()));
   }
 
   static Future<void> clearWorkoutProgress(String routineId) async {

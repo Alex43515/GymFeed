@@ -38,8 +38,14 @@ env:
   UPLOAD_CERT_SHA256: C07A8D59F8F5265F622053BFCDE9F2D7D0C55566E54BE49B8B226420536BD506
 
 jobs:
+  publish-health-privacy:
+    name: Publish current health privacy notice only
+    uses: ./.github/workflows/deploy-health-privacy.yml
+    secrets: inherit
+
   build-test-and-publish:
     name: Build, test, and publish signed AAB
+    needs: publish-health-privacy
     runs-on: ubuntu-24.04
     # This existing environment owns the protected Google Play and signing
     # credentials used for both tracks. The selected Play track is resolved

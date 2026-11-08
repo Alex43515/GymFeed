@@ -4,6 +4,7 @@ import '/custom_code/widgets/create_ui.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
+import '/backend/supabase/supabase.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
   // 0 = Free, 1 = Premium. Matches the two tabs in the paywall design.
   int _tab = 0;
+  bool _billingBusy = false;
 
   @override
   void setState(VoidCallback callback) {
@@ -162,45 +164,68 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   }
 
   Future<void> _subscribe() async {
+    if (_billingBusy) return;
     if (kIsWeb) {
       await launchURL(
         'https://play.google.com/store/apps/details?id=com.flutterflow.gymfeedofficial',
       );
       return;
     }
-    var monthly = revenue_cat.offerings?.current?.monthly;
-    if (monthly == null) {
-      await revenue_cat.loadOfferings();
-      monthly = revenue_cat.offerings?.current?.monthly;
-    }
-    if (monthly == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The monthly plan is unavailable.')),
+    _billingBusy = true;
+    try {
+      final uid = supabase.auth.currentUser?.id;
+      if (uid == null || !await revenue_cat.login(uid)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Please sign in and try again.'),
+          ));
+        }
+        return;
+      }
+      var monthly = revenue_cat.offerings?.current?.monthly;
+      if (monthly == null) {
+        await revenue_cat.loadOfferings();
+        monthly = revenue_cat.offerings?.current?.monthly;
+      }
+      if (monthly == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The monthly plan is unavailable.')),
+        );
+        return;
+      }
+      final outcome = await revenue_cat.purchasePackageWithOutcome(
+        monthly.identifier,
+        requiredEntitlementId: 'premium_features',
       );
-      return;
-    }
-    final purchased = await revenue_cat.purchasePackage(monthly.identifier);
-    if (purchased) {
-      await revenue_cat.loadCustomerInfo();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('GymFeed Pro is now active.')),
-      );
-      context.safePop();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed Purchase',
-            style: TextStyle(color: FlutterFlowTheme.of(context).primaryText),
+      if (outcome == revenue_cat.PurchaseOutcome.active) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('GymFeed Pro is now active.')),
+        );
+        context.safePop();
+      } else if (outcome != revenue_cat.PurchaseOutcome.cancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              switch (outcome) {
+                revenue_cat.PurchaseOutcome.pending =>
+                  'Your purchase is pending approval. Premium will activate after approval.',
+                revenue_cat.PurchaseOutcome.missingEntitlement =>
+                  'Premium access could not be verified. Try Restore or contact support.',
+                _ => 'Purchase could not be completed. Please try again.',
+              },
+              style: TextStyle(color: FlutterFlowTheme.of(context).primaryText),
+            ),
+            duration: const Duration(milliseconds: 4000),
+            backgroundColor: FlutterFlowTheme.of(context).error,
           ),
-          duration: const Duration(milliseconds: 4000),
-          backgroundColor: FlutterFlowTheme.of(context).error,
-        ),
-      );
+        );
+      }
+      safeSetState(() {});
+    } finally {
+      _billingBusy = false;
     }
-    safeSetState(() {});
   }
 
   @override
@@ -240,9 +265,20 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                         );
                         return;
                       }
-                      final restored = await revenue_cat.restorePurchases();
-                      final premiumActive = revenue_cat.activeEntitlementIds
-                          .contains('premium_features');
+                      if (_billingBusy) return;
+                      _billingBusy = true;
+                      var restored = false;
+                      try {
+                        final uid = supabase.auth.currentUser?.id;
+                        if (uid != null && await revenue_cat.login(uid)) {
+                          restored = await revenue_cat.restorePurchases();
+                        }
+                      } finally {
+                        _billingBusy = false;
+                      }
+                      final premiumActive = restored &&
+                          revenue_cat.activeEntitlementIds
+                              .contains('premium_features');
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(

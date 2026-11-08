@@ -31,15 +31,17 @@ class SupabaseAuthManager extends AuthManager
   Future signOut() => supabase.auth.signOut();
 
   @override
-  Future deleteUser(BuildContext context) async {
+  Future<bool> deleteUser(BuildContext context) async {
     try {
       if (!loggedIn) {
         debugPrint('Error: delete user attempted with no logged in user!');
-        return;
+        return false;
       }
       await currentUser?.delete();
+      return true;
     } catch (e) {
-      _showError(context, 'Could not delete account: $e');
+      if (context.mounted) _showError(context, 'Could not delete account: $e');
+      return false;
     }
   }
 

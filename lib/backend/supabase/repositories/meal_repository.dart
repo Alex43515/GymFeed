@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '/backend/supabase/supabase.dart';
 import 'starter_plan_repository.dart';
+import 'coach_plan_repository.dart';
 
 double _number(dynamic value, [double fallback = 0]) {
   if (value is num) return value.toDouble();
@@ -101,10 +102,13 @@ class NutritionDay {
 /// original scanner column names, so all food UI goes through this repository
 /// instead of mixing the legacy and proposed schemas.
 class MealRepository {
-  MealRepository({StarterPlanRepository? starterPlans})
-      : _starterPlans = starterPlans ?? StarterPlanRepository();
+  MealRepository(
+      {StarterPlanRepository? starterPlans, CoachPlanRepository? coachPlans})
+      : _starterPlans = starterPlans ?? StarterPlanRepository(),
+        _coachPlans = coachPlans ?? CoachPlanRepository();
 
   final StarterPlanRepository _starterPlans;
+  final CoachPlanRepository _coachPlans;
   SupabaseClient get _db => supabase;
   String? get _uid => _db.auth.currentUser?.id;
 
@@ -151,12 +155,19 @@ class MealRepository {
   }
 
   Future<NutritionDay> loadDay(DateTime date) async {
-    final results = await Future.wait<dynamic>(
-        [forDate(date), loadGoals(), _starterPlans.mealsForDate(date)]);
+    final results = await Future.wait<dynamic>([
+      forDate(date),
+      loadGoals(),
+      _starterPlans.mealsForDate(date),
+      _coachPlans.mealsForDate(date)
+    ]);
     return NutritionDay(
       meals: results[0] as List<MealScan>,
       goals: results[1] as NutritionGoals,
-      plannedMeals: results[2] as List<StarterPlannedMeal>,
+      plannedMeals: [
+        ...results[2] as List<StarterPlannedMeal>,
+        ...results[3] as List<StarterPlannedMeal>
+      ],
     );
   }
 
@@ -232,7 +243,7 @@ class MealRepository {
       scannedAt: DateTime(date.year, date.month, date.day, hour),
       analysis: {
         'starter_plan_meal_id': meal.id,
-        'source': 'starter_plan',
+        'source': meal.id.startsWith('coach-') ? 'coach_plan' : 'starter_plan',
       },
     );
   }

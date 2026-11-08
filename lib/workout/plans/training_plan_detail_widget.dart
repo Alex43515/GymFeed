@@ -9,6 +9,7 @@ import '/components/content_safety/report_content_sheet.dart';
 import '/flutter_flow/flutter_flow_video_player.dart';
 import '/workout/routines/exercise_video_sheet.dart';
 import '/workout/routines/workout_routine_store.dart';
+import '/workout/routines/workout_units.dart';
 
 import 'add_plan_to_train_widget.dart';
 import 'training_plan_builder_widget.dart';
@@ -54,8 +55,7 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
   bool _busy = false;
   bool _changed = false;
 
-  String? get _uid =>
-      widget.currentUserId ?? supabase.auth.currentUser?.id;
+  String? get _uid => widget.currentUserId ?? supabase.auth.currentUser?.id;
 
   @override
   void initState() {
@@ -81,8 +81,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
 
   void _reload() => setState(_load);
 
-  void _message(String text) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(text)));
+  void _message(String text) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
   Future<void> _addToTrain(TrainingPlan plan) async {
     final added = await Navigator.of(context).push<bool>(MaterialPageRoute(
@@ -119,8 +119,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
       final confirmed = await _confirm('Edit this plan?',
           'The plan leaves the store while you edit it. People who already follow it keep their calendar. Submit again when you are done.');
       if (!confirmed) return;
-      final ok = await _guard(
-          () => _service.repository.unpublishForEditing(plan.id));
+      final ok =
+          await _guard(() => _service.repository.unpublishForEditing(plan.id));
       if (!ok) return;
     }
     if (!mounted) return;
@@ -173,14 +173,14 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
       _message(text.contains('cover image')
           ? 'Add a cover image first.'
           : text.contains('intro video')
-          ? 'Add an intro video first.'
-          : text.contains('video')
-          ? 'Every exercise needs an explanation video.'
-          : text.contains('exercise') || text.contains('workout day')
-              ? 'Every workout day needs at least one exercise.'
-              : text.contains('what to change')
-                  ? 'Write what the creator should change.'
-                  : 'Something went wrong. Please try again.');
+              ? 'Add an intro video first.'
+              : text.contains('video')
+                  ? 'Every exercise needs an explanation video.'
+                  : text.contains('exercise') || text.contains('workout day')
+                      ? 'Every workout day needs at least one exercise.'
+                      : text.contains('what to change')
+                          ? 'Write what the creator should change.'
+                          : 'Something went wrong. Please try again.');
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -214,7 +214,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                 key: const ValueKey('send-review-note'),
                 onPressed: () => Navigator.pop(context, controller.text),
                 child: Text('Send',
-                    style: planText(color: planGreen, weight: FontWeight.w700))),
+                    style:
+                        planText(color: planGreen, weight: FontWeight.w700))),
           ],
         ),
       );
@@ -369,7 +370,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                 key: const ValueKey('save-rating'),
                 onPressed: () => Navigator.pop(context, true),
                 child: Text('Save',
-                    style: planText(color: planGreen, weight: FontWeight.w700))),
+                    style:
+                        planText(color: planGreen, weight: FontWeight.w700))),
           ],
         ),
       ),
@@ -379,8 +381,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
     unawaited(Future<void>.delayed(
         const Duration(milliseconds: 500), comment.dispose));
     if (save != true) return;
-    final ok = await _guard(() => _service.repository
-        .rate(plan.id, rating: stars, comment: text));
+    final ok = await _guard(
+        () => _service.repository.rate(plan.id, rating: stars, comment: text));
     if (!ok || !mounted) return;
     _message('Thanks for rating this plan.');
     _reload();
@@ -417,15 +419,14 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                 Expanded(
                   child: Text('Ratings',
                       style: planText(
-                          size: 13,
-                          color: planMuted,
-                          weight: FontWeight.w600)),
+                          size: 13, color: planMuted, weight: FontWeight.w600)),
                 ),
                 if (canRate)
                   TextButton(
                     key: const ValueKey('rate-plan'),
                     onPressed: _busy ? null : () => _rate(plan, mine),
-                    child: Text(mine == null ? 'Rate this plan' : 'Edit my rating',
+                    child: Text(
+                        mine == null ? 'Rate this plan' : 'Edit my rating',
                         style: planText(
                             size: 12,
                             color: planGreen,
@@ -504,8 +505,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
               Positioned(
                 left: 10,
                 top: 10,
-                child: planChip('Featured',
-                    color: planBg, background: planAmber),
+                child:
+                    planChip('Featured', color: planBg, background: planAmber),
               ),
           ],
         ),
@@ -537,8 +538,7 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: planText(size: 14, weight: FontWeight.w700)),
-              Text('Plan creator',
-                  style: planText(size: 11, color: planMuted)),
+              Text('Plan creator', style: planText(size: 11, color: planMuted)),
             ],
           ),
         ),
@@ -623,11 +623,14 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
           ? ListTile(
               dense: true,
               leading: Text('Day ${day.day}',
-                  style: planText(size: 11, color: planMuted, weight: FontWeight.w700)),
-              title: Text('Rest day', style: planText(size: 13, color: planMuted)),
+                  style: planText(
+                      size: 11, color: planMuted, weight: FontWeight.w700)),
+              title:
+                  Text('Rest day', style: planText(size: 13, color: planMuted)),
             )
           : Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              data:
+                  Theme.of(context).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 key: ValueKey('plan-day-${day.day}'),
                 iconColor: planGreen,
@@ -657,7 +660,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                     final playable =
                         video?.isPlayable == true && _canWatchExercises(plan);
                     return InkWell(
-                      key: ValueKey('plan-exercise-${day.day}-${exercise.name}'),
+                      key:
+                          ValueKey('plan-exercise-${day.day}-${exercise.name}'),
                       onTap: playable
                           ? () => showExerciseVideo(context,
                               exerciseName: exercise.name,
@@ -665,25 +669,27 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                               subtitle: plan.title)
                           : null,
                       child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      child: Row(
-                        children: [
-                          Icon(
-                              playable
-                                  ? Icons.play_circle_fill_rounded
-                                  : Icons.fitness_center_rounded,
-                              color: playable ? planGreen : planMuted,
-                              size: playable ? 19 : 15),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(exercise.name,
-                                style: planText(size: 13)),
-                          ),
-                          Text(
-                              '${sets.length} × ${reps.length == 1 ? reps.first : '${reps.reduce((a, b) => a < b ? a : b)}-${reps.reduce((a, b) => a > b ? a : b)}'}',
-                              style: planText(size: 12, color: planMuted)),
-                        ],
-                      ),
+                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        child: Row(
+                          children: [
+                            Icon(
+                                playable
+                                    ? Icons.play_circle_fill_rounded
+                                    : Icons.fitness_center_rounded,
+                                color: playable ? planGreen : planMuted,
+                                size: playable ? 19 : 15),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(exercise.name,
+                                  style: planText(size: 13)),
+                            ),
+                            Text(
+                                sets.any((set) => set.isTimed)
+                                    ? '${sets.length} sets / ${workoutMinutesLabel(sets.fold<int>(0, (total, set) => total + (set.durationSeconds ?? 0)))}'
+                                    : '${sets.length} × ${reps.length == 1 ? reps.first : '${reps.reduce((a, b) => a < b ? a : b)}-${reps.reduce((a, b) => a > b ? a : b)}'}',
+                                style: planText(size: 12, color: planMuted)),
+                          ],
+                        ),
                       ),
                     );
                   }),
@@ -753,7 +759,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                     key: const ValueKey('delete-plan'),
                     onPressed: _busy ? null : () => _delete(plan),
                     child: Text(plan.isEditable ? 'Delete' : 'Remove',
-                        style: planText(size: 13, color: const Color(0xFFFF6B6B))),
+                        style:
+                            planText(size: 13, color: const Color(0xFFFF6B6B))),
                   ),
                 ],
               ),
@@ -831,7 +838,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                           if (_isAdmin && plan.isPublished) ...[
                             OutlinedButton.icon(
                               key: const ValueKey('toggle-featured'),
-                              onPressed: _busy ? null : () => _toggleFeatured(plan),
+                              onPressed:
+                                  _busy ? null : () => _toggleFeatured(plan),
                               icon: Icon(
                                   plan.isFeatured
                                       ? Icons.star_rounded
@@ -850,7 +858,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                           _topMedia(plan),
                           const SizedBox(height: 14),
                           Text(plan.title,
-                              style: planText(size: 22, weight: FontWeight.w800)),
+                              style:
+                                  planText(size: 22, weight: FontWeight.w800)),
                           const SizedBox(height: 10),
                           _creator(plan),
                           const SizedBox(height: 14),
@@ -869,7 +878,8 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                           if (plan.description.trim().isNotEmpty) ...[
                             const SizedBox(height: 16),
                             Text(plan.description,
-                                style: planText(size: 13, color: const Color(0xFFCFCFCF))),
+                                style: planText(
+                                    size: 13, color: const Color(0xFFCFCFCF))),
                           ],
                           const SizedBox(height: 20),
                           Text(
@@ -904,14 +914,18 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton(
-                                      key: const ValueKey('remove-plan-from-train'),
-                                      onPressed: _busy ? null : _removeFromTrain,
+                                      key: const ValueKey(
+                                          'remove-plan-from-train'),
+                                      onPressed:
+                                          _busy ? null : _removeFromTrain,
                                       style: OutlinedButton.styleFrom(
                                         minimumSize: const Size.fromHeight(52),
-                                        side: const BorderSide(color: planBorder),
+                                        side:
+                                            const BorderSide(color: planBorder),
                                       ),
                                       child: Text('Remove',
-                                          style: planText(size: 13, color: planMuted)),
+                                          style: planText(
+                                              size: 13, color: planMuted)),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
@@ -919,7 +933,9 @@ class _TrainingPlanDetailWidgetState extends State<TrainingPlanDetailWidget> {
                                     flex: 2,
                                     child: ElevatedButton(
                                       key: const ValueKey('reschedule-plan'),
-                                      onPressed: _busy ? null : () => _addToTrain(plan),
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _addToTrain(plan),
                                       style: ElevatedButton.styleFrom(
                                         minimumSize: const Size.fromHeight(52),
                                         backgroundColor: planGreen,

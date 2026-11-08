@@ -173,7 +173,7 @@ class PremiumAccess {
     Future<Map<String, dynamic>> Function()? statusLoader,
     Future<Map<String, dynamic>> Function(String username)? inviteRedeemer,
     String? Function()? userId,
-  })  : _paidLoader = paidLoader ?? _loadPaidFromRevenueCat,
+  })  : _paidLoaderOverride = paidLoader,
         _statusLoader = statusLoader ?? _loadStatusFromServer,
         _inviteRedeemer = inviteRedeemer ?? _redeemOnServer,
         _userId = userId ?? (() => supabase.auth.currentUser?.id);
@@ -183,7 +183,7 @@ class PremiumAccess {
   @visibleForTesting
   static void overrideForTesting(PremiumAccess access) => instance = access;
 
-  final Future<bool> Function() _paidLoader;
+  final Future<bool> Function()? _paidLoaderOverride;
   final Future<Map<String, dynamic>> Function() _statusLoader;
   final Future<Map<String, dynamic>> Function(String username) _inviteRedeemer;
   final String? Function() _userId;
@@ -195,10 +195,11 @@ class PremiumAccess {
   DateTime? _cachedAt;
   Future<PremiumStatus>? _loading;
 
-  static Future<bool> _loadPaidFromRevenueCat() async {
-    if (revenue_cat.activeEntitlementIds.contains(premiumEntitlementId)) {
-      return true;
-    }
+  /// Binds RevenueCat to this account before asking, and always asks the SDK
+  /// rather than trusting cached entitlements, so a previous account's
+  /// subscription can never unlock this one (premium billing audit, 3.0.6).
+  static Future<bool> _loadPaidFromRevenueCat(String? userId) async {
+    if (userId == null || !await revenue_cat.login(userId)) return false;
     return await revenue_cat.isEntitled(premiumEntitlementId) ?? false;
   }
 
@@ -217,7 +218,8 @@ class PremiumAccess {
   Future<bool> hasPaidSubscription() async {
     if (hasPremiumTesterOverride(_userId())) return true;
     try {
-      return await _paidLoader();
+      return await (_paidLoaderOverride?.call() ??
+          _loadPaidFromRevenueCat(_userId()));
     } catch (_) {
       return false;
     }
