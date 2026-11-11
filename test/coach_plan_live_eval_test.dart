@@ -1,5 +1,6 @@
 // Opt-in provider evaluation using synthetic context only. No diary/calendar
-// writes occur. Set GYMFEED_EVAL_OPENAI_KEY in the environment and run:
+// writes occur. Set GYMFEED_EVAL_OPENAI_KEY in the environment and run.
+// Set GYMFEED_EVAL_MODEL to compare another model against the GPT-5 mini baseline.
 // flutter test test/coach_plan_live_eval_test.dart --dart-define=RUN_LIVE_COACH_EVAL=true
 import 'dart:convert';
 import 'dart:io';
@@ -12,6 +13,7 @@ import 'package:gym_feed/backend/supabase/repositories/coach_plan_actions.dart';
 void main() {
   const enabled = bool.fromEnvironment('RUN_LIVE_COACH_EVAL');
   final key = Platform.environment['GYMFEED_EVAL_OPENAI_KEY'];
+  final model = Platform.environment['GYMFEED_EVAL_MODEL'] ?? 'gpt-5-mini';
   final today = DateTime(2026, 10, 12);
   const context = AiCoachContext(
     profile: {
@@ -43,7 +45,8 @@ void main() {
             'Content-Type': 'application/json'
           },
           body: jsonEncode({
-            'model': 'gpt-5-mini',
+            'model': model,
+            'store': false,
             'messages': messages,
             'reasoning_effort': 'low',
             'max_completion_tokens': 16000,

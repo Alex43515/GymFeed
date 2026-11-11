@@ -1,6 +1,12 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:gym_feed/backend/supabase/ai_service.dart';
 
 import 'package:gym_feed/backend/supabase/repositories/coach_vision_repository.dart';
 
@@ -23,6 +29,88 @@ void main() {
   }
   ''';
 
+  test('a model edit changes the next scan and preserves request options',
+      () async {
+    const equipmentJson = '''
+    {"name":"Incline chest press","machine_family":"press machine",
+    "type":"upper body","category":"plate-loaded machine","confidence":0.9,
+    "muscles":["Chest","Triceps"],"steps":["Adjust the seat.","Press with control."]}
+    ''';
+    var equipmentModel = 'gpt-6-luna';
+    final calls = <Map<String, dynamic>>[];
+    final client = SupabaseClient(
+      'https://gymfeed.test',
+      'test-key',
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/rest/v1/ai_model_settings') {
+          final feature = request.url.queryParameters['feature'];
+          if (feature == 'eq.equipment_scan') {
+            return http.Response(
+              jsonEncode([
+                {'model': equipmentModel}
+              ]),
+              200,
+              headers: {'content-type': 'application/json'},
+              request: request,
+            );
+          }
+          expect(feature, 'eq.food_scan');
+          return http.Response('{"message":"Settings unavailable"}', 403,
+              request: request);
+        }
+
+        expect(request.url.path,
+            '/functions/v1/ai-proxy/openai/v1/chat/completions');
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        calls.add(payload);
+        return http.Response(
+          jsonEncode({
+            'choices': [
+              {
+                'message': {
+                  'content': calls.length == 3 ? foodJson : equipmentJson
+                }
+              }
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    final repo = CoachVisionRepository(aiService: AiService(client: client));
+    final bytes = Uint8List.fromList([1]);
+
+    final first = await repo.analyzeEquipment(
+      imageBytes: bytes,
+      imageUrl: 'https://example.com/machine.jpg',
+    );
+    equipmentModel = 'gpt-5.4-mini';
+    final second = await repo.analyzeEquipment(
+      imageBytes: bytes,
+      imageUrl: 'https://example.com/machine.jpg',
+    );
+    final food = await repo.analyzeFood(
+      imageBytes: bytes,
+      imageUrl: 'https://example.com/meal.jpg',
+    );
+
+    expect(first.model, 'gpt-6-luna');
+    expect(second.model, 'gpt-5.4-mini');
+    expect(food.model, 'gpt-6-luna');
+    expect(calls.map((call) => call['model']),
+        ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6-luna']);
+    expect(calls.map((call) => call['reasoning_effort']),
+        ['medium', 'medium', 'none']);
+    for (final call in calls) {
+      expect(call['max_completion_tokens'], 1800);
+      expect(call, isNot(contains('max_tokens')));
+      expect(call, isNot(contains('temperature')));
+    }
+  });
+
   test('food scan uses OpenAI primary and normalizes editable ingredients',
       () async {
     var geminiCalls = 0;
@@ -40,7 +128,7 @@ void main() {
     );
 
     expect(result.provider, 'openai');
-    expect(result.model, 'gpt-4o-mini');
+    expect(result.model, 'gpt-6-luna');
     expect(geminiCalls, 0);
     expect(result.data['confidence'], .98);
     expect((result.data['ingredients'] as List), hasLength(3));
@@ -84,7 +172,7 @@ void main() {
     );
 
     expect(result.provider, 'openai');
-    expect(result.model, 'gpt-5.4-mini');
+    expect(result.model, 'gpt-6-luna');
     expect(result.data['name'], 'Plate-Loaded Incline Chest Press');
     expect(result.data['muscles'], contains('Upper chest'));
     expect(result.data['visual_evidence'], hasLength(2));

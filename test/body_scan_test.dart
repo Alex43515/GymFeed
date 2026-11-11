@@ -81,7 +81,7 @@ void main() {
     );
 
     expect(result.provider, 'openai');
-    expect(result.model, 'gpt-5.4-mini');
+    expect(result.model, 'gpt-6-luna');
     expect(result.persistedData['ai_provider'], 'openai');
     expect(geminiCalls, 0);
   });

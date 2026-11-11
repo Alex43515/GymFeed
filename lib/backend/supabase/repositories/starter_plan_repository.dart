@@ -582,8 +582,7 @@ class StarterPlanRepository {
     try {
       final result = await _aiService.openAiChat(
         messages,
-        // gpt-4o-mini supports less output than Gemini. The monthly JSON fits
-        // below this ceiling because meal descriptions are deliberately short.
+        model: await _aiService.openAiModelFor(AiFeature.starterPlan),
         maxTokens: maxTokens?.clamp(1, 16000),
         temperature: temperature,
         jsonObject: jsonObject,
