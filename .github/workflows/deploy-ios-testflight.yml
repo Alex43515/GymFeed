@@ -34,7 +34,7 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  APP_STORE_WHATS_NEW: GymFeed 3.0.8 adds separately consented daily activity context for AI Coach, with private read-only Connected health and clearer data-use controls.
+  APP_STORE_WHATS_NEW: Updated the AI models behind Coach, Equipment Scan, Body Scan, Food Scan, and starter plans.
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
 jobs:
