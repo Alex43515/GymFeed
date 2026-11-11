@@ -1802,7 +1802,7 @@ Rules:
     try {
       return await _aiService.openAiChat(
         messages,
-        model: 'gpt-5-mini',
+        model: await _aiService.openAiModelFor(AiFeature.aiCoach),
         maxTokens: 3000,
         reasoningEffort: 'low',
         jsonObject: true,

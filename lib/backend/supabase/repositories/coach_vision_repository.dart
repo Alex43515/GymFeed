@@ -43,8 +43,6 @@ class CoachVisionRepository {
         _openAiVision = openAiVision,
         _geminiVision = geminiVision;
 
-  static const foodOpenAiModel = 'gpt-4o-mini';
-  static const equipmentOpenAiModel = 'gpt-5.4-mini';
   static const geminiModel = 'gemini-3.5-flash-lite';
 
   final AiService _ai;
@@ -62,7 +60,7 @@ class CoachVisionRepository {
       imageUrl: imageUrl,
       mimeType: mimeType,
       normalize: normalizeFood,
-      openAiModel: foodOpenAiModel,
+      feature: AiFeature.foodScan,
     );
   }
 
@@ -77,7 +75,7 @@ class CoachVisionRepository {
       imageUrl: imageUrl,
       mimeType: mimeType,
       normalize: normalizeEquipment,
-      openAiModel: equipmentOpenAiModel,
+      feature: AiFeature.equipmentScan,
       openAiReasoningEffort: 'medium',
       openAiImageDetail: 'high',
     );
@@ -89,17 +87,20 @@ class CoachVisionRepository {
     required String imageUrl,
     required String mimeType,
     required Map<String, dynamic> Function(String raw) normalize,
-    required String openAiModel,
+    required AiFeature feature,
     String? openAiReasoningEffort,
     String openAiImageDetail = 'auto',
   }) async {
     Object? openAiError;
     try {
+      final model = _openAiVision == null
+          ? await _ai.openAiModelFor(feature)
+          : AiService.defaultOpenAiModel;
       final raw = await (_openAiVision?.call(prompt, imageUrl) ??
           _ai.openAiTextFromImage(
             prompt,
             imageUrl: imageUrl,
-            model: openAiModel,
+            model: model,
             detail: openAiImageDetail,
             maxTokens: 1800,
             reasoningEffort: openAiReasoningEffort,
@@ -110,7 +111,7 @@ class CoachVisionRepository {
       return CoachVisionResult(
         data: normalize(raw),
         provider: 'openai',
-        model: openAiModel,
+        model: model,
       );
     } catch (error) {
       openAiError = error;

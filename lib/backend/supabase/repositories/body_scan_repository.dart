@@ -78,7 +78,6 @@ class BodyScanRepository {
         _openAiVision = openAiVision,
         _geminiVision = geminiVision;
 
-  static const openAiModel = 'gpt-5.4-mini';
   static const geminiModel = 'gemini-3.5-flash-lite';
 
   final AiService _ai;
@@ -95,11 +94,14 @@ class BodyScanRepository {
     final prompt = buildPrompt(profile);
     Object? openAiError;
     try {
+      final model = _openAiVision == null
+          ? await _ai.openAiModelFor(AiFeature.bodyScan)
+          : AiService.defaultOpenAiModel;
       final raw = await (_openAiVision?.call(prompt, imageUrl) ??
           _ai.openAiTextFromImage(
             prompt,
             imageUrl: imageUrl,
-            model: openAiModel,
+            model: model,
             detail: 'high',
             maxTokens: 2400,
             reasoningEffort: 'medium',
@@ -110,7 +112,7 @@ class BodyScanRepository {
       return BodyScanResult(
         data: normalize(raw, profile),
         provider: 'openai',
-        model: openAiModel,
+        model: model,
       );
     } on BodyScanInputException {
       // Another provider cannot repair a cropped photo or missing profile data.

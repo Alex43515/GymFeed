@@ -12,6 +12,7 @@
 // so it is a drop-in for the existing call sites — only the base URL + auth change.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { fetchModelSetting, rewriteLegacyAiRequest } from "./model_settings.ts";
 
 const OPENAI_BASE = "https://api.openai.com";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com";
@@ -94,10 +95,16 @@ Deno.serve(async (req: Request) => {
       if (ct) headers.set("content-type", ct);
       const beta = req.headers.get("openai-beta");
       if (beta) headers.set("OpenAI-Beta", beta);
+      const openAiBody = method === "POST" &&
+          upstreamPath === "/v1/chat/completions" && body
+        ? await rewriteLegacyAiRequest(body, (feature) =>
+          fetchModelSetting(feature, req.headers.get("authorization"))
+        )
+        : body;
       const upstream = await fetch(OPENAI_BASE + upstreamPath + url.search, {
         method,
         headers,
-        body,
+        body: openAiBody,
       });
       return passthrough(upstream);
     }

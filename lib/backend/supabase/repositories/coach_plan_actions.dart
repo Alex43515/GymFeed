@@ -357,7 +357,7 @@ ${jsonEncode(latestAction == null ? null : {
   Future<String?> _call(List<Map<String, dynamic>> messages) async {
     try {
       return await _ai.openAiChat(messages,
-          model: 'gpt-5-mini',
+          model: await _ai.openAiModelFor(AiFeature.aiCoach),
           maxTokens: 24000,
           reasoningEffort: 'low',
           jsonSchema: coachPlanResponseSchema);
