@@ -22,8 +22,50 @@ function publicationLabel(item: Content) {
   return `${item.status === 'scheduled' ? 'Zakazano' : 'Planirano'} za ${day}`;
 }
 const time = (value?: string) => value ? new Date(value).toLocaleTimeString('sr-Latn-RS',{hour:'2-digit',minute:'2-digit'}) : '—';
+const localDay = (value: string) => new Intl.DateTimeFormat('sv-SE').format(new Date(value));
 const clean = (value: any): string => typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value, null, 2);
 const assetType = (type: string) => type === 'video' ? 'Video' : type === 'carousel' ? 'Carousel' : 'Image';
+const channelNames: Record<string, string> = { instagram: 'Instagram', tiktok: 'TikTok', youtube: 'YouTube' };
+const activeJob = (job?: Any) => !!job && ['queued','running','retry_wait'].includes(job.status);
+const stoppedJob = (job?: Any): job is Any & {status: 'failed' | 'needs_attention'} => !!job && ['failed','needs_attention'].includes(job.status);
+const approvalKey = (id: string, revision: number) => `${id}:${revision}`;
+type PublicationFeedback = { status: string; label: string; message?: string };
+function publicationFeedback(item: Content, job: Any | undefined, sending: boolean, requestError: string | undefined, publications: Any[]): PublicationFeedback | undefined {
+  if (item.status === 'published' || job?.result?.status === 'published') return {status:'published',label:'Objavljeno'};
+  if (sending) return {status:'running',label:'Šaljem zahtev za objavu…'};
+  if (activeJob(job)) {
+    const label = job?.status === 'retry_wait' ? 'Objava čeka ponovni pokušaj' : job?.status === 'queued' ? 'Objava je u redu' : 'Zakazivanje objave je u toku';
+    return {status:job?.status,label};
+  }
+  const scheduled = item.status === 'scheduled' || job?.result?.status === 'scheduled';
+  const providerErrors = publications.filter(row=>row.error && row.status==='failed').map(row=>`${channelNames[row.platform] ?? row.platform} · ${row.error}`).join(' · ');
+  const error = (!scheduled && requestError) || (stoppedJob(job) ? job.error?.message || 'Posao je zaustavljen.' : '') ||
+    providerErrors || (item.status==='approved' && item.progress?.stage==='blocked' ? item.progress.message : '');
+  if (error) return {status:'failed',label:scheduled&&!providerErrors?'Zakazano · potrebna provera':'Objava nije uspela',message:error};
+  if (scheduled) {
+    const pendingMusic = job?.result?.manualMusic || publications.some(row =>
+      row.status !== 'published' && row.platform_copy?.delivery?.scheduling_type === 'notification');
+    return pendingMusic ? {status:'scheduled',label:'Zakazan Buffer podsetnik',message:'Dodaj muziku i dovrši objavu iz Buffer podsetnika.'}
+      : {status:'scheduled',label:'Zakazano u Bufferu'};
+  }
+  if (job?.status === 'cancelled') return {status:'cancelled',label:'Zahtev za objavu je otkazan'};
+  if (job?.status === 'succeeded') return {status:'approved',label:'Odobreno · čeka potvrdu Buffera'};
+}
+function ReuseBadge({ job }: { job: Any }) {
+  if (!job.result?.postId) return <Badge status={job.status}/>;
+  if (job.result.schedulingType==='notification') return <Badge status="scheduled">Buffer podsetnik</Badge>;
+  if (Date.parse(job.scheduledTime)<=Date.now()) return <Badge status="succeeded">Prosleđeno u Buffer</Badge>;
+  return <Badge status="scheduled"/>;
+}
+function combineJobs(saved: Any[], received: Any[]) {
+  const byId = new Map(saved.map(job => [job.id, job]));
+  for (const job of received) {
+    const current = byId.get(job.id);
+    if (!current || Date.parse(job.updated_at) > Date.parse(current.updated_at)) byId.set(job.id, job);
+    else if (current.revision == null && job.revision != null) byId.set(job.id, {...current,revision:job.revision});
+  }
+  return [...byId.values()].sort((a,b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+}
 function canRetryJob(job: Any) {
   return job.canRetry === true;
 }
@@ -42,9 +84,31 @@ export default function Studio() {
   const [modal,setModal] = useState(''), [jobDetail,setJobDetail] = useState<Any|null>(null), [instructions,setInstructions] = useState('');
   const [campaignName,setCampaignName] = useState('GymFeed · fresh creative experiments'), [startDate,setStartDate] = useState(new Date(Date.now()+86400000).toISOString().slice(0,10)), [days,setDays] = useState(7);
   const [department,setDepartment] = useState('research');
+  const [approvalSending,setApprovalSending] = useState('');
+  const [approvalErrors,setApprovalErrors] = useState<Record<string,string>>({});
+  const [publicationSending,setPublicationSending] = useState('');
+  const [publicationErrors,setPublicationErrors] = useState<Record<string,string>>({});
+  const [receivedJobs,setReceivedJobs] = useState<Any[]>([]);
+  const [reuseDate,setReuseDate] = useState(''), [reuseChannels,setReuseChannels] = useState<string[]>([]), [reuseError,setReuseError] = useState('');
   const pendingRequests = useRef(new Map<string,string>());
+  const approvalInFlight = useRef(false);
+  const snapshotRequest = useRef(0);
+  const snapshotApplied = useRef(0);
   const notify = (message:string) => {setToast(message);setTimeout(()=>setToast(''),5500);};
-  const load = useCallback(async () => { try {const result=await api('snapshot');setData(result);setError('');} catch(e:any){setError(e.message);}finally{setLoading(false);}},[]);
+  const load = useCallback(async () => {
+    const request = ++snapshotRequest.current;
+    try {
+      const result = await api('snapshot');
+      if (request < snapshotApplied.current) return;
+      snapshotApplied.current=request;
+      setData(result);
+      setError('');
+    } catch(e:any) {
+      if (request === snapshotRequest.current) setError(e.message);
+    } finally {
+      if (request === snapshotRequest.current) setLoading(false);
+    }
+  },[]);
   useEffect(()=>{
     if (window.location.hash === '#analytics') setView('analytics');
     if (window.location.hash === '#ideas') setView('ideas');
@@ -57,21 +121,60 @@ export default function Studio() {
   useEffect(()=>{if(!selected)return;let active=true;setDetail(null);setInstructions('');api(`content/${selected.id}`).then(r=>{if(active)setDetail(r);}).catch(e=>notify(e.message));return()=>{active=false;};},[selected?.id]);
   useEffect(()=>{
     if(!data)return;
-    if(jobDetail){const current=data.jobs.find((j:Any)=>j.id===jobDetail.id);if(current)setJobDetail(current);}
+    if(jobDetail){const current=combineJobs([...data.jobs,...(data.reuse||[])],receivedJobs).find(j=>j.id===jobDetail.id);if(current)setJobDetail(current);}
     if(!selected)return;
     let active=true;
     const current=data.content.find((c:Content)=>c.id===selected.id);
     if(current&&current.updatedAt!==selected.updatedAt){setSelected(current);api(`content/${current.id}`).then(r=>{if(active)setDetail(r);}).catch(()=>{});}
     return()=>{active=false;};
-  },[data,jobDetail?.id,selected?.id]);
+  },[data,receivedJobs,jobDetail?.id,selected?.id]);
   const content: Content[] = data?.content || [];
-  const jobs: Any[] = data?.jobs || [];
+  const jobs = combineJobs(data?.jobs || [], receivedJobs);
+  const reuseJobs = combineJobs(data?.reuse || [], receivedJobs.filter(j=>j.kind==='content_republish'));
+  const ideaApprovals = new Map<string,Any>();
+  const assetApprovals = new Map<string,Any>();
+  for (const job of jobs) {
+    const approvals = job.kind === 'idea_approve' ? ideaApprovals : job.kind === 'asset_approve' ? assetApprovals : null;
+    if (!approvals) continue;
+    const key = approvalKey(job.content_id,job.revision);
+    if (!approvals.has(key)) approvals.set(key,job);
+  }
+  const pendingPublicationIds = [...assetApprovals.values()].filter(activeJob).map(job=>job.id).sort().join(',');
+  useEffect(()=>{
+    if (!pendingPublicationIds) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      const results = await Promise.allSettled(pendingPublicationIds.split(',').map(id=>api(`jobs/${id}`)));
+      if (!active) return;
+      const records = results.flatMap(result=>result.status==='fulfilled'?[result.value]:[]);
+      if (records.length) setReceivedJobs(current=>combineJobs(current,records).slice(0,80));
+      if (records.some(job=>!activeJob(job))) void load();
+      timer=setTimeout(poll,2000);
+    };
+    timer=setTimeout(poll,1000);
+    return ()=>{active=false;clearTimeout(timer);};
+  },[pendingPublicationIds,load]);
+  const approvalFor = (item: Content) => ideaApprovals.get(approvalKey(item.id,item.revision));
+  const assetApprovalFor = (item: Content) => assetApprovals.get(approvalKey(item.id,item.reviewRevision));
+  const feedbackFor = (item: Content) => {
+    const key = approvalKey(item.id,item.reviewRevision);
+    return publicationFeedback(item,assetApprovalFor(item),publicationSending===key,publicationErrors[key],
+      (data?.publications ?? []).filter((row: Any)=>row.content_id===item.id));
+  };
+  const selectedPublicationJob = selected ? assetApprovalFor(selected) : undefined;
+  const selectedPublication = selected ? feedbackFor(selected) : undefined;
+  const failedApprovals = content.filter(c=>stoppedJob(approvalFor(c)) && !['awaiting_approval','qa_failed','approved','scheduled','published'].includes(c.status));
+  const selectedApproval = selected ? approvalFor(selected) : undefined;
+  const selectedReuse = selected ? reuseJobs.filter(j=>j.content_id===selected.id) : [];
+  const reuseOptions: string[] = (data?.settings?.publicationChannels ?? []).filter((channel: string)=>channel!=='youtube'||selected?.type==='video');
+  const calendarDays = [...new Set([...content.map(c=>c.date),...reuseJobs.map(j=>localDay(j.scheduledTime))].filter(Boolean))].sort();
   const events: Any[] = data?.events || [];
   const incidents = content.filter(c=>(c.blocked || c.error || c.status==='failed') && !['published','scheduled'].includes(c.status));
   const stoppedCampaigns = jobs.filter(job => job.kind === 'plan_campaign' && ['failed', 'needs_attention'].includes(job.status));
   const stoppedCampaign = stoppedCampaigns[0];
-  const alertCount = incidents.length + stoppedCampaigns.length;
-  const activeJobs = jobs.filter(j=>['running','queued','retry_wait'].includes(j.status));
+  const alertCount = new Set([...incidents.map(c=>c.id),...failedApprovals.map(c=>c.id)]).size + stoppedCampaigns.length;
+  const activeJobs = jobs.filter(activeJob);
   const actionable = content.filter(c=>['awaiting_approval','qa_failed'].includes(c.status) || c.status==='planned' && c.ideaStatus==='pending');
   const inProduction = content.filter(c=>c.status==='generating');
   const published = content.filter(c=>['scheduled','published'].includes(c.status));
@@ -79,7 +182,9 @@ export default function Studio() {
   const invalidRange = Boolean(ideasFrom && ideasTo && ideasFrom > ideasTo);
   const visible = content.filter(c => {
     if (ideasView) {
-      const pendingIdea = c.status === 'planned' && ['pending', 'revising'].includes(c.ideaStatus) && !c.assets.length;
+      const approval = approvalFor(c);
+      const pendingIdea = c.status === 'planned' && ['pending', 'revising'].includes(c.ideaStatus) && !c.assets.length &&
+        approvalSending !== approvalKey(c.id,c.revision) && !activeJob(approval) && approval?.status !== 'succeeded';
       if (!pendingIdea && c.status !== 'scheduled') return false;
       const day = c.publicationDate;
       if (invalidRange || (ideasFrom && (!day || day < ideasFrom)) || (ideasTo && (!day || day > ideasTo))) return false;
@@ -89,17 +194,85 @@ export default function Studio() {
   });
   const open = (item:Content) => {setSelected(item);setDetailTab('brief');};
   const navigate = (next:string) => {setView(next);setQuery('');setFilter('all');};
-  const enqueue = async (kind:string,payload:Any={},item?:Content) => {
-    const signature=JSON.stringify({kind,payload,contentId:item?.id});
-    let key=pendingRequests.current.get(signature);
-    if(!key){
-      const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(signature)))).map(b=>b.toString(16).padStart(2,'0')).join('');
-      key=item||kind==='plan_campaign'?`studio:${kind}:${hash}`:crypto.randomUUID();pendingRequests.current.set(signature,key);
+  const rememberJobs = (records: Any[]) => setReceivedJobs(current=>combineJobs(current,records).slice(0,80));
+  const enqueue = async (kind:string,payload:Any={},item?:Content,onError?: (message:string)=>void,previousCancellation?: string) => {
+    setBusy(kind);
+    try {
+      const signature=JSON.stringify({kind,payload,contentId:item?.id,previousCancellation});
+      let key=pendingRequests.current.get(signature);
+      if(!key){
+        const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(signature)))).map(b=>b.toString(16).padStart(2,'0')).join('');
+        key=item||kind==='plan_campaign'?`studio:${kind}:${hash}`:crypto.randomUUID();
+        pendingRequests.current.set(signature,key);
+      }
+      const result=await api('jobs',{kind,payload,contentId:item?.id},{'idempotency-key':key});
+      if (kind==='idea_approve'||kind==='asset_approve') rememberJobs([{...result,revision:payload.revision}]);
+      if (kind!=='asset_approve') {
+        notify(stoppedJob(result) ? result.error?.message || 'Posao je zaustavljen.' : 'Posao je sačuvan u redu. Status i svaki pokušaj vidiš u Poslovi i greške.');
+        setModal('');
+      }
+      if(!item&&kind!=='plan_campaign') pendingRequests.current.delete(signature);
+      void load();
+      return result;
+    } catch(e:any) {
+      onError?.(e.message);
+      notify(e.message);
+    } finally {
+      setBusy('');
     }
-    setBusy(kind);try {const result=await api('jobs',{kind,payload,contentId:item?.id},{'idempotency-key':key});notify('Posao je sačuvan u redu. Status i svaki pokušaj vidiš u Poslovi i greške.');setModal('');if(!item&&kind!=='plan_campaign')pendingRequests.current.delete(signature);await load();return result;}catch(e:any){notify(e.message);}finally{setBusy('');}
   };
-  const decide = async (kind:string) => {if(!selected)return;const item=detail || selected;await enqueue(kind,{revision:kind.startsWith('asset_')?item.reviewRevision:item.revision,instructions},selected);setSelected(null);};
-  const retry = async (job:Any) => {setBusy(job.id);try{await api(`jobs/${job.id}/retry`,{});notify(job.kind==='plan_campaign'?'Nastavak kampanje je u redu poslova.':'Retry je sačuvan.');await load();}catch(e:any){notify(e.message);}finally{setBusy('');}};
+  const decide = async (kind:string) => {
+    if(!selected || busy || approvalInFlight.current) return;
+    const item=selected;
+    const revision=kind.startsWith('asset_')?item.reviewRevision:item.revision;
+    if (kind==='asset_approve') {
+      const job=assetApprovalFor(item);
+      if (activeJob(job) || stoppedJob(job) || job?.status==='succeeded') return;
+      const key=approvalKey(item.id,revision);
+      approvalInFlight.current=true;
+      setPublicationSending(key);
+      setPublicationErrors(current=>({...current,[key]:''}));
+      setModal('');
+      await enqueue(kind,{revision,instructions},item,message=>setPublicationErrors(current=>({...current,[key]:message})),
+        job?.status==='cancelled'?job.id:undefined);
+      setPublicationSending('');
+      approvalInFlight.current=false;
+      return;
+    }
+    if(kind==='idea_approve'){
+      const key=approvalKey(item.id,revision);
+      approvalInFlight.current=true;
+      setApprovalSending(key);
+      setApprovalErrors(current=>({...current,[key]:''}));
+      setSelected(null);
+      await enqueue(kind,{revision},item,message=>setApprovalErrors(current=>({...current,[key]:message})));
+      setApprovalSending('');
+      approvalInFlight.current=false;
+      return;
+    }
+    if(await enqueue(kind,{revision,instructions},item)) setSelected(current=>current?.id===item.id?null:current);
+  };
+  const retry = async (job:Any) => {setBusy(job.id);try{const updated=await api(`jobs/${job.id}/retry`,{});rememberJobs([{...job,...updated}]);notify(job.kind==='plan_campaign'?'Nastavak kampanje je u redu poslova.':'Retry je sačuvan.');await load();}catch(e:any){notify(e.message);}finally{setBusy('');}};
+  const openJob = (job:Any) => {setJobDetail(job);setModal('job');};
+  const scheduleReuse = async () => {
+    if (!selected || busy || !reuseDate || !reuseChannels.length) return;
+    setReuseError('');
+    setBusy('reuse');
+    try {
+      const { scheduled } = await api(`content/${selected.id}/schedule`, { platforms: reuseChannels, scheduledTime: new Date(reuseDate).toISOString() });
+      rememberJobs(scheduled);
+      setModal('');
+      setDetailTab('assets');
+      notify('Zahtev za zakazivanje je sačuvan. Status po kanalu vidiš u Kalendaru i Materijalima.');
+      void load();
+    } catch(e:any) {
+      setReuseError(e.message);
+      void load();
+    } finally {
+      setBusy('');
+    }
+  };
+  const showReuse = () => {setReuseDate('');setReuseChannels([]);setReuseError('');setModal('reuse');};
   const upload = async (id: string, file: File, ref: string, actions: string) => {
     const response = await fetch(`/api/studio/content/${id}/upload`, {
       method: 'POST',
@@ -115,12 +288,16 @@ export default function Studio() {
     void load();
   };
   const sectionHead = (eyebrow:string,title:string,description:string,action?:ReactNode) => <div className="section-head"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{action}</div>;
-  const contentCard = (item:Content,index:number) => <button key={item.id} className="content-card" onClick={()=>open(item)}>
+  const contentCard = (item:Content,index:number) => {
+    const approval = approvalFor(item);
+    const approvalError = approvalErrors[approvalKey(item.id,item.revision)] || (stoppedJob(approval) ? approval?.error?.message || 'Posao je zaustavljen.' : '');
+    const publication = view==='studio' ? feedbackFor(item) : undefined;
+    return <button key={item.id} className="content-card" onClick={()=>open(item)}>
     <div className={`cover cover-${index%4}`}>
       {item.thumbnail ? <img src={item.thumbnail} alt=""/> : <><div className="cover-grid"/><span className="cover-brand">GYMFEED<span>®</span></span><span className="cover-title">{item.hook || item.title}</span><span className="cover-bottom">{item.feature?.replaceAll('_',' ') || 'Make your next move.'}<ArrowUpRight size={22}/></span></>}
       <span className="type-tag">{item.type==='video'?<Film size={12}/>:item.type==='carousel'?<Layers3 size={12}/>:<ImageIcon size={12}/>} {assetType(item.type)}{item.duration?` · ${item.duration}s`:''}</span>
-    </div><div className="card-body"><div className="card-meta"><span>{ideasView ? publicationLabel(item) : date(item.date)}</span><Badge status={item.blocked?'failed':ideasView&&item.status==='planned'?item.ideaStatus:item.status}/></div><h3>{item.title}</h3>{ideasView&&item.createdAt&&<div className="idea-planned-date">Kreirano {date(item.createdAt)} · {time(item.createdAt)}</div>}<div className="card-foot"><span>{item.treatment?.format_family?.replaceAll('_',' ') || item.feature?.replaceAll('_',' ') || 'GymFeed creative'}</span><ArrowUpRight size={16}/></div></div>
-  </button>;
+    </div><div className="card-body"><div className="card-meta"><span>{ideasView ? publicationLabel(item) : date(item.date)}</span><Badge status={publication?.status || (item.blocked?'failed':ideasView&&item.status==='planned'?item.ideaStatus:item.status)}>{publication?.label}</Badge></div><h3>{item.title}</h3>{ideasView&&item.createdAt&&<div className="idea-planned-date">Kreirano {date(item.createdAt)} · {time(item.createdAt)}</div>}{ideasView&&approvalError&&<p className="error-text" role="status">{approvalError}</p>}{publication?.status==='failed'&&<p className="error-text">{publication.message}</p>}<div className="card-foot"><span>{item.treatment?.format_family?.replaceAll('_',' ') || item.feature?.replaceAll('_',' ') || 'GymFeed creative'}</span><ArrowUpRight size={16}/></div></div>
+  </button>;};
 
   return <div className="app-shell">
     <aside className="sidebar"><a href="#" className="brand" onClick={e=>{e.preventDefault();navigate('overview');}}><span className="brand-mark"><Activity size={23} strokeWidth={3}/></span>GymFeed<span className="brand-small">STUDIO</span></a>
@@ -142,6 +319,15 @@ export default function Studio() {
         <button className="button subtle" onClick={()=>{navigate('jobs');setJobDetail(stoppedCampaign);setModal('job');}}>Otvori detalje</button>
         <button className="button primary" disabled={!!busy || !canRetryJob(stoppedCampaign)} onClick={()=>void retry(stoppedCampaign)}>Nastavi kampanju</button>
       </div>}
+      {ideasView&&failedApprovals.map(item=>{
+        const job=approvalFor(item);
+        if(!stoppedJob(job)) return null;
+        return <div className="error-banner" role="alert" key={job.id}>
+          <CircleAlert size={20}/><div><strong>Pokretanje je zaustavljeno · {item.title}</strong><p>{job.error?.message || 'Otvori posao da vidiš razlog.'}</p></div>
+          <button className="button subtle" onClick={()=>openJob(job)}>Otvori grešku</button>
+          {item.ideaStatus==='approved'&&<button className="button subtle" onClick={()=>{open(item);setDetailTab(item.blockKind==='capture'?'assets':'errors');}}>Otvori sadržaj</button>}
+        </div>;
+      })}
       {loading&&!data?<div className="loading-state"><LoaderCircle className="spin"/><h2>Učitavam tvoj workspace</h2><p>Čitam stvarne kampanje, produkciju i rezultate.</p></div>:<>
       {view==='overview'&&<>
         {sectionHead('YOUR MARKETING, CONNECTED','Dobre ideje. Stvarni rezultati.','Jedno mesto za strategiju, sadržaj i sve što se dešava između.',<button className="button primary" onClick={()=>setModal('campaign')}><Plus size={17}/>Nova kampanja</button>)}
@@ -169,8 +355,18 @@ export default function Studio() {
         <MediaEditor/>
       </>}
       {view==='calendar'&&<>
-        {sectionHead('PUBLISHING CALENDAR','Tvoj sledeći potez.','Planirani datum ideje i stvarno stanje publikacije, zajedno.')}
-        {[...new Set(content.map(c=>c.date).filter(Boolean))].sort().map(day=><section className="calendar-day" key={day}><div className="day-label"><strong>{new Date(day).getDate()}</strong><span>{new Date(day).toLocaleDateString('sr-Latn-RS',{month:'short',weekday:'short'})}</span></div><div className="day-items">{content.filter(c=>c.date===day).map(c=><button key={c.id} onClick={()=>open(c)}><span className="item-type">{c.type==='video'?<Film size={18}/>:<Layers3 size={18}/>}</span><div><strong>{c.title}</strong><small>{assetType(c.type)} · {c.feature?.replaceAll('_',' ')}</small></div><Badge status={c.status}/><ChevronRight size={16}/></button>)}</div></section>)}
+        {sectionHead('PUBLISHING CALENDAR','Tvoj sledeći potez.','Planirani i zakazani termini objava.')}
+        {calendarDays.map(day=><section className="calendar-day" key={day}>
+          <div className="day-label"><strong>{Number(day.slice(8,10))}</strong><span>{new Date(day).toLocaleDateString('sr-Latn-RS',{month:'short',weekday:'short',timeZone:'UTC'})}</span></div>
+          <div className="day-items">
+            {content.filter(c=>c.date===day).map(c=><button key={c.id} onClick={()=>open(c)}><span className="item-type">{c.type==='video'?<Film size={18}/>:<Layers3 size={18}/>}</span><div><strong>{c.title}</strong><small>{assetType(c.type)} · {c.feature?.replaceAll('_',' ')}</small></div><Badge status={c.status}/><ChevronRight size={16}/></button>)}
+            {reuseJobs.filter(j=>localDay(j.scheduledTime)===day).sort((a,b)=>a.scheduledTime.localeCompare(b.scheduledTime)).map(job=><button key={job.id} onClick={()=>openJob(job)}>
+              <span className="item-type"><CalendarDays size={18}/></span>
+              <div><strong>{job.title}</strong><small>Ponovna objava · {channelNames[job.platform]} · {time(job.scheduledTime)}</small></div>
+              <ReuseBadge job={job}/><ChevronRight size={16}/>
+            </button>)}
+          </div>
+        </section>)}
       </>}
       {view==='analytics'&&<>
         {sectionHead('ANALYTICS & LEARNING','Brojevi koji imaju smisla.','Podaci, pretpostavke i rupe u merenju prikazani su odvojeno.',<button className="button primary" disabled={!!busy} onClick={()=>void enqueue('weekly_review')}><Sparkles size={16}/>Pokreni Weekly CMO</button>)}
@@ -208,6 +404,15 @@ export default function Studio() {
         {detailTab==='brief'&&<><span className="eyebrow">THE HOOK</span><blockquote>{detail.hook}</blockquote><h3>Ideja</h3><p>{detail.concept}</p><div className="detail-fields"><div><small>FEATURE</small><strong>{detail.feature||'—'}</strong></div><div><small>FORMAT</small><strong>{detail.treatment?.format_family?.replaceAll('_',' ')||assetType(detail.type)}</strong></div></div>{detail.rationale&&<><h3>Zašto ova ideja</h3><p>{clean(detail.rationale)}</p></>}{detail.experiment&&<details className="detail-disclosure"><summary>Eksperiment i merenje<ChevronDown size={15}/></summary><pre>{clean(detail.experiment)}</pre></details>}{detail.research?.summary&&<details className="detail-disclosure"><summary>Dokazi i istraživanje<ChevronDown size={15}/></summary><p>{detail.research.summary}</p></details>}</>}
         {detailTab==='story'&&<>{(detail.plan?.scenes||detail.plan?.slides||[]).map((s:Any,i:number)=><div className="story-scene" key={s.scene_id||i}><div className="scene-number">{String(i+1).padStart(2,'0')}</div><div><div className="scene-label">{s.asset_type?.replaceAll('_',' ')||s.visual_type?.replaceAll('_',' ')}{s.duration_seconds?` · ${s.duration_seconds}s`:''}</div><h3>{s.headline||s.action||s.purpose}</h3><p>{s.spoken_dialogue||s.voiceover_text||s.body||s.visual_prompt}</p>{s.overlay_text&&<span className="overlay-copy">Overlay: {s.overlay_text}</span>}{s.capture_ref&&<code>{s.capture_ref}</code>}</div></div>)}</>}
         {detailTab==='assets'&&<>
+          {selectedReuse.length>0&&<section>
+            <h3>Ponovne objave</h3>
+            {selectedReuse.map(job=><div className="linked-job" key={job.id}>
+              <div><ReuseBadge job={job}/><strong>{channelNames[job.platform]} · {date(job.scheduledTime)} u {time(job.scheduledTime)}</strong>
+                <button className="text-button" onClick={()=>openJob(job)}>Detalji</button>
+              </div>
+              {job.error&&stoppedJob(job)&&<p className="error-text">{job.error.message}</p>}
+            </div>)}
+          </section>}
           {detail.assets?.map((url:string,i:number)=><div className="asset-preview" key={url}>{selected.type==='video'?<video controls preload="metadata" src={url}/>:<img src={url} alt={`Materijal ${i+1}`}/>}<a href={url} target="_blank" rel="noreferrer">Otvori materijal {i+1}<ExternalLink size={14}/></a></div>)}
           {!detail.assets?.length&&<Empty title="Gotov materijal još nije dostupan" text="Ovde će se pojaviti završeni video ili slike." icon={Film}/>}
           {Object.entries(detail.captureUploads ?? {}).map(([ref, ready]) => {
@@ -236,13 +441,57 @@ export default function Studio() {
           {jobs.filter(j=>j.content_id===detail.id).map(j=><div className="linked-job" key={j.id}><div><Badge status={j.status}/><strong>{j.kind.replaceAll('_',' ')}</strong></div><p>{j.error?.message}</p>{j.error?.next_action&&<p>{j.error.next_action}</p>}</div>)}
         </>}
       </div>}
-      <div className="drawer-actions"><label className="field-label">Tvoja uputstva za izmenu<textarea value={instructions} onChange={e=>setInstructions(e.target.value)} placeholder="Šta tačno treba promeniti u ideji ili gotovom materijalu?"/></label><div className="action-buttons">{['planned','failed','generating'].includes(selected.status)&&!selected.assets.length?<><button className="button subtle" disabled={!!busy||instructions.trim().length<5} onClick={()=>void decide('idea_reject')}>Traži izmenu</button><button className="button primary" disabled={!!busy||selected.status==='generating'} onClick={()=>void decide(selected.ideaStatus==='approved'?'resume_content':'idea_approve')}>{busy?<LoaderCircle size={16} className="spin"/>:<Play size={15}/>} {selected.ideaStatus==='approved'?'Nastavi produkciju':'Odobri i pokreni'}</button></>:['awaiting_approval','qa_failed','failed'].includes(selected.status)&&selected.assets.length>0?<><button className="button subtle" disabled={!!busy||instructions.trim().length<5} onClick={()=>void decide('asset_reject')}>Vrati na izmenu</button><button className="button primary" disabled={!!busy} onClick={()=>setModal('publish')}><Check size={16}/>Odobri za objavu</button></>:<span className="muted">{statusNames[selected.status]||selected.status} · sve odluke ostaju sačuvane.</span>}</div></div>
+      <div className="drawer-actions">
+        {selectedPublication&&<div className={selectedPublication.status==='failed'?'error-detail':'info-detail'} role={selectedPublication.status==='failed'?'alert':'status'}>
+          <strong>{selectedPublication.label}</strong>
+          {selectedPublication.message&&<p>{selectedPublication.message}</p>}
+        </div>}
+        {!selected.reusable&&!(selectedPublication&&['running','queued','retry_wait','scheduled','published','approved'].includes(selectedPublication.status))&&
+          <label className="field-label">Tvoja uputstva za izmenu<textarea value={instructions} onChange={e=>setInstructions(e.target.value)} placeholder="Šta tačno treba promeniti u ideji ili gotovom materijalu?"/></label>}
+        <div className="action-buttons">
+          {selectedPublication?.status==='failed'&&stoppedJob(selectedPublicationJob)
+            ? <button className="button subtle" onClick={()=>openJob(selectedPublicationJob)}><CircleAlert size={16}/>Detalji objave</button>
+            : null}
+          {selectedPublication&&['running','queued','retry_wait'].includes(selectedPublication.status)?null
+            : selected.reusable?<button className="button primary" disabled={!!busy} onClick={showReuse}><CalendarDays size={16}/>Zakaži ponovo</button>
+            :['planned','failed','generating'].includes(selected.status)&&!selected.assets.length?<><button className="button subtle" disabled={!!busy||activeJob(selectedApproval)||instructions.trim().length<5} onClick={()=>void decide('idea_reject')}>Traži izmenu</button>
+              {stoppedJob(selectedApproval)&&selected.ideaStatus!=='approved'
+                ? <button className="button primary" onClick={()=>openJob(selectedApproval)}><CircleAlert size={16}/>Pogledaj grešku odobrenja</button>
+                : <button className="button primary" disabled={!!busy||selected.status==='generating'||activeJob(selectedApproval)} onClick={()=>void decide(selected.ideaStatus==='approved'?'resume_content':'idea_approve')}>
+                  {activeJob(selectedApproval)?<LoaderCircle size={16} className="spin"/>:<Play size={15}/>}
+                  {activeJob(selectedApproval)?'Odobrenje je u toku':selected.ideaStatus==='approved'?'Nastavi produkciju':'Odobri i pokreni'}
+                </button>}
+            </>:['awaiting_approval','qa_failed','failed'].includes(selected.status)&&selected.assets.length>0&&!['scheduled','published','approved'].includes(selectedPublication?.status ?? '')?<><button className="button subtle" disabled={!!busy||instructions.trim().length<5} onClick={()=>void decide('asset_reject')}>Vrati na izmenu</button>{!stoppedJob(selectedPublicationJob)&&<button className="button primary" disabled={!!busy} onClick={()=>setModal('publish')}><Check size={16}/>Odobri za objavu</button>}</>:null}
+        </div>
+      </div>
     </aside></div>}
 
     {modal&&<div className="modal-overlay" onClick={()=>setModal('')}><section role="dialog" aria-modal="true" className="modal" onClick={e=>e.stopPropagation()}><button className="modal-close icon-button" aria-label="Zatvori prozor" onClick={()=>setModal('')}><X size={20}/></button>
       {modal==='campaign'&&<><span className="modal-icon"><Sparkles size={24}/></span><span className="eyebrow">RESEARCH → IDEAS → YOUR REVIEW</span><h2>Sledeća dobra kampanja.</h2><p>CMO istražuje i priprema nove ideje. Generisanje materijala kreće tek kada odobriš pojedinačnu ideju.</p><label className="field-label">Naziv kampanje<input value={campaignName} onChange={e=>setCampaignName(e.target.value)}/></label><div className="form-columns"><label className="field-label">Prvi dan<input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></label><label className="field-label">Broj dana<select value={days} onChange={e=>setDays(Number(e.target.value))}>{[1,3,7,14].map(d=><option key={d} value={d}>{d} {d===1?'dan':'dana'}</option>)}</select></label></div><div className="mini-notice"><ShieldCheck size={16}/>Istraživanje koristi AI budžet. Produkcija čeka tvoje odobrenje.</div><button className="button primary full" disabled={!!busy||campaignName.trim().length<3} onClick={()=>void enqueue('plan_campaign',{name:campaignName,startDate,days})}>{busy?<LoaderCircle size={16} className="spin"/>:<Sparkles size={16}/>}Istraži i napravi plan</button></>}
       {modal==='brief'&&<><span className="modal-icon"><FileText size={24}/></span><span className="eyebrow">{data?.departments?.[department]?.title}</span><h2>Šta želiš da istražimo?</h2><p>Dobijaš sačuvan brief u redu poslova. Emailovi, odgovori i izmene sajta ostaju nacrti za pregled.</p><label className="field-label">Uputstva<textarea rows={6} value={instructions} onChange={e=>setInstructions(e.target.value)} placeholder="Publika, problem, cilj i šta želiš da uradimo drugačije…"/></label><button className="button primary full" disabled={!!busy} onClick={()=>void enqueue('department_brief',{department,instructions})}><Sparkles size={16}/>Napravi brief</button></>}
       {modal==='publish'&&<><span className="modal-icon"><Send size={24}/></span><h2>Odobri ovaj materijal za objavu?</h2><p>Potvrđuješ gotov materijal trenutne revizije. Postojeći publishing tok zatim ga prosleđuje povezanim kanalima preko Buffera.</p><button className="button primary full" disabled={!!busy} onClick={()=>void decide('asset_approve')}><Check size={16}/>Potvrdi odobrenje za objavu</button></>}
+      {modal==='reuse'&&selected&&<><span className="modal-icon"><CalendarDays size={24}/></span>
+        <h2>Zakaži ponovo</h2><p>{selected.title}</p>
+        <form onSubmit={event=>{event.preventDefault();void scheduleReuse();}}>
+          <label className="field-label">Datum i vreme objave (lokalno)
+            <input type="datetime-local" required value={reuseDate} onChange={e=>setReuseDate(e.currentTarget.value)}/>
+          </label>
+          {reuseOptions.length?<div className="editor-channels" role="group" aria-label="Kanali za objavu">
+            {reuseOptions.map(channel=><label className="checkbox" key={channel}>
+              <input type="checkbox" checked={reuseChannels.includes(channel)} onChange={e=>{
+                const checked=e.currentTarget.checked;
+                setReuseChannels(current=>checked?[...current,channel]:current.filter(value=>value!==channel));
+              }}/>{channelNames[channel]}
+            </label>)}
+          </div>:<p>Nema povezanih Buffer kanala za ovaj format.</p>}
+          <p>Studio koristi gotov materijal i opis objave za svaki kanal.</p>
+          {reuseError&&<div className="error-detail" role="alert"><p>{reuseError}</p></div>}
+          <button className="button primary full" disabled={!!busy||!reuseDate||!reuseChannels.length}>
+            {busy==='reuse'?<LoaderCircle size={16} className="spin"/>:<CalendarDays size={16}/>}
+            {busy==='reuse'?'Upisujem termin…':'Zakaži objavu'}
+          </button>
+        </form>
+      </>}
       {modal==='job'&&jobDetail&&<><span className="eyebrow">JOB / {jobDetail.id.slice(0,8)}</span><h2>{jobDetail.kind.replaceAll('_',' ')}</h2><Badge status={jobDetail.status}/><p>Pokušaj {jobDetail.attempts} od {jobDetail.max_attempts} · {date(jobDetail.created_at)} {time(jobDetail.created_at)}</p>{jobDetail.error&&<div className="error-detail"><strong>{jobDetail.error.code}</strong><p>{jobDetail.error.message}</p><h3>Sledeći korak</h3><p>{jobDetail.kind === 'plan_campaign' && canRetryJob(jobDetail) ? 'Klikni Nastavi kampanju. Studio kreće od prvog nedovršenog dana.' : jobDetail.error.next_action}</p></div>}{jobDetail.result&&<div className="brief-result">{jobDetail.result.title&&<h3>{jobDetail.result.title}</h3>}{jobDetail.result.summary&&<p>{jobDetail.result.summary}</p>}{jobDetail.result.items?.map((item:Any,i:number)=><article key={i}><span className="eyebrow">{item.channel} · {item.objective}</span><h3>{item.title}</h3><p>{item.body}</p><small>Merimo: {item.success_metric}</small></article>)}{jobDetail.result.next_actions?.map((a:string)=><p key={a}>→ {a}</p>)}{jobDetail.result.limitations?.map((a:string)=><p className="muted" key={a}>{a}</p>)}{!jobDetail.result.items&&<pre>{clean(jobDetail.result)}</pre>}</div>}{['failed','needs_attention'].includes(jobDetail.status)&&<button className="button primary full" disabled={!!busy||!canRetryJob(jobDetail)} onClick={()=>void retry(jobDetail)}><RefreshCw size={16}/>{jobDetail.kind==='plan_campaign'?'Nastavi kampanju':'Retry operacije'}</button>}{['queued','retry_wait'].includes(jobDetail.status)&&<button className="button subtle full" onClick={async()=>{try{await api(`jobs/${jobDetail.id}/cancel`,{});setModal('');await load();}catch(e:any){notify(e.message);}}}>Otkaži posao u redu</button>}</>}
     </section></div>}
     {toast&&<div role="status" className="toast"><CircleAlert size={17}/>{toast}<button aria-label="Zatvori obaveštenje" onClick={()=>setToast('')}><X size={15}/></button></div>}

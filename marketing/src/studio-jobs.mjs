@@ -1,7 +1,7 @@
 import { classifyStudioError, redact } from "./studio-errors.mjs";
 
 const unwrap = (result) => { if (result.error) throw new Error(result.error.message); return result.data; };
-export const STUDIO_JOB_KINDS = ["plan_campaign", "weekly_review", "idea_approve", "idea_reject", "asset_approve", "asset_reject", "resume_content", "sync", "department_brief", "media_edit", "media_publish"];
+export const STUDIO_JOB_KINDS = ["plan_campaign", "weekly_review", "idea_approve", "idea_reject", "asset_approve", "asset_reject", "resume_content", "sync", "department_brief", "media_edit", "media_publish", "content_republish"];
 const SAFE_RETRY = new Set(["sync"]);
 
 export function hasResumableMediaEdit(result) {
@@ -16,6 +16,7 @@ function canResumeCampaign(job) {
 }
 
 function requiresReconciliation(job) {
+  if (job.kind === "content_republish") return Boolean(job.result?.submitting || job.result?.rejectedPostId);
   return ["connection", "interrupted"].includes(job.error?.category) &&
     !job.error?.retryable && !canResumeCampaign(job) &&
     !(job.kind === "media_edit" && hasResumableMediaEdit(job.result));
@@ -70,6 +71,7 @@ export class StudioJobs {
       .eq("id", id).in("status", ["queued", "retry_wait"]).select().maybeSingle());
     if (!job) throw Object.assign(new Error("Only queued jobs can be cancelled; an accepted provider task cannot be undone"), { statusCode: 409 });
     await this.event({ jobId: id, contentId: job.content_id, stage: "cancelled", message: "Queued operation cancelled" });
+    this.onChange();
     return job;
   }
   async tick() {
@@ -80,6 +82,7 @@ export class StudioJobs {
     try {
       job = unwrap(await this.client.rpc("marketing_studio_claim_job"));
       if (!job) return { idle: true };
+      this.onChange();
       const update = async (patch) => unwrap(await this.client.from("marketing_studio_jobs").update({ ...patch, updated_at: new Date().toISOString() })
         .eq("id", job.id).eq("lock_token", job.lock_token).eq("status", "running").select().maybeSingle());
       heartbeat = setInterval(() => update({ heartbeat_at: new Date().toISOString() }).catch(() => {}), this.heartbeatMs);

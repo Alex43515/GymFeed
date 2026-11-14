@@ -1757,6 +1757,26 @@ export class MarketingOrchestrator {
     return new Date(base.getTime() + offsets[platform]).toISOString();
   }
 
+  publicationChannels(contentType) {
+    const accounts = {
+      instagram: this.config.BUFFER_INSTAGRAM_CHANNEL_ID,
+      tiktok: this.config.BUFFER_TIKTOK_CHANNEL_ID,
+      ...(contentType === "video" ? { youtube: this.config.BUFFER_YOUTUBE_CHANNEL_ID } : {}),
+    };
+    return Object.fromEntries(Object.entries(accounts).filter(([, account]) => account));
+  }
+
+  publicationMedia(content, platform) {
+    const variants = content.decision?.generation?.platform_variants;
+    const variant = variants?.[platform]?.url;
+    if (content.content_type === "video" && variants && !variant) {
+      throw new Error(`Missing ${platform} video variant; publication stopped before Buffer submission`);
+    }
+    const urls = content.content_type === "video" ? [variant ?? content.asset_urls?.[0]].filter(Boolean) : content.asset_urls;
+    if (!urls?.length) throw new Error(`No media asset is available for ${platform}`);
+    return urls;
+  }
+
   async publishContent(id, { explicitBatchRelease = false } = {}) {
     const content = await this.repository.contentById(id);
     if (!["approved", "scheduled"].includes(content.status)) return { skipped: true, reason: `status is ${content.status}`, content };
@@ -1765,16 +1785,10 @@ export class MarketingOrchestrator {
     const brand = await this.repository.brandConfig();
     if (!brand.enabled) return { skipped: true, reason: "marketing disabled", content };
 
-    const accountByPlatform = {
-      instagram: this.config.BUFFER_INSTAGRAM_CHANNEL_ID,
-      tiktok: this.config.BUFFER_TIKTOK_CHANNEL_ID,
-      youtube: this.config.BUFFER_YOUTUBE_CHANNEL_ID,
-    };
-    const platforms = (content.content_type === "video" ? ["instagram", "tiktok", "youtube"] : ["instagram", "tiktok"])
-      .filter((platform) => accountByPlatform[platform]);
+    const accountByPlatform = this.publicationChannels(content.content_type);
+    const platforms = Object.keys(accountByPlatform);
     if (!platforms.length) throw new Error("No Buffer channel IDs are configured for this content");
 
-    const platformVariants = content.decision?.generation?.platform_variants ?? null;
     const publications = [];
     const existing = this.repository.publicationByContent ? await this.repository.publicationByContent(id) : [];
     for (const platform of platforms) {
@@ -1782,12 +1796,7 @@ export class MarketingOrchestrator {
       if (previous?.provider_request_id) { publications.push(previous); continue; }
       if (previous?.status === "pending" && previous.error) throw new Error(`Buffer ${platform} submission is unresolved. Reconcile it in Buffer before retrying.`);
       const copy = this.platformPlan(content, platform);
-      const platformMediaUrl = platformVariants?.[platform]?.url;
-      if (content.content_type === "video" && platformVariants && !platformMediaUrl) {
-        throw new Error(`Missing ${platform} video variant; publication stopped before Buffer submission`);
-      }
-      const mediaUrls = content.content_type === "video" ? [platformMediaUrl ?? content.asset_urls?.[0]].filter(Boolean) : content.asset_urls;
-      if (!mediaUrls.length) throw new Error(`No media asset is available for ${platform}`);
+      const mediaUrls = this.publicationMedia(content, platform);
       const scheduledAt = this.scheduledTime(content, platform);
       if (content.decision?.campaign?.id && !scheduledAt) throw new Error("Campaign publishing requires an explicit future schedule");
       const music=photoMusicPlan(content,this.config);

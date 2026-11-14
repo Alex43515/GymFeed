@@ -6,11 +6,20 @@ import { STUDIO_SOURCES, STUDIO_DEPARTMENTS } from "./studio-strategy.mjs";
 import { appCaptureCatalog, preflightAppCaptures } from "./app-captures.mjs";
 import { requestedCaptures, UPLOAD_LIMIT } from "./capture-storage.mjs";
 import { settleOrReleaseOpenAiReservation } from "./orchestrator.mjs";
+import { photoMusicPlan } from "./photo-music.mjs";
 
 const unwrap = result => { if (result.error) throw new Error(result.error.message); return result.data; };
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(value ?? "");
 const requireValue = (test, message) => { if (!test) throw Object.assign(new Error(message), { statusCode: 400 }); };
 const now = () => new Date().toISOString();
+const reusable = row => ["approved", "scheduled", "published"].includes(row.status) && row.asset_urls?.length > 0;
+const futureSlot = value => typeof value === "string" && value.endsWith("Z") && Date.parse(value) > Date.now() + 60_000;
+const reuseDetails = payload => ({ platform: payload.platform, scheduledTime: payload.scheduledTime, title: payload.title });
+function studioJob({ payload, lock_token, ...job }) {
+  return { ...job, canRetry: canRetryStudioJob(job),
+    ...(["idea_approve", "asset_approve"].includes(job.kind) ? { revision: payload.revision } : {}),
+    ...(job.kind === "content_republish" ? reuseDetails(payload) : {}) };
+}
 
 function scheduledPublicationDate(timestamp, timeZone) {
   const date = new Date(timestamp);
@@ -37,7 +46,7 @@ export function studioContent(row, detailed = false) {
     ideaStatus: campaign.idea_status ?? "pending", blocked: Boolean(campaign.production_blocked),
     error: row.failure_reason ?? campaign.production_block_reason ?? null,
     blockKind: campaign.production_block_kind, progress: row.decision?.workflow,
-    assets: row.asset_urls ?? [], thumbnail: row.thumbnail_url, score: row.qa_score,
+    assets: row.asset_urls ?? [], reusable: reusable(row), thumbnail: row.thumbnail_url, score: row.qa_score,
     createdAt: row.created_at, updatedAt: row.updated_at,
     duration: plan.target_duration_seconds, treatment: plan.creative_treatment,
     sceneProgress: { total: scenes.filter(s => s.asset_type === "generated_video").length,
@@ -53,17 +62,60 @@ export function studioContent(row, detailed = false) {
 export function registerStudioRoutes(app, { config, cmo, repository, orchestrator, captureStorage, editor }) {
   const client = repository.client;
   const secrets = Object.entries(config).filter(([key]) => /KEY|TOKEN|PASSWORD/.test(key)).map(([, value]) => value);
-  let cache = null, cachedAt = 0;
-  const invalidate = () => { cachedAt = 0; };
+  let cache = null, cachedAt = 0, cacheVersion = 0;
+  const invalidate = () => { cachedAt = 0; cacheVersion++; };
   let jobs;
   const contentEntry = content => ({ campaignId: content.decision.campaign.id, ideaId: content.id,
     contentId: content.id, version: Number(content.decision.campaign.idea_revision), revision: Number(content.decision.review_revision ?? 1),
     plannedDate: content.decision.campaign.date, storedPlannedDate: content.decision.campaign.date,
     fingerprint: `studio:${content.id}:${content.decision.campaign.idea_revision}`, contentUpdatedAt: content.updated_at });
 
+  function republishInput(content, platform) {
+    requireValue(reusable(content), "Za ponovno zakazivanje potreban je odobren gotov materijal.");
+    const accounts = orchestrator.publicationChannels(content.content_type);
+    requireValue(config.BUFFER_API_KEY && Object.hasOwn(accounts, platform), "Kanal nije dostupan za ovaj format.");
+    const { text, title } = orchestrator.platformPlan(content, platform);
+    const music = photoMusicPlan(content, config);
+    return { platform, accountId: accounts[platform], mediaUrls: orchestrator.publicationMedia(content, platform),
+      text, title, isVideo: content.content_type === "video", ...(music ? { music } : {}) };
+  }
+
+  async function republish(job) {
+    const { platform, scheduledTime } = job.payload;
+    if (job.result?.postId) return job.result;
+    if (job.result?.submitting || job.result?.rejectedPostId) {
+      throw new Error("Buffer submission requires reconciliation. Proveri objavu u Bufferu.");
+    }
+    const content = await repository.contentById(job.content_id);
+    requireValue((content.decision?.review_revision ?? 1) === job.payload.revision, "Stale revision. Osveži materijal i ponovo odaberi termin.");
+    const input = republishInput(content, platform);
+    if (content.decision?.campaign?.id) await orchestrator.campaigns.assertPublicationAllowed(content.id);
+    requireValue((await repository.brandConfig()).enabled, "Objavljivanje je isključeno u podešavanjima marketinga.");
+    const existing = await repository.publicationByContent(content.id);
+    requireValue(!existing.some(row => row.platform === platform && row.provider_request_id &&
+      Date.parse(row.scheduled_at) === Date.parse(scheduledTime)), "Originalna objava je već zakazana za taj kanal i termin.");
+    requireValue(futureSlot(scheduledTime), "Izaberi termin objave koji je više od jednog minuta u budućnosti.");
+    const save = async result => unwrap(await client.from("marketing_studio_jobs").update({ result })
+      .eq("id", job.id).eq("lock_token", job.lock_token).eq("status", "running").select("id").single());
+    await save({ submitting: true });
+    let post;
+    try {
+      post = await orchestrator.publisher.publish({ ...input, scheduledTime });
+    } catch (error) {
+      if (error.bufferPostId) await save({ rejectedPostId: error.bufferPostId });
+      else if (error.safeToRetry) await save({});
+      else throw new Error("Buffer submission is uncertain. Proveri red objava u Bufferu pre ponovnog pokušaja.", { cause: error });
+      throw error;
+    }
+    const result = { postId: post.id, platform, scheduledTime, schedulingType: post.schedulingType };
+    await save(result);
+    return result;
+  }
+
   const execute = async job => {
     if (job.kind === "media_edit") return editor.edit(job);
     if (job.kind === "media_publish") return editor.publish(job);
+    if (job.kind === "content_republish") return republish(job);
     const p = job.payload;
     if (job.kind === "plan_campaign") {
       const result = await cmo.execute({ action: "plan_campaign", name: p.name,
@@ -93,7 +145,8 @@ export function registerStudioRoutes(app, { config, cmo, repository, orchestrato
       entry.decision = job.kind.endsWith("approve") ? "Approve" : "Reject";
       entry.instructions = p.instructions ?? "";
       const result = await cmo.assetDecision(entry);
-      return { action: result.action, status: (await repository.contentById(content.id)).status,
+      return { action: result.action ?? result.result?.action, status: (await repository.contentById(content.id)).status,
+        ...(job.kind === "asset_approve" ? { manualMusic: Boolean(result.release?.manualMusic) } : {}),
         blocked: result.blocked, reason: result.reason };
     }
     if (job.kind === "idea_reject") {
@@ -143,19 +196,23 @@ export function registerStudioRoutes(app, { config, cmo, repository, orchestrato
 
   app.get("/v1/studio/snapshot", async () => {
     if (cache && Date.now() - cachedAt < 15000) return cache;
-    const [context, queue, events, campaigns, runs, research, captures] = await Promise.all([
+    const version = cacheVersion;
+    const [context, queue, events, campaigns, runs, research, captures, reuse] = await Promise.all([
       repository.loadContext(), client.from("marketing_studio_jobs").select("*").order("created_at", { ascending: false }).limit(80),
       client.from("marketing_studio_events").select("*").order("created_at", { ascending: false }).limit(100),
       repository.campaignList(), client.from("marketing_runs").select("id,workflow,status,error,started_at,completed_at,actual_cost_usd,output").order("started_at", { ascending: false }).limit(30),
       client.from("marketing_research").select("id,summary,trends,sources,valid_until,created_at").order("created_at", { ascending: false }).limit(8), appCaptureCatalog(),
+      client.from("marketing_studio_jobs").select("id,content_id,status,payload,result,error,attempts,max_attempts,kind,created_at,updated_at")
+        .eq("kind", "content_republish").order("created_at", { ascending: false }).limit(200),
     ]);
     const content = context.content.filter(row => !row.master_content_id);
     const costs = context.costs.filter(c => c.status !== "released");
     const totals = costs.reduce((out, c) => { const key = c.status === "reserved" ? "reserved" : "spent";
       out[key] += Number(c.actual_cost_usd ?? c.estimated_cost_usd ?? 0); return out; }, { spent: 0, reserved: 0 });
     const eventCounts = context.events_30d.reduce((out, e) => { const name = e.event_name ?? "unknown"; out[name] = (out[name] ?? 0) + Number(e.event_count ?? 1); return out; }, {});
-    cache = redact({ fetchedAt: now(), content: content.slice(0, 240).map(row => studioContent(row)),
-      jobs: unwrap(queue).map(({ payload, lock_token, ...job }) => ({ ...job, canRetry: canRetryStudioJob(job) })),
+    const snapshot = redact({ fetchedAt: now(), content: content.slice(0, 240).map(row => studioContent(row)),
+      jobs: unwrap(queue).map(studioJob),
+      reuse: unwrap(reuse).map(({ payload, ...job }) => ({ ...job, ...reuseDetails(payload), canRetry: canRetryStudioJob(job) })),
       events: unwrap(events), campaigns, runs: unwrap(runs), research: unwrap(research),
       learnings: context.learnings, publications: context.publications, costs: context.costs.map(({ metadata, ...c }) => c), totals,
       eventCounts, intelligence: creativeIntelligence(content, context.publications, context.events_30d),
@@ -164,12 +221,16 @@ export function registerStudioRoutes(app, { config, cmo, repository, orchestrato
         referenceModel: config.FAL_REFERENCE_VIDEO_MODEL, imageModel: config.FAL_IMAGE_MODEL,
         videoUsdPerSecond: config.FAL_VIDEO_USD_PER_SECOND, autoPublish: config.AUTO_PUBLISH,
         scheduler: process.env.STUDIO_SCHEDULER ?? "local_worker",
+        publicationChannels: config.BUFFER_API_KEY ? Object.keys(orchestrator.publicationChannels("video")) : [],
         connections: { openai: Boolean(config.OPENAI_API_KEY), fal: Boolean(config.FAL_KEY), buffer: Boolean(config.BUFFER_API_KEY),
           googleDrive: Boolean(config.GOOGLE_SHEETS_CREDENTIALS), ga4: Boolean(config.GA4_PROPERTY_ID), email: false, crm: false },
       }, sources: STUDIO_SOURCES, departments: STUDIO_DEPARTMENTS,
     }, secrets);
-    cachedAt = Date.now();
-    return cache;
+    if (version === cacheVersion) {
+      cache = snapshot;
+      cachedAt = Date.now();
+    }
+    return snapshot;
   });
   app.get("/v1/studio/content/:id", async request => {
     requireValue(uuid(request.params.id), "Invalid content ID");
@@ -188,7 +249,7 @@ export function registerStudioRoutes(app, { config, cmo, repository, orchestrato
   });
   app.post("/v1/studio/jobs", async (request, reply) => {
     const body = request.body ?? {}, p = body.payload ?? {};
-    requireValue(!["media_edit", "media_publish"].includes(body.kind), "Use the Studio editor to create a media job");
+    requireValue(!["media_edit", "media_publish", "content_republish"].includes(body.kind), "Use the appropriate Studio scheduling or editing action");
     requireValue(typeof p === "object" && !Array.isArray(p), "Invalid payload");
     requireValue(!body.contentId || uuid(body.contentId), "Invalid content ID");
     if (body.kind === "plan_campaign") {
@@ -205,7 +266,35 @@ export function registerStudioRoutes(app, { config, cmo, repository, orchestrato
     const allowed = Object.fromEntries(Object.entries(p).filter(([key]) => ["name","startDate","days","department","instructions","revision","campaignId"].includes(key)));
     const job = await jobs.enqueue({ kind: body.kind, contentId: body.contentId, payload: allowed, requestKey: request.headers["idempotency-key"] });
     reply.code(202);
-    return redact(job, secrets);
+    return redact({ ...job, canRetry: canRetryStudioJob(job) }, secrets);
+  });
+  app.post("/v1/studio/content/:id/schedule", async (request, reply) => {
+    const id = request.params.id;
+    const { platforms, scheduledTime } = request.body ?? {};
+    requireValue(uuid(id), "Materijal nije pronađen.");
+    requireValue(futureSlot(scheduledTime), "Izaberi termin objave koji je više od jednog minuta u budućnosti.");
+    requireValue(Array.isArray(platforms) && platforms.length > 0 && platforms.length <= 3 &&
+      platforms.every(platform => ["instagram", "tiktok", "youtube"].includes(platform)), "Izaberi povezane kanale.");
+    const slot = new Date(scheduledTime).toISOString();
+    const content = await repository.contentById(id);
+    const channels = [...new Set(platforms)];
+    for (const channel of channels) republishInput(content, channel);
+    const scheduled = [];
+    for (const platform of channels) {
+      const payload = { platform, scheduledTime: slot, revision: content.decision?.review_revision ?? 1, title: studioContent(content).title };
+      const job = await jobs.enqueue({ kind: "content_republish", contentId: id, payload,
+        requestKey: `content-republish:${id}:${platform}:${slot}` });
+      scheduled.push({ id: job.id, kind: job.kind, content_id: id, status: job.status, error: job.error,
+        result: job.result, updated_at: job.updated_at, created_at: job.created_at, attempts: job.attempts,
+        max_attempts: job.max_attempts, canRetry: canRetryStudioJob(job), ...reuseDetails(job.payload) });
+    }
+    return reply.code(202).send(redact({ scheduled }, secrets));
+  });
+  app.get("/v1/studio/jobs/:id", async (request, reply) => {
+    requireValue(uuid(request.params.id), "Invalid job ID");
+    const job = unwrap(await client.from("marketing_studio_jobs").select("*").eq("id", request.params.id).maybeSingle());
+    if (!job) return reply.code(404).send({ message: "Posao nije pronađen." });
+    return redact(studioJob(job), secrets);
   });
   app.post("/v1/studio/jobs/:id/retry", async request => { requireValue(uuid(request.params.id), "Invalid job ID"); return redact(await jobs.retry(request.params.id), secrets); });
   app.post("/v1/studio/jobs/:id/cancel", async request => { requireValue(uuid(request.params.id), "Invalid job ID"); return redact(await jobs.cancel(request.params.id), secrets); });
