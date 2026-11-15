@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -29,7 +31,15 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
   final _search = TextEditingController();
   String _query = '';
   late Future<List<PostsRecord>> _posts;
-  Future<List<Profile>>? _people;
+  final _peopleScroll = ScrollController();
+  final _peopleRepository = ProfileRepository();
+  final Map<String, Profile> _people = {};
+  Timer? _searchDebounce;
+  late int _selectedTab;
+  int _peopleRequest = 0;
+  int? _nextPeopleOffset = 0;
+  bool _loadingPeople = false;
+  bool _peopleError = false;
 
   @override
   void initState() {
@@ -39,25 +49,99 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
       vsync: this,
       initialIndex: widget.initialTab.clamp(0, 1),
     );
+    _selectedTab = _tabs.index;
+    _tabs.addListener(_tabChanged);
+    _peopleScroll.addListener(_maybeLoadMorePeople);
     _posts = queryPostsRecordOnce(limit: 150);
+    if (_tabs.index == 1) unawaited(_loadPeople());
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabs.dispose();
+    _peopleScroll.dispose();
     _search.dispose();
     super.dispose();
   }
 
+  void _tabChanged() {
+    if (_tabs.index == _selectedTab) return;
+    _selectedTab = _tabs.index;
+    _search.clear();
+    _resetPeople('');
+  }
+
   void _changed(String value) {
+    if (_tabs.index != 1) {
+      setState(() => _query = value.trim().toLowerCase());
+      return;
+    }
+    _resetPeople(value.trim().toLowerCase(), debounce: true);
+  }
+
+  void _resetPeople(String query, {bool debounce = false}) {
+    _searchDebounce?.cancel();
+    _searchDebounce = null;
     setState(() {
-      _query = value.trim().toLowerCase();
-      if (_tabs.index == 1) {
-        _people = value.trim().isEmpty
-            ? ProfileRepository().suggested(limit: 30)
-            : ProfileRepository().search(value.trim(), limit: 30);
-      }
+      _query = query;
+      _peopleRequest++;
+      _people.clear();
+      _nextPeopleOffset = 0;
+      _loadingPeople = false;
+      _peopleError = false;
     });
+    if (_tabs.index != 1) return;
+    if (debounce) {
+      _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+        _searchDebounce = null;
+        unawaited(_loadPeople());
+      });
+    }
+    if (_peopleScroll.hasClients) _peopleScroll.jumpTo(0);
+    if (!debounce) unawaited(_loadPeople());
+  }
+
+  void _maybeLoadMorePeople() {
+    if (_tabs.index == 1 &&
+        !_peopleError &&
+        _searchDebounce == null &&
+        _peopleScroll.hasClients &&
+        _peopleScroll.position.hasContentDimensions &&
+        _peopleScroll.position.extentAfter < 400) {
+      unawaited(_loadPeople());
+    }
+  }
+
+  Future<void> _loadPeople() async {
+    final offset = _nextPeopleOffset;
+    if (_loadingPeople || offset == null) return;
+    final request = _peopleRequest;
+    final query = _query;
+    setState(() {
+      _loadingPeople = true;
+      _peopleError = false;
+    });
+    try {
+      final page = await _peopleRepository.explorePeople(query, offset: offset);
+      if (!mounted || request != _peopleRequest) return;
+      setState(() {
+        for (final profile in page.profiles) {
+          _people[profile.id] = profile;
+        }
+        _nextPeopleOffset = page.nextOffset;
+        _loadingPeople = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && request == _peopleRequest) _maybeLoadMorePeople();
+      });
+    } catch (_) {
+      if (!mounted || request != _peopleRequest) return;
+      setState(() {
+        _loadingPeople = false;
+        _peopleError = true;
+      });
+    }
   }
 
   Future<void> _refresh() async {
@@ -116,15 +200,6 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
             TabBar(
               key: const Key('explore-tabs'),
               controller: _tabs,
-              onTap: (_) {
-                _search.clear();
-                setState(() {
-                  _query = '';
-                  if (_tabs.index == 1) {
-                    _people = ProfileRepository().suggested(limit: 30);
-                  }
-                });
-              },
               indicatorColor: _green,
               labelColor: Colors.white,
               unselectedLabelColor: const Color(0xFF777777),
@@ -224,48 +299,63 @@ class _ExplorePageWidgetState extends State<ExplorePageWidget>
   }
 
   Widget _peopleList() {
-    final future = _people ??= ProfileRepository().suggested(limit: 30);
-    return FutureBuilder<List<Profile>>(
-      future: future,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: _green));
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 110),
-          itemCount: snapshot.data!.length,
-          separatorBuilder: (_, __) => const Divider(color: Color(0xFF222222)),
-          itemBuilder: (context, index) {
-            final profile = snapshot.data![index];
-            return ListTile(
-              onTap: () => context.pushNamed(
-                ProfileOtherWidget.routeName,
-                queryParameters: {
-                  'username':
-                      serializeParam(profile.username, ParamType.String),
-                }.withoutNulls,
+    final people = _people.values.toList(growable: false);
+    final showFooter =
+        _peopleError || _nextPeopleOffset != null || people.isEmpty;
+    return ListView.separated(
+      key: const Key('explore-people-list'),
+      controller: _peopleScroll,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 110),
+      itemCount: people.length + (showFooter ? 1 : 0),
+      separatorBuilder: (_, __) => const Divider(color: Color(0xFF222222)),
+      itemBuilder: (context, index) {
+        if (index == people.length) {
+          if (_peopleError) {
+            return Center(
+              child: TextButton(
+                onPressed: _loadPeople,
+                child: const Text('Could not load people. Retry'),
               ),
-              leading: CircleAvatar(
-                backgroundColor: const Color(0xFF173A25),
-                backgroundImage: profile.photoUrl.isEmpty
-                    ? null
-                    : NetworkImage(profile.photoUrl),
-                child: profile.photoUrl.isEmpty
-                    ? const Icon(Icons.person_rounded, color: _green)
-                    : null,
-              ),
-              title: Text(
-                  profile.displayName.isEmpty
-                      ? profile.username
-                      : profile.displayName,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600)),
-              subtitle: Text('@${profile.username}',
-                  style: const TextStyle(color: Color(0xFF888888))),
-              trailing: const Icon(Icons.chevron_right_rounded,
-                  color: Color(0xFF777777)),
             );
-          },
+          }
+          if (_nextPeopleOffset != null) {
+            return const Padding(
+              padding: EdgeInsets.all(18),
+              child: Center(child: CircularProgressIndicator(color: _green)),
+            );
+          }
+          return const Center(
+            child: Text('No people found',
+                style: TextStyle(color: Colors.white70)),
+          );
+        }
+        final profile = people[index];
+        return ListTile(
+          onTap: () => context.pushNamed(
+            ProfileOtherWidget.routeName,
+            queryParameters: {
+              'username': serializeParam(profile.username, ParamType.String),
+            }.withoutNulls,
+          ),
+          leading: CircleAvatar(
+            backgroundColor: const Color(0xFF173A25),
+            backgroundImage: profile.photoUrl.isEmpty
+                ? null
+                : NetworkImage(profile.photoUrl),
+            child: profile.photoUrl.isEmpty
+                ? const Icon(Icons.person_rounded, color: _green)
+                : null,
+          ),
+          title: Text(
+              profile.displayName.isEmpty
+                  ? profile.username
+                  : profile.displayName,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600)),
+          subtitle: Text('@${profile.username}',
+              style: const TextStyle(color: Color(0xFF888888))),
+          trailing:
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF777777)),
         );
       },
     );

@@ -350,6 +350,34 @@ class ProfileRepository {
 
   // --------------------------------------------------------------- search
 
+  Future<({List<Profile> profiles, int? nextOffset})> explorePeople(
+      String query,
+      {int offset = 0,
+      int limit = 30}) async {
+    var request = _db
+        .from('profiles')
+        .select('id,username,display_name,photo_url,created_at');
+    request = request.not('username', 'is', null).neq('username', '');
+    final uid = _uid;
+    if (uid != null && query.isEmpty) request = request.neq('id', uid);
+    if (query.isNotEmpty) {
+      final escaped = query.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+      final pattern = '"%$escaped%"';
+      request =
+          request.or('username.ilike.$pattern,display_name.ilike.$pattern');
+    }
+    final rows = await request
+        .order('created_at', ascending: false)
+        .order('id', ascending: false)
+        .range(offset, offset + limit - 1);
+    final profiles = await _withoutBlocked(rows.map(Profile.fromMap).toList());
+    // Advance by raw rows so blocked accounts cannot cut the list short.
+    return (
+      profiles: profiles,
+      nextOffset: rows.length < limit ? null : offset + rows.length,
+    );
+  }
+
   Future<List<Profile>> search(String query, {int limit = 20}) async {
     final q = query.trim();
     if (q.isEmpty) return const [];

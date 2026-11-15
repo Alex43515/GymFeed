@@ -96,6 +96,17 @@ class TrainingRepository {
     return _decorate(rows as List);
   }
 
+  Future<List<Training>> upcomingEvents(DateTime now, {int limit = 100}) async {
+    final rows = await _db
+        .from('user_trainings')
+        .select(_select)
+        .gte('starts_at', now.toUtc().toIso8601String())
+        .order('starts_at', ascending: true)
+        .order('id', ascending: true)
+        .limit(limit);
+    return _decorate(rows);
+  }
+
   /// FitClips is a workout-video surface. It must never fall back to generic
   /// social posts, photos, or food posts.
   Future<List<Training>> videoFeed({int limit = 30}) async {

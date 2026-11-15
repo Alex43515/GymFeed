@@ -62,6 +62,7 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
     final repository = TrainingRepository();
     final uid = _currentUserId;
     final groups = await Future.wait<List<Training>>([
+      repository.upcomingEvents(DateTime.now()),
       repository.feed(limit: 100),
       if (uid != null) repository.joinedByCurrentUser(limit: 100),
       if (uid != null) repository.byUser(uid, limit: 100),
@@ -72,10 +73,21 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
         unique[training.id] = training;
       }
     }
-    final result = unique.values.toList(growable: false);
-    result.sort((a, b) => (b.startsAt ?? b.createdAt ?? DateTime(1970))
-        .compareTo(a.startsAt ?? a.createdAt ?? DateTime(1970)));
-    return result;
+    return unique.values.toList(growable: false);
+  }
+
+  int _compareEvents(Training a, Training b, DateTime now) {
+    int group(DateTime? date) =>
+        date == null ? 2 : (date.isBefore(now) ? 1 : 0);
+    final aGroup = group(a.startsAt);
+    final bGroup = group(b.startsAt);
+    if (aGroup != bGroup) return aGroup.compareTo(bGroup);
+    final oldest = DateTime.fromMillisecondsSinceEpoch(0);
+    final aDate = a.startsAt ?? a.createdAt ?? oldest;
+    final bDate = b.startsAt ?? b.createdAt ?? oldest;
+    final dateOrder =
+        aGroup == 0 ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
+    return dateOrder == 0 ? a.id.compareTo(b.id) : dateOrder;
   }
 
   Future<void> _refresh() async {
@@ -179,7 +191,7 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
         height: height,
       );
 
-  Widget _upcomingCard(Training training, int index) {
+  Widget _upcomingCard(Training training) {
     final image = training.coverUrl;
     final joined = _joined[training.id] ?? training.joinedByMe;
     return GestureDetector(
@@ -303,32 +315,46 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
               SizedBox(
                 height: 142,
                 width: double.infinity,
-                child: image.isEmpty
-                    ? DecoratedBox(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF163A27), Color(0xFF101010)],
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    image.isEmpty
+                        ? DecoratedBox(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [Color(0xFF163A27), Color(0xFF101010)],
+                              ),
+                            ),
+                            child: Icon(
+                              index.isEven
+                                  ? Icons.fitness_center_rounded
+                                  : Icons.directions_run_rounded,
+                              color: theme.primary.withValues(alpha: 0.72),
+                              size: 42,
+                            ),
+                          )
+                        : Image.network(
+                            image,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const ColoredBox(
+                              color: Color(0xFF17281E),
+                              child: Icon(Icons.fitness_center_rounded,
+                                  color: Color(0xFF1FE276), size: 40),
+                            ),
                           ),
-                        ),
-                        child: Icon(
-                          index.isEven
-                              ? Icons.fitness_center_rounded
-                              : Icons.directions_run_rounded,
-                          color: theme.primary.withValues(alpha: 0.72),
-                          size: 42,
-                        ),
-                      )
-                    : Image.network(
-                        image,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const ColoredBox(
-                          color: Color(0xFF17281E),
-                          child: Icon(Icons.fitness_center_rounded,
-                              color: Color(0xFF1FE276), size: 40),
-                        ),
+                    if (training.videoUrl.trim().isNotEmpty)
+                      const Center(
+                        child: Icon(Icons.play_circle_fill_rounded,
+                            size: 42,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(color: Colors.black, blurRadius: 6)
+                            ]),
                       ),
+                  ],
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -461,7 +487,13 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
             future: _future,
             builder: (context, snapshot) {
               final all = snapshot.data ?? const <Training>[];
-              final visible = all.where(_matches).toList();
+              final now = DateTime.now();
+              final visible = all.where(_matches).toList()
+                ..sort((a, b) => _compareEvents(a, b, now));
+              final upcoming = visible
+                  .where(
+                      (training) => training.startsAt?.isBefore(now) == false)
+                  .toList();
               return RefreshIndicator(
                 onRefresh: _refresh,
                 color: FlutterFlowTheme.of(context).primary,
@@ -477,34 +509,22 @@ class _CoachEventsWidgetState extends State<CoachEventsWidget> {
                     const SizedBox(height: 22),
                     TourAnchor(
                       id: 'events-page',
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text('Upcoming activities',
-                                style:
-                                    _text(size: 21, weight: FontWeight.w700)),
-                          ),
-                          TextButton(
-                            onPressed: () {},
-                            child: Text('View more',
-                                style: _text(size: 12, color: _muted)),
-                          ),
-                        ],
-                      ),
+                      child: Text('Upcoming activities',
+                          style: _text(size: 21, weight: FontWeight.w700)),
                     ),
                     const SizedBox(height: 10),
                     if (snapshot.connectionState == ConnectionState.waiting)
                       _loadingCard(height: 180)
-                    else if (all.isNotEmpty)
+                    else if (upcoming.isNotEmpty)
                       SizedBox(
                         height: 180,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
-                          itemCount: all.take(2).length,
+                          itemCount: upcoming.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(width: 12),
                           itemBuilder: (_, index) =>
-                              _upcomingCard(all[index], index),
+                              _upcomingCard(upcoming[index]),
                         ),
                       ),
                     const SizedBox(height: 25),

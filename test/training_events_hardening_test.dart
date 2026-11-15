@@ -74,6 +74,40 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('upcoming events are shown soonest first', (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final now = DateTime.now().toUtc();
+      Training event(String id, [DateTime? startsAt]) => Training({
+            'id': id,
+            'title': id,
+            if (startsAt != null) 'starts_at': startsAt.toIso8601String(),
+          });
+
+      await tester.pumpWidget(_app(CoachEventsWidget(
+        trainingsLoader: () async => [
+          event('unknown'),
+          event('later', now.add(const Duration(days: 7))),
+          event('past', now.subtract(const Duration(days: 1))),
+          event('soon', now.add(const Duration(hours: 1))),
+        ],
+      )));
+      await tester.pumpAndSettle();
+
+      final soon = find.byKey(const ValueKey('upcoming-event-soon'));
+      final later = find.byKey(const ValueKey('upcoming-event-later'));
+      expect(tester.getTopLeft(soon).dx, lessThan(tester.getTopLeft(later).dx));
+      expect(find.byKey(const ValueKey('upcoming-event-past')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('upcoming-event-unknown')), findsNothing);
+      final firstCard = find.byKey(const ValueKey('event-card-soon'));
+      final secondCard = find.byKey(const ValueKey('event-card-later'));
+      expect(tester.getTopLeft(firstCard).dy,
+          lessThanOrEqualTo(tester.getTopLeft(secondCard).dy));
+    });
+
     test('block, creation, and FitClips no longer use legacy paths', () {
       final blocked =
           File('lib/components/blocked/blocked_widget.dart').readAsStringSync();

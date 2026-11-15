@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '/auth/firebase_auth/auth_util.dart';
+import '/index.dart';
 import '/backend/supabase/repositories/profile_repository.dart';
 import '/backend/supabase/repositories/training_repository.dart';
 import '/components/nav_bar/nav_bar_widget.dart';
@@ -294,35 +296,48 @@ class _VideoReelsWidgetState extends State<VideoReelsWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: const Color(0xFF153925),
-                    backgroundImage: training.authorPhotoUrl.isEmpty
-                        ? null
-                        : NetworkImage(training.authorPhotoUrl),
-                    child: training.authorPhotoUrl.isEmpty
-                        ? const Icon(Icons.person_rounded,
-                            color: Colors.white, size: 21)
+              InkWell(
+                key: ValueKey('fitclip-creator-profile-${training.id}'),
+                borderRadius: BorderRadius.circular(22),
+                onTap: training.authorId == currentUserUid &&
+                        training.authorId.isNotEmpty
+                    ? () => context.pushNamed(ProfileWidget.routeName)
+                    : training.authorUsername.isNotEmpty
+                        ? () => context.pushNamed(ProfileOtherWidget.routeName,
+                                queryParameters: {
+                                  'username': training.authorUsername
+                                })
                         : null,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '@${training.authorUsername.isEmpty ? 'gymfeed' : training.authorUsername}',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'Poppins',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          shadows: [
-                            Shadow(color: Colors.black, blurRadius: 5)
-                          ]),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: const Color(0xFF153925),
+                      backgroundImage: training.authorPhotoUrl.isEmpty
+                          ? null
+                          : NetworkImage(training.authorPhotoUrl),
+                      child: training.authorPhotoUrl.isEmpty
+                          ? const Icon(Icons.person_rounded,
+                              color: Colors.white, size: 21)
+                          : null,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '@${training.authorUsername.isEmpty ? 'gymfeed' : training.authorUsername}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            shadows: [
+                              Shadow(color: Colors.black, blurRadius: 5)
+                            ]),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 9),
               Text(training.title,
