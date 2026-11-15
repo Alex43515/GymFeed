@@ -34,7 +34,7 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  APP_STORE_WHATS_NEW: Updated the AI models behind Coach, Equipment Scan, Body Scan, Food Scan, and starter plans.
+  APP_STORE_WHATS_NEW: Discover more people in Explore, see upcoming events in date order, watch event videos, and open creator profiles from Events and FitClips.
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
 jobs:
