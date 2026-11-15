@@ -15,6 +15,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:gym_feed/backend/schema/users_record.dart';
 import 'package:gym_feed/components/profile_follow_list/profile_follow_list_widget.dart';
 import 'package:gym_feed/pages/core_pages/profile/mobile_profile_view.dart';
+import 'package:gym_feed/pages/core_pages/explore_page/explore_page_widget.dart';
 
 class _ProfileReference implements DocumentReference<Map<String, dynamic>> {
   @override
@@ -55,6 +56,62 @@ class _IdleSocket implements WebSocketChannel, WebSocketSink {
 }
 
 void main() {
+  testWidgets('Explore loads the next People results when scrolling',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    GoogleFonts.config.allowRuntimeFetching = false;
+    addTearDown(() => GoogleFonts.config.allowRuntimeFetching = true);
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final offsets = <int>[];
+    final app = (await tester.runAsync(() => Supabase.initialize(
+          url: 'https://example.test',
+          anonKey: 'test-key',
+          authOptions: const FlutterAuthClientOptions(
+            autoRefreshToken: false,
+            detectSessionInUri: false,
+            localStorage: EmptyLocalStorage(),
+          ),
+          realtimeClientOptions: RealtimeClientOptions(
+            transport: (_, __) => _IdleSocket(),
+          ),
+          httpClient: MockClient((request) async {
+            final rows = <Map<String, String>>[];
+            if (request.url.path.endsWith('/profiles')) {
+              final offset =
+                  int.parse(request.url.queryParameters['offset'] ?? '0');
+              offsets.add(offset);
+              for (var i = offset; i < 34 && i < offset + 30; i++) {
+                rows.add({
+                  'id': '$i',
+                  'username': 'athlete$i',
+                  'display_name': 'Athlete $i'
+                });
+              }
+            }
+            return http.Response(jsonEncode(rows), 200,
+                request: request,
+                headers: {'content-type': 'application/json'});
+          }),
+        )))!;
+    addTearDown(app.dispose);
+
+    await tester
+        .pumpWidget(const MaterialApp(home: ExplorePageWidget(initialTab: 1)));
+    await tester.pumpAndSettle();
+    expect(offsets, [0]);
+    final list = find.byKey(const Key('explore-people-list'));
+    for (var i = 0; i < 8 && !offsets.contains(30); i++) {
+      await tester.drag(list, const Offset(0, -520));
+      await tester.pumpAndSettle();
+    }
+    expect(offsets, [0, 30]);
+    await tester.scrollUntilVisible(find.text('Athlete 33'), 300,
+        scrollable:
+            find.descendant(of: list, matching: find.byType(Scrollable)));
+    expect(find.text('Athlete 33'), findsOneWidget);
+  });
+
   testWidgets('own and other profiles reopen each tab and both follow lists',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

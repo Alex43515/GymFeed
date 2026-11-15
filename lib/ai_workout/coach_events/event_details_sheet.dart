@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '/auth/firebase_auth/auth_util.dart';
+import '/custom_code/widgets/feed_video_player.dart';
+import '/flutter_flow/custom_functions.dart' as functions;
+import '/flutter_flow/flutter_flow_util.dart';
+import '/index.dart';
+
 import '/backend/supabase/repositories/training_repository.dart';
 
 Future<void> showGymFeedEventDetails(
@@ -103,6 +109,9 @@ class _EventDetailsSheetState extends State<_EventDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     final training = widget.training;
+    final videoUrl = functions.bunnyCDNVideoPath(training.videoUrl.trim());
+    final isOwnProfile =
+        training.authorId.isNotEmpty && training.authorId == currentUserUid;
     return Container(
       constraints:
           BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .93),
@@ -122,7 +131,20 @@ class _EventDetailsSheetState extends State<_EventDetailsSheet> {
                     borderRadius: BorderRadius.circular(99))),
           ),
           const SizedBox(height: 18),
-          if (training.coverUrl.isNotEmpty)
+          if (videoUrl.isNotEmpty)
+            SizedBox(
+              height: 230,
+              width: double.infinity,
+              child: FeedVideoPlayer(
+                key: ValueKey('event-video-${training.id}'),
+                videoUrl: videoUrl,
+                thumbnailUrl:
+                    training.coverUrl.isEmpty ? null : training.coverUrl,
+                borderRadius: 20,
+                fit: BoxFit.contain,
+              ),
+            )
+          else if (training.coverUrl.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Image.network(training.coverUrl,
@@ -167,34 +189,54 @@ class _EventDetailsSheetState extends State<_EventDetailsSheet> {
                   color: _green, trailing: Icons.open_in_new_rounded),
             ),
           const SizedBox(height: 18),
-          Text('Created by', style: _style(12, color: const Color(0xFF858585))),
-          const SizedBox(height: 8),
-          Row(children: [
-            CircleAvatar(
-              radius: 23,
-              backgroundColor: const Color(0xFF173A25),
-              backgroundImage: training.authorPhotoUrl.isEmpty
-                  ? null
-                  : NetworkImage(training.authorPhotoUrl),
-              child: training.authorPhotoUrl.isEmpty
-                  ? const Icon(Icons.person_rounded, color: _green)
-                  : null,
+          InkWell(
+            key: const Key('event-creator-profile'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: isOwnProfile || training.authorUsername.isNotEmpty
+                ? () => context.pushNamed(
+                      isOwnProfile
+                          ? ProfileWidget.routeName
+                          : ProfileOtherWidget.routeName,
+                      queryParameters: {
+                        if (!isOwnProfile) 'username': training.authorUsername,
+                      },
+                    )
+                : null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Created by',
+                    style: _style(12, color: const Color(0xFF858585))),
+                const SizedBox(height: 8),
+                Row(children: [
+                  CircleAvatar(
+                    radius: 23,
+                    backgroundColor: const Color(0xFF173A25),
+                    backgroundImage: training.authorPhotoUrl.isEmpty
+                        ? null
+                        : NetworkImage(training.authorPhotoUrl),
+                    child: training.authorPhotoUrl.isEmpty
+                        ? const Icon(Icons.person_rounded, color: _green)
+                        : null,
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(
+                            training.authorDisplayName.isEmpty
+                                ? 'GymFeed member'
+                                : training.authorDisplayName,
+                            style: _style(14, weight: FontWeight.w700)),
+                        if (training.authorUsername.isNotEmpty)
+                          Text('@${training.authorUsername}',
+                              style: _style(11, color: _green)),
+                      ])),
+                ]),
+              ],
             ),
-            const SizedBox(width: 11),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(
-                      training.authorDisplayName.isEmpty
-                          ? 'GymFeed member'
-                          : training.authorDisplayName,
-                      style: _style(14, weight: FontWeight.w700)),
-                  if (training.authorUsername.isNotEmpty)
-                    Text('@${training.authorUsername}',
-                        style: _style(11, color: _green)),
-                ])),
-          ]),
+          ),
           const SizedBox(height: 20),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _participants,
