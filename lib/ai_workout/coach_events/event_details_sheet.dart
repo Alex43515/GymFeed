@@ -131,21 +131,10 @@ class _EventDetailsSheetState extends State<_EventDetailsSheet> {
                     borderRadius: BorderRadius.circular(99))),
           ),
           const SizedBox(height: 18),
-          if (videoUrl.isNotEmpty)
-            SizedBox(
-              height: 230,
-              width: double.infinity,
-              child: FeedVideoPlayer(
-                key: ValueKey('event-video-${training.id}'),
-                videoUrl: videoUrl,
-                thumbnailUrl:
-                    training.coverUrl.isEmpty ? null : training.coverUrl,
-                borderRadius: 20,
-                fit: BoxFit.contain,
-              ),
-            )
-          else if (training.coverUrl.isNotEmpty)
+          if (training.backgroundImage.trim().isNotEmpty ||
+              (videoUrl.isEmpty && training.coverUrl.isNotEmpty))
             ClipRRect(
+              key: const Key('event-cover-image'),
               borderRadius: BorderRadius.circular(20),
               child: Image.network(training.coverUrl,
                   height: 230,
@@ -271,6 +260,29 @@ class _EventDetailsSheetState extends State<_EventDetailsSheet> {
             const SizedBox(height: 7),
             Text(training.description!,
                 style: _style(13, color: const Color(0xFFC4C4C4))),
+          ],
+          if (videoUrl.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            Text('Event video', style: _style(15, weight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: ColoredBox(
+                key: const Key('event-video-section'),
+                color: Colors.black,
+                child: SizedBox(
+                  height: 280,
+                  width: double.infinity,
+                  child: FeedVideoPlayer(
+                    key: ValueKey('event-video-${training.id}'),
+                    videoUrl: videoUrl,
+                    thumbnailUrl: training.videoThumbnail,
+                    borderRadius: 20,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
           ],
           const SizedBox(height: 24),
           FilledButton(

@@ -1610,7 +1610,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget>
                 tooltip: 'Remove exercise',
                 onPressed:
                     _finishing ? null : () => _removeExercise(activeExercise),
-                icon: const Icon(Icons.delete_outline_rounded,
+                icon: const Icon(Icons.close_rounded,
                     color: Color(0xFFF07474), size: 20),
               ),
             ],

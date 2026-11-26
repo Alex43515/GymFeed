@@ -11,7 +11,8 @@ void main() {
   late WorkoutRoutine routine;
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues(
+        {'gymfeed_workout_weight_unit_v1_guest': 'kg'});
     now = DateTime(2026, 10, 16, 10);
     routine = WorkoutRoutine(
       id: 'chest-biceps',

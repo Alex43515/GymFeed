@@ -3,6 +3,7 @@ import '/backend/backend.dart';
 import '/backend/supabase/repositories/post_repository.dart';
 import '/backend/supabase/repositories/bookmark_repository.dart';
 import '/components/founding_badge/founding_badge.dart';
+import '/components/post_caption/post_caption.dart';
 import '/components/personal_post_options/personal_post_options_widget.dart';
 import '/components/send_post/send_post_widget.dart';
 import '/components/tagged_users/tagged_users_widget.dart';
@@ -370,7 +371,8 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                                             .override(
                                               fontFamily: 'Poppins',
                                               fontSize:
-                                                  MediaQuery.sizeOf(context).width <
+                                                  MediaQuery.sizeOf(context)
+                                                              .width <
                                                           768.0
                                                       ? 15.0
                                                       : 20.0,
@@ -718,6 +720,20 @@ class _PostWidgetState extends State<PostWidget> with TickerProviderStateMixin {
                   ),
                 ],
               ),
+              if (widget.detailsPage != false &&
+                  widget.post!.postCaption.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(15, 12, 15, 0),
+                  child: PostCaption(
+                    key: ValueKey('post-caption-${widget.post!.reference.id}'),
+                    caption: widget.post!.postCaption,
+                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          letterSpacing: 0,
+                        ),
+                  ),
+                ),
               if (widget.detailsPage == false)
                 Padding(
                   padding:

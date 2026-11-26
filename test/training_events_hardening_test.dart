@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_feed/ai_workout/coach_events/coach_events_widget.dart';
 import 'package:gym_feed/backend/supabase/repositories/training_repository.dart';
+import 'package:gym_feed/ai_workout/coach_events/event_details_sheet.dart';
+import 'package:gym_feed/custom_code/widgets/feed_video_player.dart';
 
 Widget _app(Widget child) => MaterialApp(
       theme: ThemeData.dark(useMaterial3: true),
@@ -12,6 +14,42 @@ Widget _app(Widget child) => MaterialApp(
 
 void main() {
   group('workout and event hardening', () {
+    testWidgets('event cover and video occupy separate sections',
+        (tester) async {
+      final event = Training({
+        'id': 'separate-media',
+        'title': 'Workout at the park',
+        'description': 'Join us for a workout.',
+        'background_image': 'https://example.com/cover.jpg',
+        'legacy_video_url': 'https://example.com/video.mp4',
+        'video_thumbnail': 'https://example.com/video-poster.jpg',
+      });
+      await tester.pumpWidget(_app(Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => showGymFeedEventDetails(context, event),
+            child: const Text('Open event'),
+          ),
+        ),
+      )));
+      await tester.tap(find.text('Open event'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      final cover = find.byKey(const Key('event-cover-image'));
+      expect(cover, findsOneWidget);
+      final coverTop = tester.getTopLeft(cover).dy;
+      final video = find.byKey(const Key('event-video-separate-media'));
+      await tester.scrollUntilVisible(video, 250,
+          scrollable: find.byType(Scrollable).last);
+      final player = tester.widget<FeedVideoPlayer>(video);
+      expect(player.thumbnailUrl, 'https://example.com/video-poster.jpg');
+      expect(find.text('Event video'), findsOneWidget);
+      expect(coverTop, lessThan(tester.getTopLeft(video).dy));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.takeException(), isNull);
+    });
+
     test('training maps the persisted event/media fields', () {
       final startsAt = DateTime.utc(2026, 8, 24, 7);
       final training = Training({

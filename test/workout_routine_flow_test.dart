@@ -76,6 +76,78 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  Future<void> seedSearchRoutines() async {
+    for (var index = 24; index >= 0; index--) {
+      await WorkoutRoutineStore.saveRoutine(WorkoutRoutine(
+        id: 'search-$index',
+        name: 'Search routine ${index.toString().padLeft(2, '0')}',
+        category: 'Strength',
+        createdAt: DateTime(2026, 11, 26),
+        exercises: const [RoutineExercise(name: 'Squat')],
+      ));
+    }
+  }
+
+  testWidgets('Train searches beyond the first ten routines and loads more',
+      (tester) async {
+    configurePhone(tester);
+    await seedSearchRoutines();
+    await tester.pumpWidget(phoneApp(
+      TrainingHomeWidget(trainingsLoader: () async => const []),
+    ));
+    await tester.pumpAndSettle();
+    final scroll = find.byType(Scrollable).first;
+    final search = find.byKey(const ValueKey('training-routine-search'));
+    await tester.scrollUntilVisible(search, 300, scrollable: scroll);
+    final newRoutine = find.byKey(const ValueKey('new-routine'));
+    final first = find.byKey(const ValueKey('routine-card-search-0'));
+    expect(tester.getTopLeft(newRoutine).dy,
+        lessThan(tester.getTopLeft(search).dy));
+    expect(find.byKey(const ValueKey('routine-card-search-10')), findsNothing);
+    await tester.enterText(search, ' ROUTINE 24 ');
+    await tester.pumpAndSettle();
+    expect(
+        find.byKey(const ValueKey('routine-card-search-24')), findsOneWidget);
+    expect(first, findsNothing);
+    await tester.enterText(search, 'no matching plan');
+    await tester.pumpAndSettle();
+    expect(find.text('No routines match your search.'), findsOneWidget);
+    await tester.enterText(search, '');
+    await tester.pumpAndSettle();
+    final showMore = find.byKey(const ValueKey('training-routines-show-more'));
+    await tester.scrollUntilVisible(showMore, 300, scrollable: scroll);
+    await tester.tap(showMore);
+    await tester.pumpAndSettle();
+    final twentieth = find.byKey(const ValueKey('routine-card-search-19'));
+    await tester.scrollUntilVisible(twentieth, 300, scrollable: scroll);
+    expect(twentieth, findsOneWidget);
+    expect(find.byKey(const ValueKey('routine-card-search-20')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Add workout searches the whole routine library before adding',
+      (tester) async {
+    configurePhone(tester);
+    await seedSearchRoutines();
+    await tester.pumpWidget(phoneApp(
+      TrainingHomeWidget(trainingsLoader: () async => const []),
+    ));
+    await tester.pumpAndSettle();
+    final add = find.byKey(const ValueKey('add-scheduled-workout-empty'));
+    await tester.scrollUntilVisible(add, 250,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('schedule-routine-search')), 'ROUTINE 24');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('schedule-routine-search-24')));
+    await tester.pumpAndSettle();
+    final schedule = await WorkoutRoutineStore.loadSchedule();
+    expect(schedule.values.any((ids) => ids.contains('search-24')), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('routine builder adds an exercise and persists the new routine',
       (tester) async {
     configurePhone(tester);
