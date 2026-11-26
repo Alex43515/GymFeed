@@ -16,6 +16,27 @@ const _routineBorder = Color(0xFF292929);
 const _routineMuted = Color(0xFF8B8B8B);
 const _routineGreen = Color(0xFF1FE276);
 
+Future<bool?> _confirmExerciseRemoval(BuildContext context, String name,
+        {bool fromRoutine = false}) =>
+    showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove exercise?'),
+        content: Text(fromRoutine
+            ? 'Remove $name and its sets from this routine?'
+            : 'Remove $name and its sets from this workout?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          TextButton(
+              key: const ValueKey('confirm-remove-exercise'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Remove')),
+        ],
+      ),
+    );
+
 const workoutExerciseLibrary = [
   'Bench Press',
   'Squat',
@@ -972,6 +993,20 @@ class _RoutineDetailWidgetState extends State<RoutineDetailWidget> {
     }
   }
 
+  Future<void> _removeExercise(int index) async {
+    final exercise = _routine.exercises[index];
+    final remove = await _confirmExerciseRemoval(context, exercise.name,
+        fromRoutine: true);
+    if (remove != true || !mounted) return;
+    final updated =
+        await WorkoutRoutineStore.removeRoutineExercise(_routine, index);
+    if (!mounted) return;
+    setState(() {
+      _routine = updated;
+      _routineChanged = true;
+    });
+  }
+
   Future<void> _shareWorkout(BuildContext context) =>
       showModalBottomSheet<void>(
         context: context,
@@ -1095,9 +1130,16 @@ class _RoutineDetailWidgetState extends State<RoutineDetailWidget> {
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.chevron_right_rounded,
-                                      color: _routineMuted, size: 21),
+                                  IconButton(
+                                    key: ValueKey(
+                                        'remove-detail-exercise-${exercise.name}'),
+                                    tooltip: 'Remove from routine',
+                                    onPressed: () => _removeExercise(index),
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: Color(0xFFF07474),
+                                        size: 21),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1192,21 +1234,22 @@ class _ActiveExercise {
 }
 
 class ActiveWorkoutWidget extends StatefulWidget {
-  const ActiveWorkoutWidget({super.key, required this.routine});
+  const ActiveWorkoutWidget({super.key, required this.routine, this.now});
 
   final WorkoutRoutine routine;
+  final DateTime Function()? now;
 
   @override
   State<ActiveWorkoutWidget> createState() => _ActiveWorkoutWidgetState();
 }
 
-class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
+class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget>
+    with WidgetsBindingObserver {
   late DateTime _startedAt;
   late final List<_ActiveExercise> _exercises;
   late String _historyId;
   Future<void> _pendingSave = Future<void>.value();
   bool _loading = true;
-  bool _dirty = false;
   bool _completedWorkout = false;
   Timer? _elapsedTimer;
   Timer? _restTimer;
@@ -1224,13 +1267,35 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
     setState(() => _unit = unit);
   }
 
+  DateTime _now() => widget.now?.call() ?? DateTime.now();
+
+  int _currentElapsedSeconds() {
+    if (_completedWorkout || _finishing) return _elapsedSeconds;
+    final seconds = _now().difference(_startedAt).inSeconds;
+    return seconds < _elapsedSeconds ? _elapsedSeconds : seconds;
+  }
+
+  void _refreshElapsed() {
+    if (!mounted || _loading) return;
+    final seconds = _currentElapsedSeconds();
+    if (seconds != _elapsedSeconds) setState(() => _elapsedSeconds = seconds);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_loading || _finishing) return;
+    _refreshElapsed();
+    if (!_completedWorkout && state != AppLifecycleState.resumed) _queueSave();
+  }
+
   /// Explanation videos for exercises of a training-plan day, by name.
   Map<String, String> _videoUrls = const {};
 
   @override
   void initState() {
     super.initState();
-    _startedAt = DateTime.now();
+    WidgetsBinding.instance.addObserver(this);
+    _startedAt = _now();
     _historyId = 'workout-${_startedAt.microsecondsSinceEpoch}';
     _exercises = widget.routine.exercises
         .map((exercise) => _ActiveExercise(exercise))
@@ -1238,15 +1303,16 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
     unawaited(_loadProgress());
     unawaited(_loadExerciseVideos());
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _elapsedSeconds += 1);
+      _refreshElapsed();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _elapsedTimer?.cancel();
     _restTimer?.cancel();
-    if (_dirty && !_completedWorkout) _queueSave();
+    if (!_loading && !_completedWorkout && !_finishing) _queueSave();
     for (final exercise in _exercises) {
       exercise.dispose();
     }
@@ -1264,36 +1330,29 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
   }
 
   Future<void> _loadProgress() async {
-    final saved = await WorkoutRoutineStore.loadWorkoutProgress(
+    final state = await WorkoutRoutineStore.loadWorkoutState(
         widget.routine.id, _startedAt);
     if (!mounted) return;
+    final saved = state?.workout;
     if (saved != null) {
       _startedAt = saved.startedAt;
       _historyId = saved.id;
-      final remaining = List<CompletedExercise>.from(saved.exercises);
-      for (final active in _exercises) {
-        final index =
-            remaining.indexWhere((item) => item.name == active.exercise.name);
-        if (index < 0) continue;
-        final completed = remaining.removeAt(index);
-        if (completed.sets.isEmpty) continue;
-        active.isTimed = completed.sets.any((set) => set.isTimed);
-        for (final set in active.sets) {
-          set.dispose();
-        }
-        active.sets
-          ..clear()
-          ..addAll(completed.sets.map((set) => _EditableSet(
-              weight: set.weightKg,
-              reps: set.reps,
-              durationSeconds: set.durationSeconds,
-              completed: set.completed)
-            ..weightController.changeUnit(_unit)));
+      _completedWorkout = state!.completed;
+      final templates = List<RoutineExercise>.from(widget.routine.exercises);
+      for (final exercise in _exercises) {
+        exercise.dispose();
       }
-      for (final completed in remaining) {
+      _exercises.clear();
+      // The saved session is authoritative, including exercises removed from it.
+      for (final completed in saved.exercises) {
         if (completed.sets.isEmpty) continue;
-        final active = _ActiveExercise(RoutineExercise(
-            name: completed.name, setCount: completed.sets.length));
+        final index =
+            templates.indexWhere((item) => item.name == completed.name);
+        final template = index >= 0
+            ? templates.removeAt(index)
+            : RoutineExercise(
+                name: completed.name, setCount: completed.sets.length);
+        final active = _ActiveExercise(template);
         active.isTimed = completed.sets.any((set) => set.isTimed);
         for (final set in active.sets) {
           set.dispose();
@@ -1310,6 +1369,14 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
       }
       _elapsedSeconds = saved.durationSeconds;
     }
+    _elapsedSeconds = _currentElapsedSeconds();
+    if (_completedWorkout) _elapsedTimer?.cancel();
+    // Persist the start even before the first set is edited or checked.
+    if (!_completedWorkout) {
+      _queueSave();
+      await _pendingSave;
+    }
+    if (!mounted) return;
     setState(() => _loading = false);
   }
 
@@ -1318,7 +1385,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
         routineId: widget.routine.id,
         name: widget.routine.name,
         startedAt: _startedAt,
-        durationSeconds: _elapsedSeconds,
+        durationSeconds: _currentElapsedSeconds(),
         exercises: _exercises
             .map((exercise) => CompletedExercise(
                   name: exercise.exercise.name,
@@ -1342,11 +1409,11 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
       );
 
   void _queueSave() {
-    _dirty = true;
     final progress = _snapshot();
-    _pendingSave = _pendingSave
-        .catchError((_) {})
-        .then((_) => WorkoutRoutineStore.saveWorkoutProgress(progress));
+    final completed = _completedWorkout;
+    _pendingSave = _pendingSave.catchError((_) {}).then((_) => completed
+        ? WorkoutRoutineStore.saveHistory(progress)
+        : WorkoutRoutineStore.saveWorkoutProgress(progress));
   }
 
   void _startRest() {
@@ -1392,8 +1459,9 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
   }
 
   Future<void> _closeWorkout() async {
+    if (_finishing || _loading) return;
+    if (!_completedWorkout) _queueSave();
     await _pendingSave;
-    _dirty = false;
     if (mounted) Navigator.pop(context, false);
   }
 
@@ -1412,8 +1480,18 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
     _queueSave();
   }
 
+  Future<void> _removeExercise(_ActiveExercise exercise) async {
+    final remove =
+        await _confirmExerciseRemoval(context, exercise.exercise.name);
+    if (remove != true || !mounted) return;
+    setState(() => _exercises.remove(exercise));
+    // Let the current TextFields unmount before disposing their controllers.
+    WidgetsBinding.instance.addPostFrameCallback((_) => exercise.dispose());
+    _queueSave();
+  }
+
   Future<void> _finish() async {
-    if (_finishing) return;
+    if (_finishing || _loading) return;
     if (_exercises.any((exercise) => exercise.sets.any((set) => exercise.isTimed
         ? workoutDurationFromMinutes(set.minutesController.text) == null
         : set.weightController.kilograms == null ||
@@ -1422,13 +1500,29 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
           content: Text('Check the set values before finishing.')));
       return;
     }
-    setState(() => _finishing = true);
-    await _pendingSave;
+    final duration = _currentElapsedSeconds();
+    setState(() {
+      _elapsedSeconds = duration;
+      _finishing = true;
+    });
     final history = _snapshot();
-    await WorkoutRoutineStore.saveHistory(history);
-    await WorkoutRoutineStore.clearWorkoutProgress(widget.routine.id);
-    _dirty = false;
-    _completedWorkout = true;
+    try {
+      await _pendingSave;
+      await WorkoutRoutineStore.saveHistory(history);
+      _completedWorkout = true;
+      _elapsedTimer?.cancel();
+      await WorkoutRoutineStore.clearWorkoutProgress(widget.routine.id);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _finishing = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not save the workout. Please try Finish again.'),
+        ));
+      }
+      return;
+    }
+    _restTimer?.cancel();
+    _restSeconds = 0;
     if (!mounted) return;
     final done = await Navigator.of(context).push<bool>(MaterialPageRoute(
       settings: const RouteSettings(name: 'workout-summary'),
@@ -1511,6 +1605,14 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                 ),
               Text('${activeExercise.sets.length} sets',
                   style: _routineText(size: 10, color: _routineMuted)),
+              IconButton(
+                key: ValueKey('remove-active-exercise-${exercise.name}'),
+                tooltip: 'Remove exercise',
+                onPressed:
+                    _finishing ? null : () => _removeExercise(activeExercise),
+                icon: const Icon(Icons.close_rounded,
+                    color: Color(0xFFF07474), size: 20),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -1792,7 +1894,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                   children: [
                     IconButton(
                       tooltip: 'Save and close',
-                      onPressed: _closeWorkout,
+                      onPressed: _loading || _finishing ? null : _closeWorkout,
                       icon: const Icon(Icons.close_rounded,
                           color: Colors.white, size: 25),
                     ),
@@ -1801,6 +1903,7 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(workoutDurationLabel(_elapsedSeconds),
+                              key: const ValueKey('workout-elapsed-time'),
                               style: _routineText(
                                   size: 18,
                                   color: _routineGreen,
@@ -1841,30 +1944,33 @@ class _ActiveWorkoutWidgetState extends State<ActiveWorkoutWidget> {
                     if (_loading)
                       const Center(child: CircularProgressIndicator())
                     else
-                      ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 105),
-                        children: [
-                          WorkoutUnitSelector(onChanged: _changeUnit),
-                          const SizedBox(height: 12),
-                          ..._exercises.map(_exerciseCard),
-                          OutlinedButton.icon(
-                            key: const ValueKey('active-add-exercise'),
-                            onPressed: _addExercise,
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              side: const BorderSide(color: _routineBorder),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(15)),
+                      AbsorbPointer(
+                        absorbing: _finishing,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 105),
+                          children: [
+                            WorkoutUnitSelector(onChanged: _changeUnit),
+                            const SizedBox(height: 12),
+                            ..._exercises.map(_exerciseCard),
+                            OutlinedButton.icon(
+                              key: const ValueKey('active-add-exercise'),
+                              onPressed: _addExercise,
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                side: const BorderSide(color: _routineBorder),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15)),
+                              ),
+                              icon: const Icon(Icons.add_rounded,
+                                  color: _routineGreen, size: 18),
+                              label: Text('Add exercise',
+                                  style: _routineText(
+                                      size: 12,
+                                      color: _routineGreen,
+                                      weight: FontWeight.w700)),
                             ),
-                            icon: const Icon(Icons.add_rounded,
-                                color: _routineGreen, size: 18),
-                            label: Text('Add exercise',
-                                style: _routineText(
-                                    size: 12,
-                                    color: _routineGreen,
-                                    weight: FontWeight.w700)),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     if (_restSeconds > 0) _restBar(),
                   ],

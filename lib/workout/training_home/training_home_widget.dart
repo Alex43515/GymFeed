@@ -71,6 +71,9 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
   late DateTime _visibleWeekStart;
 
   int _tab = 0;
+  final _routineSearchController = TextEditingController();
+  String _routineQuery = '';
+  int _routineLimit = 10;
   WorkoutWeightUnit _weightUnit = WorkoutWeightUnit.lb;
 
   static const _bg = Color(0xFF0B0B0B);
@@ -133,6 +136,7 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
 
   @override
   void dispose() {
+    _routineSearchController.dispose();
     _model.dispose();
     super.dispose();
   }
@@ -635,112 +639,165 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     List<WorkoutRoutine> routines,
     List<String> scheduledIds,
   ) async {
+    var query = '';
+    var limit = 10;
     final selectedId = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: Container(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.76),
-          decoration: const BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(27)),
-            border: Border(top: BorderSide(color: _border)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 11),
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4A4A4A),
-                  borderRadius: BorderRadius.circular(2),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final filtered = routines
+              .where((routine) => '${routine.name} ${routine.category}'
+                  .toLowerCase()
+                  .contains(query.trim().toLowerCase()))
+              .toList();
+          final visible = filtered.take(limit).toList();
+          return Padding(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+            child: SafeArea(
+              top: false,
+              child: Container(
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.76),
+                decoration: const BoxDecoration(
+                  color: _card,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(27)),
+                  border: Border(top: BorderSide(color: _border)),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Text('Add workout',
-                          style: _text(size: 20, weight: FontWeight.w700)),
+                    const SizedBox(height: 11),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A4A4A),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.pop(sheetContext),
-                      icon:
-                          const Icon(Icons.close_rounded, color: Colors.white),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text('Add workout',
+                                style:
+                                    _text(size: 20, weight: FontWeight.w700)),
+                          ),
+                          IconButton(
+                            tooltip: 'Close',
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: const Icon(Icons.close_rounded,
+                                color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: _routineSearch(
+                        key: const ValueKey('schedule-routine-search'),
+                        onChanged: (value) => setSheetState(() {
+                          query = value;
+                          limit = 10;
+                        }),
+                      ),
+                    ),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        itemCount: visible.length +
+                            (filtered.length > visible.length || visible.isEmpty
+                                ? 1
+                                : 0),
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (_, index) {
+                          if (visible.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Text('No routines match your search.',
+                                  style: _text(color: _muted)),
+                            );
+                          }
+                          if (index == visible.length) {
+                            return TextButton(
+                              key:
+                                  const ValueKey('schedule-routines-show-more'),
+                              onPressed: () => setSheetState(() => limit += 10),
+                              child: Text(
+                                  'Show more (${filtered.length - visible.length} remaining)',
+                                  style: _text(color: _green)),
+                            );
+                          }
+                          final routine = visible[index];
+                          final added = scheduledIds.contains(routine.id);
+                          return ListTile(
+                            key: ValueKey('schedule-routine-${routine.id}'),
+                            enabled: !added,
+                            onTap: added
+                                ? null
+                                : () => Navigator.pop(sheetContext, routine.id),
+                            tileColor: const Color(0xFF111111),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: const BorderSide(color: _border),
+                            ),
+                            leading: Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF123821),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.fitness_center_rounded,
+                                  color: _green, size: 18),
+                            ),
+                            title: Text(routine.name,
+                                style:
+                                    _text(size: 14, weight: FontWeight.w700)),
+                            subtitle: Text(
+                                '${routine.exercises.length} exercises',
+                                style: _text(size: 10, color: _muted)),
+                            trailing: Text(added ? 'Added' : 'Add',
+                                style: _text(
+                                    size: 11,
+                                    color: added ? _muted : _green,
+                                    weight: FontWeight.w700)),
+                          );
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('schedule-create-routine'),
+                        onPressed: () =>
+                            Navigator.pop(sheetContext, '__create__'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          side: const BorderSide(color: _border),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: const Icon(Icons.add_rounded,
+                            color: _green, size: 18),
+                        label: Text('Create custom routine',
+                            style: _text(
+                                size: 12,
+                                color: _green,
+                                weight: FontWeight.w700)),
+                      ),
                     ),
                   ],
                 ),
               ),
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  itemCount: routines.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, index) {
-                    final routine = routines[index];
-                    final added = scheduledIds.contains(routine.id);
-                    return ListTile(
-                      key: ValueKey('schedule-routine-${routine.id}'),
-                      enabled: !added,
-                      onTap: added
-                          ? null
-                          : () => Navigator.pop(sheetContext, routine.id),
-                      tileColor: const Color(0xFF111111),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: const BorderSide(color: _border),
-                      ),
-                      leading: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF123821),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.fitness_center_rounded,
-                            color: _green, size: 18),
-                      ),
-                      title: Text(routine.name,
-                          style: _text(size: 14, weight: FontWeight.w700)),
-                      subtitle: Text('${routine.exercises.length} exercises',
-                          style: _text(size: 10, color: _muted)),
-                      trailing: Text(added ? 'Added' : 'Add',
-                          style: _text(
-                              size: 11,
-                              color: added ? _muted : _green,
-                              weight: FontWeight.w700)),
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
-                child: OutlinedButton.icon(
-                  key: const ValueKey('schedule-create-routine'),
-                  onPressed: () => Navigator.pop(sheetContext, '__create__'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(50),
-                    side: const BorderSide(color: _border),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                  ),
-                  icon: const Icon(Icons.add_rounded, color: _green, size: 18),
-                  label: Text('Create custom routine',
-                      style: _text(
-                          size: 12, color: _green, weight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
     if (!mounted || selectedId == null) return;
@@ -986,6 +1043,38 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
     );
   }
 
+  Widget _routineSearch(
+      {required Key key,
+      TextEditingController? controller,
+      required ValueChanged<String> onChanged}) {
+    return TextField(
+      key: key,
+      controller: controller,
+      onChanged: onChanged,
+      style: _text(size: 13),
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Search routines',
+        hintStyle: _text(size: 13, color: _muted),
+        prefixIcon: const Icon(Icons.search_rounded, color: _muted),
+        filled: true,
+        fillColor: _card,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: _border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: _green),
+        ),
+      ),
+    );
+  }
+
   Widget _joinedCard(Training training) {
     final author = training.authorUsername.isNotEmpty
         ? '@${training.authorUsername}'
@@ -1137,6 +1226,13 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
               final ownRoutines = routines
                   .where((routine) => !isTrainingPlanRoutine(routine.id))
                   .toList();
+              final matchingRoutines = ownRoutines
+                  .where((routine) => '${routine.name} ${routine.category}'
+                      .toLowerCase()
+                      .contains(_routineQuery.trim().toLowerCase()))
+                  .toList();
+              final visibleRoutines =
+                  matchingRoutines.take(_routineLimit).toList();
               return FutureBuilder<List<Training>>(
                 future: _trainingsFuture,
                 builder: (context, trainingSnapshot) {
@@ -1232,6 +1328,18 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                 _tabs(),
                                 const SizedBox(height: 16),
                                 if (_tab == 0) ...[
+                                  _newRoutineButton(),
+                                  const SizedBox(height: 12),
+                                  _routineSearch(
+                                    key: const ValueKey(
+                                        'training-routine-search'),
+                                    controller: _routineSearchController,
+                                    onChanged: (value) => setState(() {
+                                      _routineQuery = value;
+                                      _routineLimit = 10;
+                                    }),
+                                  ),
+                                  const SizedBox(height: 14),
                                   if (routineSnapshot.connectionState ==
                                       ConnectionState.waiting)
                                     const Padding(
@@ -1244,8 +1352,23 @@ class _TrainingHomeWidgetState extends State<TrainingHomeWidget> {
                                   else if (ownRoutines.isEmpty)
                                     _empty(
                                         'No plans yet — create your first routine.'),
-                                  ...ownRoutines.map(_routineCard),
-                                  _newRoutineButton(),
+                                  if (ownRoutines.isNotEmpty &&
+                                      matchingRoutines.isEmpty)
+                                    _empty('No routines match your search.'),
+                                  ...visibleRoutines.map(_routineCard),
+                                  if (matchingRoutines.length >
+                                      visibleRoutines.length)
+                                    TextButton(
+                                      key: const ValueKey(
+                                          'training-routines-show-more'),
+                                      onPressed: () =>
+                                          setState(() => _routineLimit += 10),
+                                      child: Text(
+                                          'Show more (${matchingRoutines.length - visibleRoutines.length} remaining)',
+                                          style: _text(
+                                              color: _green,
+                                              weight: FontWeight.w600)),
+                                    ),
                                 ] else if (_tab == 1) ...[
                                   if (trainingSnapshot.connectionState ==
                                       ConnectionState.waiting)
