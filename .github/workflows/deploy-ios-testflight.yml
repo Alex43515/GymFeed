@@ -45,7 +45,7 @@ jobs:
 
   validate-ios:
     name: Test and build iOS Simulator app
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 60
 
     steps:
@@ -108,7 +108,7 @@ jobs:
   publish-ios:
     name: Build signed IPA and deploy to Apple
     needs: [validate-ios, publish-health-privacy]
-    runs-on: macos-15
+    runs-on: macos-15-intel
     environment: app-store-connect
     timeout-minutes: 90
 
