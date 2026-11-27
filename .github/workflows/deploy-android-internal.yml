@@ -23,6 +23,11 @@ on:
         options:
           - testing
           - production
+      promo_action:
+        description: Inspect/configure GYMFEEDSTART without building an app
+        default: none
+        type: choice
+        options: [none, inspect, configure]
 
 permissions:
   contents: read
@@ -39,6 +44,7 @@ env:
 
 jobs:
   publish-health-privacy:
+    if: ${{ !inputs.promo_action || inputs.promo_action == 'none' }}
     name: Publish current health privacy notice only
     uses: ./.github/workflows/deploy-health-privacy.yml
     secrets: inherit
@@ -217,3 +223,28 @@ jobs:
             --bundle build/app/outputs/bundle/release/app-release.aab \
             --track "$PLAY_TRACK" \
             --release-name "GymFeed $APP_MARKETING_VERSION $PLAY_TRACK $PLAY_VERSION_CODE"
+
+  promo:
+    name: Inspect or configure monthly promo
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.promo_action == 'inspect' || inputs.promo_action == 'configure') }}
+    runs-on: ubuntu-24.04
+    environment: google-play-internal
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --disable-pip-version-check google-auth requests
+      - name: Configure and verify store settings
+        env:
+          PLAY_CREDENTIALS: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          PROMO_ACTION: ${{ inputs.promo_action }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PLAY_CREDENTIALS"
+          credentials="$RUNNER_TEMP/play-promo.json"
+          trap 'rm -f "$credentials"' EXIT
+          printf '%s' "$PLAY_CREDENTIALS" > "$credentials"
+          chmod 600 "$credentials"
+          args=()
+          if [[ "$PROMO_ACTION" == configure ]]; then args+=(--apply); fi
+          python3 scripts/google_play_promo.py --credentials "$credentials" --package "$PACKAGE_NAME" "${args[@]}"
