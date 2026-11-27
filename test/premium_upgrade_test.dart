@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -52,8 +53,38 @@ void main() {
   });
 
   tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, null);
+  });
+
+  testWidgets('Android Premium has a code field and explains an invalid code',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    getOfferings = () async => _offerings();
+    await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: PaymentWidget(initialPremium: true))));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('premium-promo-code'));
+    await tester.ensureVisible(field);
+    await tester.enterText(field, 'wrong-code');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('Invalid promo code.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('premium-promo-terms')), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('Apple paywall keeps native offer redemption separate',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    getOfferings = () async => _offerings();
+    await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: PaymentWidget(initialPremium: true))));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('premium-promo-code')), findsNothing);
+    expect(find.text('Subscribe'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   Future<void> tapUpgrade(WidgetTester tester) async {

@@ -6,7 +6,8 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/revenue_cat_util.dart' as revenue_cat;
 import '/backend/supabase/supabase.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'payment_model.dart';
@@ -29,6 +30,12 @@ class _PaymentWidgetState extends State<PaymentWidget> {
   // 0 = Free, 1 = Premium. Matches the two tabs in the paywall design.
   int _tab = 0;
   bool _billingBusy = false;
+  bool _promoBusy = false;
+  final _promoController = TextEditingController();
+  revenue_cat.SubscriptionOption? _promoOption;
+  String? _promoError;
+  bool get _android =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   @override
   void setState(VoidCallback callback) {
@@ -52,6 +59,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
 
   @override
   void dispose() {
+    _promoController.dispose();
     _model.maybeDispose();
 
     super.dispose();
@@ -270,15 +278,100 @@ class _PaymentWidgetState extends State<PaymentWidget> {
     );
   }
 
+  void _showBillingError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _applyPromo() async {
+    if (_billingBusy || _promoBusy) return;
+    final code = _promoController.text.trim().toUpperCase();
+    if (code != 'GYMFEEDSTART') {
+      safeSetState(() => _promoError = 'Invalid promo code.');
+      return;
+    }
+    safeSetState(() {
+      _promoBusy = true;
+      _promoOption = null;
+      _promoError = null;
+    });
+    try {
+      final uid = supabase.auth.currentUser?.id;
+      if (uid == null || !await revenue_cat.login(uid)) {
+        throw StateError('Please sign in and try again.');
+      }
+      await revenue_cat.loadOfferings();
+      final option = revenue_cat.gymfeedStartOption();
+      if (option == null) {
+        throw StateError(
+            'Google Play has no eligible offer for this account. This code is for new subscribers in the US and Serbia.');
+      }
+      await supabase.rpc('android_promo', params: {'p_code': code});
+      if (!mounted || supabase.auth.currentUser?.id != uid) return;
+      safeSetState(() => _promoOption = option);
+    } on PostgrestException catch (e) {
+      if (mounted) safeSetState(() => _promoError = e.message);
+    } catch (e) {
+      if (mounted) {
+        safeSetState(() => _promoError = e is StateError
+            ? e.message.toString()
+            : 'Could not verify the code. Please try again.');
+      }
+    } finally {
+      if (mounted) safeSetState(() => _promoBusy = false);
+    }
+  }
+
+  Widget _promoField() {
+    final option = _promoOption;
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(
+              child: TextField(
+            key: const ValueKey('premium-promo-code'),
+            controller: _promoController,
+            enabled: !_billingBusy && !_promoBusy,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              labelText: 'Promo code',
+              labelStyle: TextStyle(color: kCreateHint),
+            ),
+            onChanged: (_) => safeSetState(() {
+              _promoOption = null;
+              _promoError = null;
+            }),
+            onSubmitted: (_) => _applyPromo(),
+          )),
+          TextButton(
+            onPressed: _billingBusy || _promoBusy ? null : _applyPromo,
+            child: Text(_promoBusy ? 'Checking…' : 'Apply'),
+          ),
+        ]),
+        if (_promoError != null)
+          Text(_promoError!, style: const TextStyle(color: Colors.redAccent)),
+        if (option != null)
+          Text(
+              'GYMFEEDSTART applied: ${option.pricingPhases.first.price.formatted} for your first month, then ${option.pricingPhases.last.price.formatted}/month. Auto-renews. Cancel anytime. New subscribers only. First 1,000 Android accounts; redeem before 15 Jan 2027, 08:00 UTC.',
+              key: const ValueKey('premium-promo-terms'),
+              style: TextStyle(color: FlutterFlowTheme.of(context).primary)),
+      ]),
+    );
+  }
+
   Future<void> _subscribe() async {
-    if (_billingBusy) return;
+    if (_billingBusy || _promoBusy) return;
     if (kIsWeb) {
       await launchURL(
         'https://play.google.com/store/apps/details?id=com.flutterflow.gymfeedofficial',
       );
       return;
     }
-    _billingBusy = true;
+    safeSetState(() => _billingBusy = true);
     try {
       final uid = supabase.auth.currentUser?.id;
       if (uid == null || !await revenue_cat.login(uid)) {
@@ -301,10 +394,30 @@ class _PaymentWidgetState extends State<PaymentWidget> {
         );
         return;
       }
-      final outcome = await revenue_cat.purchasePackageWithOutcome(
-        monthly.identifier,
-        requiredEntitlementId: 'premium_features',
-      );
+      final wantsPromo = _android && _promoController.text.trim().isNotEmpty;
+      final selectedPromo = _promoOption;
+      if (wantsPromo && selectedPromo == null) {
+        _showBillingError(
+            'Apply your promo code before subscribing, or clear it to pay the regular price.');
+        return;
+      }
+      if (wantsPromo) {
+        await revenue_cat.loadOfferings();
+        if (revenue_cat.gymfeedStartOption() != selectedPromo) {
+          _showBillingError('The offer has changed. Apply your code again.');
+          return;
+        }
+        await supabase.rpc('android_promo', params: {
+          'p_code': _promoController.text.trim().toUpperCase(),
+          'p_claim': true,
+        });
+      }
+      if (!mounted || supabase.auth.currentUser?.id != uid) return;
+      final outcome = wantsPromo
+          ? await revenue_cat.purchasePromoWithOutcome(selectedPromo!,
+              userId: uid, requiredEntitlementId: 'premium_features')
+          : await revenue_cat.purchasePackageWithOutcome(monthly.identifier,
+              requiredEntitlementId: 'premium_features');
       if (!mounted) return;
       if (outcome == revenue_cat.PurchaseOutcome.active) {
         PremiumAccess.instance.invalidate();
@@ -331,8 +444,12 @@ class _PaymentWidgetState extends State<PaymentWidget> {
         );
       }
       safeSetState(() {});
+    } on PostgrestException catch (e) {
+      _showBillingError(e.message);
+    } catch (_) {
+      _showBillingError('Could not start your purchase. Please try again.');
     } finally {
-      _billingBusy = false;
+      if (mounted) safeSetState(() => _billingBusy = false);
     }
   }
 
@@ -465,6 +582,7 @@ class _PaymentWidgetState extends State<PaymentWidget> {
                       ),
                       const SizedBox(height: 18.0),
                       _priceCard(isFree: isFree, premiumPrice: premiumPrice),
+                      if (!isFree && _android) _promoField(),
                       const SizedBox(height: 20.0),
                       // What each plan really includes. The 40 matches the
                       // daily limit in the claim_ai_use server function.
@@ -535,7 +653,11 @@ class _PaymentWidgetState extends State<PaymentWidget> {
               const SizedBox(height: 12.0),
               createPrimaryButton(
                 context,
-                label: isFree ? 'Try Premium' : 'Subscribe',
+                label: _billingBusy
+                    ? 'Processing…'
+                    : isFree
+                        ? 'Try Premium'
+                        : 'Subscribe',
                 onTap: () async {
                   if (isFree) {
                     safeSetState(() => _tab = 1);

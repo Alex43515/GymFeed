@@ -143,6 +143,9 @@ jobs:
       - name: Run Flutter tests
         run: flutter test --no-pub
 
+      - name: Check promo pricing and offer safety
+        run: python3 -m unittest discover -s scripts -p test_google_play_promo.py
+
       - name: Prepare protected release credentials
         shell: bash
         env:

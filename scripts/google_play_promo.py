@@ -4,7 +4,6 @@ import copy
 import json
 from pathlib import Path
 
-from google_play_release import API_ROOT, _json, _session
 
 PRODUCT = 'subscription_1_month'
 BASE = 'subscription-1month'
@@ -41,6 +40,7 @@ def offer_body(package):
 
 
 def main():
+    from google_play_release import API_ROOT, _json, _session
     parser = argparse.ArgumentParser()
     parser.add_argument('--credentials', type=Path, required=True)
     parser.add_argument('--package', required=True)

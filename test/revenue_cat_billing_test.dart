@@ -48,7 +48,30 @@ Map<String, dynamic> customer({
   };
 }
 
-Map<String, dynamic> monthlyOfferings(String product) {
+Map<String, dynamic> promoOptionJson({int introductoryMicros = 22500000}) {
+  Map<String, dynamic> phase(int micros, int recurrence) => {
+        'billingPeriod': {'unit': 'MONTH', 'value': 1, 'iso8601': 'P1M'},
+        'recurrenceMode': recurrence,
+        'billingCycleCount': recurrence == 2 ? 1 : 0,
+        'price': {
+          'formatted': '\$${micros / 1000000}',
+          'amountMicros': micros,
+          'currencyCode': 'USD'
+        },
+      };
+  return {
+    'id': 'subscription-1month:gymfeedstart',
+    'storeProductId': 'subscription_1_month:subscription-1month',
+    'productId': 'subscription_1_month',
+    'pricingPhases': [phase(introductoryMicros, 2), phase(25000000, 1)],
+    'tags': ['gymfeedstart', 'rc-ignore-offer'],
+    'isBasePlan': false,
+    'isPrepaid': false,
+  };
+}
+
+Map<String, dynamic> monthlyOfferings(String product,
+    {Map<String, dynamic>? promo}) {
   final package = {
     'identifier': r'$rc_monthly',
     'packageType': 'MONTHLY',
@@ -60,6 +83,7 @@ Map<String, dynamic> monthlyOfferings(String product) {
       'priceString': r'$29.99',
       'currencyCode': 'USD',
       'subscriptionPeriod': 'P1M',
+      if (promo != null) 'subscriptionOptions': [promo],
     },
     'presentedOfferingContext': {'offeringIdentifier': 'subscription'},
   };
@@ -82,12 +106,14 @@ void main() {
   late List<MethodCall> calls;
   Future<Object?> Function(MethodCall)? override;
   var sequence = 0;
+  Map<String, dynamic>? promo;
 
   setUp(() async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     info = customer();
     calls = [];
     override = null;
+    promo = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
@@ -100,12 +126,15 @@ void main() {
         case 'logIn':
           return {'customerInfo': info, 'created': false};
         case 'getOfferings':
-          return monthlyOfferings(defaultTargetPlatform == TargetPlatform.iOS
-              ? 'premium_2999_1m'
-              : 'subscription_1_month:subscription-1month');
+          return monthlyOfferings(
+              defaultTargetPlatform == TargetPlatform.iOS
+                  ? 'premium_2999_1m'
+                  : 'subscription_1_month:subscription-1month',
+              promo: promo);
         case 'isAnonymous':
           return false;
         case 'purchasePackage':
+        case 'purchaseSubscriptionOption':
           return {
             'customerInfo': info,
             'transaction': {
@@ -127,6 +156,86 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
+
+  test('promo checkout uses the exact Google option and verifies entitlement',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await billing.login('promo-buyer');
+    promo = promoOptionJson();
+    await billing.loadOfferings();
+    final option = billing.gymfeedStartOption();
+    expect(option, isNotNull);
+    info = customer(active: true);
+    expect(
+        await billing.purchasePromoWithOutcome(option!,
+            userId: 'promo-buyer', requiredEntitlementId: entitlement),
+        billing.PurchaseOutcome.active);
+    final checkout =
+        calls.singleWhere((c) => c.method == 'purchaseSubscriptionOption');
+    expect(checkout.arguments['optionIdentifier'],
+        'subscription-1month:gymfeedstart');
+    expect(calls.any((c) => c.method == 'purchasePackage'), false);
+  });
+
+  test('no eligible promo never starts a regular-price checkout', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await billing.loadOfferings();
+    expect(billing.gymfeedStartOption(), isNull);
+    expect(
+        await billing.purchasePromoWithOutcome(
+            SubscriptionOption.fromJson(promoOptionJson()),
+            userId: 'buyer',
+            requiredEntitlementId: entitlement),
+        billing.PurchaseOutcome.failed);
+    expect(calls.any((c) => c.method.startsWith('purchase')), false);
+  });
+
+  test('promo with wrong discount or duration is rejected', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    promo = promoOptionJson(introductoryMicros: 25000000);
+    await billing.loadOfferings();
+    expect(billing.gymfeedStartOption(), isNull);
+    promo = promoOptionJson();
+    promo!['pricingPhases'][0]['billingCycleCount'] = 2;
+    await billing.loadOfferings();
+    expect(billing.gymfeedStartOption(), isNull);
+  });
+
+  test('switching account after applying a code prevents checkout', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await billing.login('promo-first');
+    promo = promoOptionJson();
+    await billing.loadOfferings();
+    final option = billing.gymfeedStartOption()!;
+    await billing.login('promo-second');
+    expect(
+        await billing.purchasePromoWithOutcome(option,
+            userId: 'promo-first', requiredEntitlementId: entitlement),
+        billing.PurchaseOutcome.failed);
+    expect(calls.any((c) => c.method.startsWith('purchase')), false);
+  });
+
+  for (final outcome in {
+    PurchasesErrorCode.purchaseCancelledError:
+        billing.PurchaseOutcome.cancelled,
+    PurchasesErrorCode.paymentPendingError: billing.PurchaseOutcome.pending,
+  }.entries) {
+    test('promo ${outcome.value.name} does not grant Premium or fall back',
+        () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      await billing.login('promo-result');
+      promo = promoOptionJson();
+      await billing.loadOfferings();
+      override =
+          (call) async => throw PlatformException(code: '${outcome.key.index}');
+      expect(
+          await billing.purchasePromoWithOutcome(billing.gymfeedStartOption()!,
+              userId: 'promo-result', requiredEntitlementId: entitlement),
+          outcome.value);
+      expect(billing.activeEntitlementIds, isEmpty);
+      expect(calls.any((c) => c.method == 'purchasePackage'), false);
+    });
+  }
 
   test('cached active premium refreshes and loses access after expiry',
       () async {
