@@ -34,7 +34,7 @@ env:
   FLUTTER_VERSION: 3.27.4
   IOS_BUNDLE_ID: com.flutterflow.gymfeedofficial
   IOS_EXTENSION_BUNDLE_ID: com.flutterflow.gymfeedofficial.ImageNotification
-  APP_STORE_WHATS_NEW: GymFeed 3.0.17 adds expandable feed captions, routine search with more results on demand, a workout timer that includes time spent outside the app, whole-exercise removal, and separate event cover and video sections.
+  APP_STORE_WHATS_NEW: GymFeed 3.0.18 improves subscription checkout feedback and handling of interrupted purchases.
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
 jobs:

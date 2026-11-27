@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/services.dart';
 
 export 'package:purchases_flutter/purchases_flutter.dart'
-    show Package, Offering;
+    show Package, Offering, SubscriptionOption;
 
 Offerings? _offerings;
 CustomerInfo? _customerInfo;
@@ -72,6 +72,66 @@ Future<PurchaseOutcome> purchasePackageWithOutcome(
   String package, {
   String? requiredEntitlementId,
 }) async {
+  return _purchaseWithOutcome(() async {
+    final selected = offerings?.current?.getPackage(package);
+    if (selected == null) throw StateError('Package unavailable');
+    return Purchases.purchase(PurchaseParams.package(selected));
+  }, requiredEntitlementId: requiredEntitlementId);
+}
+
+/// Only accept the exact acquisition offer, including its store price phases.
+/// Never fall back to the full-price package when a promo is unavailable.
+SubscriptionOption? gymfeedStartOption() {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+  for (final option
+      in offerings?.current?.monthly?.storeProduct.subscriptionOptions ??
+          <SubscriptionOption>[]) {
+    if (_isGymfeedStartOption(option)) return option;
+  }
+  return null;
+}
+
+bool _isGymfeedStartOption(SubscriptionOption option) {
+  if (option.productId != 'subscription_1_month' ||
+      option.id != 'subscription-1month:gymfeedstart' ||
+      option.isBasePlan ||
+      !option.tags.contains('gymfeedstart') ||
+      !option.tags.contains('rc-ignore-offer') ||
+      option.pricingPhases.length != 2) return false;
+  final intro = option.pricingPhases.first;
+  final renewal = option.pricingPhases.last;
+  return intro.billingPeriod?.iso8601 == 'P1M' &&
+      intro.billingCycleCount == 1 &&
+      intro.recurrenceMode == RecurrenceMode.finiteRecurring &&
+      renewal.billingPeriod?.iso8601 == 'P1M' &&
+      renewal.recurrenceMode == RecurrenceMode.infiniteRecurring &&
+      intro.price.currencyCode == renewal.price.currencyCode &&
+      const ['USD', 'RSD'].contains(renewal.price.currencyCode) &&
+      renewal.price.amountMicros > 0 &&
+      // Play rounds to the nearest billable currency unit.
+      (intro.price.amountMicros - renewal.price.amountMicros * .9).abs() <=
+          10000;
+}
+
+Future<PurchaseOutcome> purchasePromoWithOutcome(
+  SubscriptionOption option, {
+  required String userId,
+  required String requiredEntitlementId,
+}) async {
+  if (defaultTargetPlatform != TargetPlatform.android ||
+      _loggedInUid != userId ||
+      !_isGymfeedStartOption(option) ||
+      gymfeedStartOption() != option) return PurchaseOutcome.failed;
+  return _purchaseWithOutcome(
+    () => Purchases.purchase(PurchaseParams.subscriptionOption(option)),
+    requiredEntitlementId: requiredEntitlementId,
+  );
+}
+
+Future<PurchaseOutcome> _purchaseWithOutcome(
+  Future<PurchaseResult> Function() purchase, {
+  String? requiredEntitlementId,
+}) async {
   if (kIsWeb ||
       !_identityBound ||
       _purchaseInProgress ||
@@ -81,13 +141,7 @@ Future<PurchaseOutcome> purchasePackageWithOutcome(
   _purchaseInProgress = true;
   final identityVersion = _identityVersion;
   try {
-    final revenueCatPackage = offerings?.current?.getPackage(package);
-    if (revenueCatPackage == null) {
-      return PurchaseOutcome.failed;
-    }
-    final purchaseResult = await Purchases.purchase(
-      PurchaseParams.package(revenueCatPackage),
-    );
+    final purchaseResult = await purchase();
     if (identityVersion != _identityVersion) return PurchaseOutcome.failed;
     customerInfo = purchaseResult.customerInfo;
     if (requiredEntitlementId != null &&
